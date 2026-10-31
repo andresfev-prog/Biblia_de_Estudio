@@ -1,0 +1,8 @@
+{
+  "name": "Biblia de Estudio",
+  "description": "Aplicación avanzada de estudio bíblico con lectura paralela, comentarios exegéticos, diccionarios y modo sin conexión.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
