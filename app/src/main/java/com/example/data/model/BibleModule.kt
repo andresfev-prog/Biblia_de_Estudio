@@ -14,5 +14,7 @@ data class BibleModule(
     val language: String, // "Español", "Inglés", "Griego / Hebreo"
     val versionTag: String,
     val sizeText: String,
-    val isDownloaded: Boolean = true
+    val isDownloaded: Boolean = true,
+    val downloadUrl: String? = null,
+    val fileName: String? = null
 )

@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import com.example.data.util.ModuleDownloader
 
 enum class AppDestination {
     HOME,
@@ -56,6 +57,11 @@ data class BibleUiState(
     // Comentarios
     val versesWithComments: Set<Int> = emptySet(),
     val parallelVersesWithComments: Set<Int> = emptySet(),
+    // Modules
+    val modules: List<BibleModule> = emptyList(),
+    val moduleLanguageFilter: String = "Todos",
+    val moduleSelectedTab: Int = 0,
+    val downloadProgress: Map<String, Float> = emptyMap(), // Única línea nueva agregada
     // Referencias cruzadas dinámicas TSK
     val versesWithCrossReferences: Set<Int> = emptySet(),
     val parallelVersesWithCrossReferences: Set<Int> = emptySet(),
@@ -91,10 +97,6 @@ data class BibleUiState(
     val searchCommentaryResults: List<Commentary> = emptyList(),
     val searchDictionaryResults: List<DictionaryEntry> = emptyList(),
     val searchHistory: List<SearchHistoryItem> = emptyList(),
-    // Módulos
-    val modules: List<BibleModule> = emptyList(),
-    val moduleLanguageFilter: String = "Todos",
-    val moduleSelectedTab: Int = 0,
     // Preferencias y Datos de usuario
     val userPreferences: UserPreference = UserPreference(),
     val readingProgress: ReadingProgress? = null,
@@ -116,6 +118,9 @@ class BibleViewModel(
     application: Application,
     private val repository: BibleRepository
 ) : AndroidViewModel(application), TextToSpeech.OnInitListener {
+
+    private val downloader = ModuleDownloader(application)
+
 
     private val _uiState = MutableStateFlow(BibleUiState())
     val uiState: StateFlow<BibleUiState> = _uiState.asStateFlow()
@@ -832,7 +837,7 @@ class BibleViewModel(
         }
     }
 
-    // --- Módulos ---
+    // --- Modules ---
     fun setModuleLanguageFilter(lang: String) {
         _uiState.value = _uiState.value.copy(moduleLanguageFilter = lang)
     }
@@ -842,15 +847,68 @@ class BibleViewModel(
     }
 
     fun toggleModuleDownload(module: BibleModule) {
+        if (module.isDownloaded) {
+            deleteModule(module)
+        } else {
+            downloadModule(module)
+        }
+    }
+
+    private fun downloadModule(module: BibleModule) {
+        val fileName = module.fileName ?: return
+        val downloadUrl = module.downloadUrl ?: return
+
+        // Evita lanzar descargas simultáneas del mismo recurso
+        if (_uiState.value.downloadProgress.containsKey(module.id)) return
+
+        // Inicia el progreso visual en 1% de inmediato
+        _uiState.value = _uiState.value.copy(
+            downloadProgress = _uiState.value.downloadProgress + (module.id to 0.01f)
+        )
+
         viewModelScope.launch {
-            repository.toggleModuleDownload(module.id, module.isDownloaded)
+            val result = downloader.downloadFile(downloadUrl, fileName) { progress ->
+                _uiState.value = _uiState.value.copy(
+                    downloadProgress = _uiState.value.downloadProgress + (module.id to progress)
+                )
+            }
+
+            val updatedProgress = _uiState.value.downloadProgress - module.id
+            val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+
+            if (result.isSuccess) {
+                // Actualiza en Room a isDownloaded = true
+                repository.toggleModuleDownload(module.id, false)
+                _uiState.value = _uiState.value.copy(
+                    downloadProgress = updatedProgress,
+                    toastMessage = if (isEn) "Module downloaded successfully" else "Módulo descargado correctamente"
+                )
+            } else {
+                val errorException = result.exceptionOrNull()
+                val errorMsg = errorException?.message ?: "Error desconocido"
+
+                // Registra el error detallado con traza en LogCat bajo BIBLE_DEBUG
+                android.util.Log.e("BIBLE_DEBUG", "Fallo al descargar ${module.fileName}: $errorMsg", errorException)
+
+                _uiState.value = _uiState.value.copy(
+                    downloadProgress = updatedProgress,
+                    toastMessage = if (isEn) "Download error: $errorMsg" else "Error al descargar: $errorMsg"
+                )
+            }
+        }
+    }
+
+    private fun deleteModule(module: BibleModule) {
+        viewModelScope.launch {
+            // Elimina el archivo binario del almacenamiento interno
+            module.fileName?.let { downloader.deleteDownloadedFile(it) }
+
+            // Actualiza en Room a isDownloaded = false
+            repository.toggleModuleDownload(module.id, true)
+
             val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
             _uiState.value = _uiState.value.copy(
-                toastMessage = if (module.isDownloaded) {
-                    if (isEn) "Module uninstalled" else "Módulo desinstalado"
-                } else {
-                    if (isEn) "Module downloaded for offline use" else "Módulo descargado para uso sin conexión"
-                }
+                toastMessage = if (isEn) "Module uninstalled" else "Módulo desinstalado"
             )
         }
     }

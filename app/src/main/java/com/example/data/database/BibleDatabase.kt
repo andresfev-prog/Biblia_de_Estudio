@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
         com.example.data.model.CrossReference::class,
         com.example.data.model.UserNote::class
     ],
-    version = 6, // Subimos a 6 para forzar la recarga con comentarios y diccionario
+    version = 8,
     exportSchema = false
 )
 abstract class BibleDatabase : RoomDatabase() {

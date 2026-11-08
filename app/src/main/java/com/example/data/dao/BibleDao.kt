@@ -106,6 +106,10 @@ interface BibleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertModules(modules: List<BibleModule>)
 
+    // Consulta para limpiar la tabla antes de reinsertar los módulos oficiales
+    @Query("DELETE FROM bible_modules")
+    suspend fun clearAllModules()
+
     // --- Cross References ---
     @Query("SELECT * FROM cross_references WHERE sourceBook = :book AND sourceChapter = :chapter AND sourceVerse = :verse")
     fun getCrossReferencesForVerse(book: String, chapter: Int, verse: Int): Flow<List<com.example.data.model.CrossReference>>

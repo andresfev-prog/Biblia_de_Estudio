@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleBooksData
+import com.example.data.model.BibleModule
 import com.example.data.model.BibleVerse
 import com.example.data.model.BookInfo
 import com.example.ui.components.CommentaryBottomSheet
@@ -170,6 +171,8 @@ fun BibleScreen(
     val baseFontSizeSp = (uiState.userPreferences.fontSizePt * 1.35f).sp
     val lineHeightSp = (uiState.userPreferences.fontSizePt * 1.9f).sp
 
+    val downloadedVersions = uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -202,6 +205,7 @@ fun BibleScreen(
                         currentBook = uiState.currentBook,
                         currentChapter = uiState.currentChapter,
                         activeVersion = uiState.activeVersion,
+                        availableVersions = downloadedVersions,
                         isParallelMode = uiState.isParallelMode,
                         isParallelLinked = uiState.isParallelLinked,
                         interfaceLanguage = lang,
@@ -344,6 +348,7 @@ private fun ReaderTopControls(
     currentBook: String,
     currentChapter: Int,
     activeVersion: String,
+    availableVersions: List<BibleModule>,
     isParallelMode: Boolean,
     isParallelLinked: Boolean,
     interfaceLanguage: String,
@@ -451,20 +456,40 @@ private fun ReaderTopControls(
                         expanded = versionMenuExpanded,
                         onDismissRequest = { versionMenuExpanded = false }
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("Reina-Valera 1960 (RVR1960)", color = appColors.textPrimary) },
-                            onClick = {
-                                onSelectActiveVersion("RVR1960")
-                                versionMenuExpanded = false
+                        if (availableVersions.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("Reina-Valera 1960 (RVR1960)", color = appColors.textPrimary) },
+                                onClick = {
+                                    onSelectActiveVersion("RVR1960")
+                                    versionMenuExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("King James Version (KJV)", color = appColors.textPrimary) },
+                                onClick = {
+                                    onSelectActiveVersion("KJV")
+                                    versionMenuExpanded = false
+                                }
+                            )
+                        } else {
+                            availableVersions.forEach { module ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "${module.title} (${module.versionTag})",
+                                            color = if (activeVersion == module.versionTag) appColors.accent else appColors.textPrimary,
+                                            fontWeight = if (activeVersion == module.versionTag) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    },
+                                    onClick = {
+                                        onSelectActiveVersion(module.versionTag)
+                                        versionMenuExpanded = false
+                                    }
+                                )
                             }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("King James Version (KJV)", color = appColors.textPrimary) },
-                            onClick = {
-                                onSelectActiveVersion("KJV")
-                                versionMenuExpanded = false
-                            }
-                        )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.width(4.dp))
@@ -610,7 +635,7 @@ private fun SingleReaderView(
                 lineHeight = lineHeight,
                 onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                 onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                onWordClick = { word -> viewModel.lookupWord(word) },
                 onFavoriteToggle = { viewModel.toggleFavorite(verse) }
             )
         }
@@ -637,7 +662,7 @@ private fun ParallelReaderView(
     appColors: AppColors,
     modifier: Modifier = Modifier
 ) {
-    val availableVersions = listOf("RVR1960", "KJV")
+    val downloadedVersions = uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
     val isLinked = uiState.isParallelLinked
 
     var isLeftVersionMenuOpen by remember { mutableStateOf(false) }
@@ -731,20 +756,40 @@ private fun ParallelReaderView(
                         expanded = isLeftVersionMenuOpen,
                         onDismissRequest = { isLeftVersionMenuOpen = false }
                     ) {
-                        availableVersions.forEach { version ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = version,
-                                        fontWeight = if (uiState.activeVersion == version) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (uiState.activeVersion == version) appColors.accent else appColors.textPrimary
-                                    )
-                                },
-                                onClick = {
-                                    isLeftVersionMenuOpen = false
-                                    viewModel.setActiveVersion(version)
-                                }
-                            )
+                        if (downloadedVersions.isEmpty()) {
+                            listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = label,
+                                            fontWeight = if (uiState.activeVersion == tag) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (uiState.activeVersion == tag) appColors.accent else appColors.textPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        isLeftVersionMenuOpen = false
+                                        viewModel.setActiveVersion(tag)
+                                    }
+                                )
+                            }
+                        } else {
+                            downloadedVersions.forEach { module ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "${module.title} (${module.versionTag})",
+                                            fontWeight = if (uiState.activeVersion == module.versionTag) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (uiState.activeVersion == module.versionTag) appColors.accent else appColors.textPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    },
+                                    onClick = {
+                                        isLeftVersionMenuOpen = false
+                                        viewModel.setActiveVersion(module.versionTag)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -783,7 +828,7 @@ private fun ParallelReaderView(
                         lineHeight = lineHeight,
                         onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                        onWordClick = { word -> viewModel.lookupWord(word) },
                         onFavoriteToggle = { viewModel.toggleFavorite(verse) }
                     )
                 }
@@ -885,28 +930,56 @@ private fun ParallelReaderView(
                         expanded = isRightVersionMenuOpen,
                         onDismissRequest = { isRightVersionMenuOpen = false }
                     ) {
-                        availableVersions.forEach { version ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = version,
-                                        fontWeight = if (uiState.parallelVersion == version) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (uiState.parallelVersion == version) appColors.accent else appColors.textPrimary
-                                    )
-                                },
-                                onClick = {
-                                    isRightVersionMenuOpen = false
-                                    if (uiState.isParallelLinked) {
-                                        viewModel.setParallelVersion(version)
-                                    } else {
-                                        viewModel.loadParallelChapter(
-                                            bookName = rightBookTitle,
-                                            chapter = rightChapter,
-                                            version = version
+                        if (downloadedVersions.isEmpty()) {
+                            listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = label,
+                                            fontWeight = if (uiState.parallelVersion == tag) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (uiState.parallelVersion == tag) appColors.accent else appColors.textPrimary
                                         )
+                                    },
+                                    onClick = {
+                                        isRightVersionMenuOpen = false
+                                        if (uiState.isParallelLinked) {
+                                            viewModel.setParallelVersion(tag)
+                                        } else {
+                                            viewModel.loadParallelChapter(
+                                                bookName = rightBookTitle,
+                                                chapter = rightChapter,
+                                                version = tag
+                                            )
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
+                        } else {
+                            downloadedVersions.forEach { module ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "${module.title} (${module.versionTag})",
+                                            fontWeight = if (uiState.parallelVersion == module.versionTag) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (uiState.parallelVersion == module.versionTag) appColors.accent else appColors.textPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    },
+                                    onClick = {
+                                        isRightVersionMenuOpen = false
+                                        if (uiState.isParallelLinked) {
+                                            viewModel.setParallelVersion(module.versionTag)
+                                        } else {
+                                            viewModel.loadParallelChapter(
+                                                bookName = rightBookTitle,
+                                                chapter = rightChapter,
+                                                version = module.versionTag
+                                            )
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -953,7 +1026,7 @@ private fun ParallelReaderView(
                         lineHeight = lineHeight,
                         onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                        onWordClick = { word -> viewModel.lookupWord(word) },
                         onFavoriteToggle = { /* Sin acción en columna paralela */ }
                     )
                 }
