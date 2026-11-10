@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -204,16 +205,16 @@ fun BottomNavBar(
                 .fillMaxWidth()
                 .height(64.dp)
                 .shadow(
-                    elevation = 10.dp,
+                    elevation = 6.dp,
                     shape = RoundedCornerShape(32.dp),
-                    spotColor = Color.Black.copy(alpha = if (appColors.isDark) 0.5f else 0.15f)
+                    spotColor = Color.Black.copy(alpha = if (appColors.isDark) 0.35f else 0.08f)
                 ),
             shape = RoundedCornerShape(32.dp),
-            color = appColors.cardBg,
-            tonalElevation = 6.dp,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
             border = BorderStroke(
                 width = 1.dp,
-                color = appColors.divider.copy(alpha = if (appColors.isDark) 0.35f else 0.7f)
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             )
         ) {
             Row(

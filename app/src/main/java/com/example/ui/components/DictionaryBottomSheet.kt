@@ -299,14 +299,14 @@ fun DictionaryBottomSheet(
                                                 Box(
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(6.dp))
-                                                        .background(if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.25f) else androidx.compose.ui.graphics.Color(0xFF0284C7))
+                                                        .background(if (appColors.isDark) appColors.accent.copy(alpha = 0.25f) else appColors.accent)
                                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                                 ) {
                                                     Text(
                                                         text = match.module.versionTag,
                                                         style = MaterialTheme.typography.labelSmall,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8) else androidx.compose.ui.graphics.Color.White
+                                                        color = if (appColors.isDark) appColors.accent else androidx.compose.ui.graphics.Color.White
                                                     )
                                                 }
                                             }
@@ -375,14 +375,14 @@ fun DictionaryBottomSheet(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.25f) else androidx.compose.ui.graphics.Color(0xFF0284C7))
+                                            .background(if (appColors.isDark) appColors.accent.copy(alpha = 0.25f) else appColors.accent)
                                             .padding(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
                                         Text(
                                             text = entryItem.strongCode,
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8) else androidx.compose.ui.graphics.Color.White,
+                                            color = if (appColors.isDark) appColors.accent else androidx.compose.ui.graphics.Color.White,
                                             maxLines = 1,
                                             softWrap = false
                                         )

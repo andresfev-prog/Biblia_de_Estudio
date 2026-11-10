@@ -521,8 +521,14 @@ fun HomeScreen(
                                 maxLines = 1,
                                 softWrap = false
                             )
+                            val noteCount = uiState.notes.size
+                            val notesCountText = if (isEnglish) {
+                                "$noteCount ${if (noteCount == 1) "note saved" else "notes saved"}"
+                            } else {
+                                "$noteCount ${if (noteCount == 1) "nota guardada" else "notas guardadas"}"
+                            }
                             Text(
-                                text = "${uiState.notes.size} ${if (uiState.notes.size == 1) "nota guardada" else "notas guardadas"}",
+                                text = notesCountText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = appColors.textSecondary
                             )

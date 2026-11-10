@@ -296,6 +296,7 @@ fun BibleScreen(
                 currentStep = uiState.pickerStep,
                 selectedBook = uiState.pickerSelectedBook,
                 selectedChapter = uiState.pickerSelectedChapter,
+                interfaceLanguage = lang,
                 onBookSelected = { viewModel.onPickerBookSelected(it) },
                 onChapterSelected = { viewModel.onPickerChapterSelected(it) },
                 onVerseSelected = { viewModel.onPickerVerseSelected(it) },
@@ -468,7 +469,12 @@ private fun ReaderTopControls(
 
                     DropdownMenu(
                         expanded = versionMenuExpanded,
-                        onDismissRequest = { versionMenuExpanded = false }
+                        onDismissRequest = { versionMenuExpanded = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 6.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                     ) {
                         if (availableVersions.isEmpty()) {
                             DropdownMenuItem(
@@ -524,7 +530,12 @@ private fun ReaderTopControls(
 
                 DropdownMenu(
                     expanded = overflowMenuExpanded,
-                    onDismissRequest = { overflowMenuExpanded = false }
+                    onDismissRequest = { overflowMenuExpanded = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
                     DropdownMenuItem(
                         leadingIcon = {
@@ -641,7 +652,7 @@ private fun SingleReaderView(
             key = { index -> uiState.verses[index].id }
         ) { index ->
             val verse = uiState.verses[index]
-            val hasCommentary = verse.verse in uiState.versesWithComments
+            val hasCommentary = true // La etiqueta COM debe mantenerse siempre visible en todos los versículos
             val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
 
             VerseRowItem(
@@ -662,9 +673,11 @@ private fun SingleReaderView(
 
         item {
             val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
+            val isEn = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
             ChapterBottomNavigationControls(
                 currentChapter = uiState.currentChapter,
                 totalChapters = totalChapters,
+                isEnglish = isEn,
                 onPreviousChapter = {
                     if (uiState.currentChapter > 1) {
                         viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
@@ -791,7 +804,12 @@ private fun ParallelReaderView(
 
                     DropdownMenu(
                         expanded = isLeftVersionMenuOpen,
-                        onDismissRequest = { isLeftVersionMenuOpen = false }
+                        onDismissRequest = { isLeftVersionMenuOpen = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 6.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -849,7 +867,7 @@ private fun ParallelReaderView(
                     key = { index -> "L_${uiState.verses[index].id}" }
                 ) { index ->
                     val verse = uiState.verses[index]
-                    val hasCommentary = verse.verse in uiState.versesWithComments
+                    val hasCommentary = true
                     val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
 
                     VerseRowItem(
@@ -870,9 +888,11 @@ private fun ParallelReaderView(
 
                 item {
                     val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
+                    val isEn = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
                     ChapterBottomNavigationControls(
                         currentChapter = uiState.currentChapter,
                         totalChapters = totalChapters,
+                        isEnglish = isEn,
                         onPreviousChapter = {
                             if (uiState.currentChapter > 1) {
                                 viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
@@ -984,7 +1004,12 @@ private fun ParallelReaderView(
 
                     DropdownMenu(
                         expanded = isRightVersionMenuOpen,
-                        onDismissRequest = { isRightVersionMenuOpen = false }
+                        onDismissRequest = { isRightVersionMenuOpen = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 6.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -1058,11 +1083,7 @@ private fun ParallelReaderView(
                     key = { index -> "R_${uiState.parallelVerses[index].id}" }
                 ) { index ->
                     val verse = uiState.parallelVerses[index]
-                    val hasCommentary = if (isLinked) {
-                        verse.verse in uiState.versesWithComments
-                    } else {
-                        verse.verse in uiState.parallelVersesWithComments
-                    }
+                    val hasCommentary = true
                     val hasCrossReference = if (isLinked) {
                         verse.verse in uiState.versesWithCrossReferences
                     } else {
@@ -1089,9 +1110,11 @@ private fun ParallelReaderView(
                     val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
                     val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
                     val totalChapters = BibleBooksData.getBookByName(rightBook)?.chapterCount ?: 1
+                    val isEn = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
                     ChapterBottomNavigationControls(
                         currentChapter = activeRightChapter,
                         totalChapters = totalChapters,
+                        isEnglish = isEn,
                         onPreviousChapter = {
                             if (activeRightChapter > 1) {
                                 if (isLinked) {
@@ -1122,6 +1145,7 @@ private fun ParallelReaderView(
             currentStep = rightPickerStep,
             selectedBook = rightBookInfo ?: BibleBooksData.books.first(),
             selectedChapter = rightPickerChapter,
+            interfaceLanguage = uiState.userPreferences.interfaceLanguage,
             onBookSelected = { selected ->
                 rightBookInfo = selected
                 rightPickerStep = 2
@@ -1155,6 +1179,7 @@ private fun ParallelReaderView(
 private fun ChapterBottomNavigationControls(
     currentChapter: Int,
     totalChapters: Int,
+    isEnglish: Boolean = false,
     onPreviousChapter: () -> Unit,
     onNextChapter: () -> Unit,
     modifier: Modifier = Modifier
@@ -1189,7 +1214,7 @@ private fun ChapterBottomNavigationControls(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Capítulo ${currentChapter - 1}",
+                        text = if (isEnglish) "Chapter ${currentChapter - 1}" else "Capítulo ${currentChapter - 1}",
                         color = appColors.textPrimary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1217,7 +1242,7 @@ private fun ChapterBottomNavigationControls(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Capítulo ${currentChapter + 1}",
+                        text = if (isEnglish) "Chapter ${currentChapter + 1}" else "Capítulo ${currentChapter + 1}",
                         color = appColors.textPrimary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1366,7 +1391,7 @@ private fun VerseRowItem(
                 )
             ) {
                 Surface(
-                    shape = RoundedCornerShape(3.dp),
+                    shape = CircleShape,
                     color = if (appColors.isDark) {
                         androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
                     } else {
@@ -1378,7 +1403,7 @@ private fun VerseRowItem(
                         else androidx.compose.ui.graphics.Color(0xFF0284C7)
                     ),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(CircleShape)
                         .clickable { onCommentaryClick("COM") }
                         .testTag("badge_com_${verse.verse}")
                 ) {
@@ -1405,7 +1430,7 @@ private fun VerseRowItem(
                 )
             ) {
                 Surface(
-                    shape = RoundedCornerShape(3.dp),
+                    shape = CircleShape,
                     color = if (appColors.isDark) {
                         androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
                     } else {
@@ -1417,7 +1442,7 @@ private fun VerseRowItem(
                         else androidx.compose.ui.graphics.Color(0xFF059669)
                     ),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(CircleShape)
                         .clickable { onCrossRefClick() }
                         .testTag("badge_ref_${verse.verse}")
                 ) {

@@ -146,8 +146,8 @@ class BibleRepository(
                 return Pair(sqlWhere, arrayOf("%$cleanQuery%"))
             } else {
                 // Modo Búsqueda Flexible (Desactivado):
-                // Aplica separación de palabras con operador AND e insensibilidad a tildes y diacríticos
-                val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+                // Filtrar tokens de 1 solo carácter (word.length > 1) para que letras aisladas («a», «y», «e») no generen coincidencias ni resaltados espurios
+                val words = cleanQuery.split(Regex("\\s+")).filter { it.length > 1 }
                 if (words.isEmpty()) {
                     return Pair("WHERE 1=0", emptyArray())
                 }
@@ -554,6 +554,10 @@ class BibleRepository(
                     LIMIT 100
                 """.trimIndent()
 
+                val exactPattern = if (exactWord) {
+                    Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+                } else null
+
                 database.rawQuery(sql, params)?.use { cursor ->
                     val colBookName = cursor.getColumnIndexOrThrow("long_name")
                     val colBookNumber = cursor.getColumnIndexOrThrow("book_number")
@@ -569,8 +573,8 @@ class BibleRepository(
                             .replace(Regex("\\s+"), " ")
                             .trim()
 
-                        val matchesExact = if (exactWord) {
-                            cleanedText.contains(cleanQuery, ignoreCase = true)
+                        val matchesExact = if (exactWord && exactPattern != null) {
+                            exactPattern.containsMatchIn(cleanedText)
                         } else {
                             true
                         }
@@ -636,11 +640,31 @@ class BibleRepository(
                     android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                 )
 
-                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord, "")
-                val sql = "SELECT COUNT(*) FROM verses $sqlWhere"
-                database.rawQuery(sql, params)?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        count = cursor.getInt(0)
+                if (exactWord) {
+                    val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord = true, "")
+                    val sql = "SELECT text FROM verses $sqlWhere"
+                    val exactPattern = Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+                    database.rawQuery(sql, params)?.use { cursor ->
+                        val colText = cursor.getColumnIndexOrThrow("text")
+                        while (cursor.moveToNext()) {
+                            val rawText = cursor.getString(colText) ?: ""
+                            val cleanedText = rawText
+                                .replace(Regex("<S>.*?</S>|<.*?>"), "")
+                                .replace(Regex("(?<=\\p{L})\\d+"), "")
+                                .replace(Regex("\\s+"), " ")
+                                .trim()
+                            if (exactPattern.containsMatchIn(cleanedText)) {
+                                count++
+                            }
+                        }
+                    }
+                } else {
+                    val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord = false, "")
+                    val sql = "SELECT COUNT(*) FROM verses $sqlWhere"
+                    database.rawQuery(sql, params)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            count = cursor.getInt(0)
+                        }
                     }
                 }
             } catch (e: Exception) {

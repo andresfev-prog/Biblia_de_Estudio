@@ -459,6 +459,18 @@ class BibleViewModel(
             val generalCommentaries = modules
                 .filter { it.category == "COMMENTARY" && it.isDownloaded && !it.fileName.isNullOrBlank() && !BibleRepository.isVersionSpecificCommentary(it.fileName) }
 
+            val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+            if (generalCommentaries.isEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = if (isEn) {
+                        "No commentaries downloaded. Go to the Modules tab to download biblical commentaries."
+                    } else {
+                        "No hay comentarios descargados. Ve a la sección Módulos para descargar comentarios bíblicos."
+                    }
+                )
+                return@launch
+            }
+
             val list = mutableListOf<Commentary>()
             withContext(Dispatchers.IO) {
                 for (mod in generalCommentaries) {

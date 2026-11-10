@@ -81,11 +81,12 @@ fun SettingsScreen(
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
 
-    // Requirement 5: Exactly two options: "Español" and "English"
-    val languages = listOf("Español", "English")
+    val isEn = lang.contains("English", ignoreCase = true)
+    // Opciones: English y Spanish en inglés, o Español e Inglés en español
+    val languages = if (isEn) listOf("English", "Spanish") else listOf("Español", "Inglés")
     val fontFamilies = listOf("Untitled Serif", "Aktiv Grotesk", "Serif", "Monospace")
 
-    val currentLanguageDisplay = if (lang.contains("English", ignoreCase = true)) "English" else "Español"
+    val currentLanguageDisplay = if (isEn) "English" else "Español"
 
     // Dynamic initials from user name
     val initials = remember(uiState.userPreferences.userName) {
@@ -228,7 +229,7 @@ fun SettingsScreen(
                 .testTag("settings_favorites_item"),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else appColors.divider.copy(alpha = 0.5f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -364,7 +365,12 @@ fun SettingsScreen(
 
                         DropdownMenu(
                             expanded = languageMenuOpen,
-                            onDismissRequest = { languageMenuOpen = false }
+                            onDismissRequest = { languageMenuOpen = false },
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 4.dp,
+                            shadowElevation = 6.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         ) {
                             languages.forEach { languageName ->
                                 DropdownMenuItem(
@@ -378,7 +384,12 @@ fun SettingsScreen(
                                         )
                                     },
                                     onClick = {
-                                        viewModel.updateInterfaceLanguage(languageName)
+                                        val targetLanguage = when (languageName) {
+                                            "Spanish" -> "Español"
+                                            "English", "Inglés" -> "English"
+                                            else -> languageName
+                                        }
+                                        viewModel.updateInterfaceLanguage(targetLanguage)
                                         languageMenuOpen = false
                                     }
                                 )
@@ -539,7 +550,12 @@ fun SettingsScreen(
 
                         DropdownMenu(
                             expanded = fontMenuOpen,
-                            onDismissRequest = { fontMenuOpen = false }
+                            onDismissRequest = { fontMenuOpen = false },
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 4.dp,
+                            shadowElevation = 6.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         ) {
                             fontFamilies.forEach { font ->
                                 DropdownMenuItem(
@@ -624,8 +640,13 @@ fun SettingsScreen(
                             softWrap = false
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        val sampleText = if (isEn) {
+                            "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life. — John 3:16"
+                        } else {
+                            "1 En el principio era el Verbo, y el Verbo era con Dios, y el Verbo era Dios."
+                        }
                         Text(
-                            text = "1 En el principio era el Verbo, y el Verbo era con Dios, y el Verbo era Dios.",
+                            text = sampleText,
                             fontSize = (uiState.userPreferences.fontSizePt * 1.35f).sp,
                             lineHeight = (uiState.userPreferences.fontSizePt * 1.9f).sp,
                             fontFamily = resolveBibleFont(uiState.userPreferences.fontFamily), // <-- Vinculación de fuente en vivo

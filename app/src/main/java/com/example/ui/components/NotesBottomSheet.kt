@@ -185,8 +185,14 @@ private fun NotesListView(
                         color = appColors.titleColor,
                         maxLines = 1
                     )
+                    val isEn = interfaceLanguage.contains("English", ignoreCase = true)
+                    val noteCountText = if (isEn) {
+                        "${notes.size} ${if (notes.size == 1) "note" else "notes"}"
+                    } else {
+                        "${notes.size} ${if (notes.size == 1) "nota" else "notas"}"
+                    }
                     Text(
-                        text = "${notes.size} ${if (notes.size == 1) "nota" else "notas"}",
+                        text = noteCountText,
                         style = MaterialTheme.typography.labelSmall,
                         color = appColors.textSecondary
                     )

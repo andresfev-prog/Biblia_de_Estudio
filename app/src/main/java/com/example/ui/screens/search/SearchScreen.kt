@@ -183,7 +183,12 @@ fun SearchScreen(
 
                 DropdownMenu(
                     expanded = isVersionMenuOpen,
-                    onDismissRequest = { isVersionMenuOpen = false }
+                    onDismissRequest = { isVersionMenuOpen = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
                     availableVersions.forEach { version ->
                         DropdownMenuItem(
@@ -498,11 +503,13 @@ private fun SearchResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val highlightedText = remember(verse.text, searchQuery, exactWord) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val highlightedText = remember(verse.text, searchQuery, exactWord, primaryColor) {
         buildHighlightedVerseText(
             fullText = verse.text,
             query = searchQuery.trim(),
-            exactWord = exactWord
+            exactWord = exactWord,
+            highlightColor = primaryColor
         )
     }
 
@@ -542,16 +549,18 @@ private fun SearchResultItem(
 private fun buildHighlightedVerseText(
     fullText: String,
     query: String,
-    exactWord: Boolean
+    exactWord: Boolean,
+    highlightColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color(0xFF0284C7)
 ): AnnotatedString {
     val cleanQuery = query.trim()
     if (cleanQuery.isBlank()) return AnnotatedString(fullText)
 
     val pattern = if (exactWord) {
-        Regex("(?i)" + Regex.escape(cleanQuery))
+        Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
     } else {
-        val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val words = cleanQuery.split(Regex("\\s+")).filter { it.length > 1 }
         val allVariants = words.flatMap { com.example.data.repository.BibleRepository.generateSpanishVariants(it) }
+        if (allVariants.isEmpty()) return AnnotatedString(fullText)
         Regex("(?i)(" + allVariants.joinToString("|") { Regex.escape(it) } + ")")
     }
 
@@ -572,7 +581,7 @@ private fun buildHighlightedVerseText(
                 pushStyle(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
-                        color = androidx.compose.ui.graphics.Color(0xFF0284C7)
+                        color = highlightColor
                     )
                 )
                 append(fullText.substring(start, end))
