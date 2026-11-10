@@ -379,6 +379,13 @@ private fun ReaderTopControls(
     var versionMenuExpanded by remember { mutableStateOf(false) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
 
+    val isEn = interfaceLanguage.contains("English", ignoreCase = true) ||
+            interfaceLanguage.equals("en", ignoreCase = true) ||
+            interfaceLanguage.startsWith("en", ignoreCase = true) ||
+            interfaceLanguage.contains("Inglés", ignoreCase = true) ||
+            BibleBooksData.isEnglishVersion(activeVersion)
+    val localizedBook = BibleBooksData.getLocalizedBookName(currentBook, isEn)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -401,7 +408,7 @@ private fun ReaderTopControls(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "$currentBook $currentChapter",
+                        text = "$localizedBook $currentChapter",
                         style = MaterialTheme.typography.labelLarge,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -471,10 +478,10 @@ private fun ReaderTopControls(
                         expanded = versionMenuExpanded,
                         onDismissRequest = { versionMenuExpanded = false },
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 4.dp,
-                        shadowElevation = 6.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                     ) {
                         if (availableVersions.isEmpty()) {
                             DropdownMenuItem(
@@ -532,10 +539,10 @@ private fun ReaderTopControls(
                     expanded = overflowMenuExpanded,
                     onDismissRequest = { overflowMenuExpanded = false },
                     shape = RoundedCornerShape(16.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp,
-                    shadowElevation = 6.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                    containerColor = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                 ) {
                     DropdownMenuItem(
                         leadingIcon = {
@@ -629,8 +636,13 @@ private fun SingleReaderView(
             .testTag("single_reader_list")
     ) {
         item {
-            val isEnVersion = BibleBooksData.isEnglishVersion(uiState.activeVersion)
-            val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isEnVersion)
+            val lang = uiState.userPreferences.interfaceLanguage
+            val isEn = lang.contains("English", ignoreCase = true) ||
+                    lang.equals("en", ignoreCase = true) ||
+                    lang.startsWith("en", ignoreCase = true) ||
+                    lang.contains("Inglés", ignoreCase = true) ||
+                    BibleBooksData.isEnglishVersion(uiState.activeVersion)
+            val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isEn)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -751,8 +763,13 @@ private fun ParallelReaderView(
                         .clickable { viewModel.openPassagePicker() }
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    val isEnVersion = BibleBooksData.isEnglishVersion(uiState.activeVersion)
-                    val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isEnVersion)
+                    val lang = uiState.userPreferences.interfaceLanguage
+                    val isEn = lang.contains("English", ignoreCase = true) ||
+                            lang.equals("en", ignoreCase = true) ||
+                            lang.startsWith("en", ignoreCase = true) ||
+                            lang.contains("Inglés", ignoreCase = true) ||
+                            BibleBooksData.isEnglishVersion(uiState.activeVersion)
+                    val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isEn)
                     Text(
                         text = "$displayBookName ${uiState.currentChapter}",
                         style = MaterialTheme.typography.titleSmall,
@@ -806,10 +823,10 @@ private fun ParallelReaderView(
                         expanded = isLeftVersionMenuOpen,
                         onDismissRequest = { isLeftVersionMenuOpen = false },
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 4.dp,
-                        shadowElevation = 6.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -1006,10 +1023,10 @@ private fun ParallelReaderView(
                         expanded = isRightVersionMenuOpen,
                         onDismissRequest = { isRightVersionMenuOpen = false },
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 4.dp,
-                        shadowElevation = 6.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->

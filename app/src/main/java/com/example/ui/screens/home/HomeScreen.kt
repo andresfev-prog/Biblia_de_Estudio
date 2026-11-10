@@ -244,7 +244,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = StringsLocale.get("verse_of_the_day", normalizedLang),
+                        text = if (isEnglish) "Verse of the Day" else "Versículo del día",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = appColors.titleColor,
@@ -305,7 +305,7 @@ fun HomeScreen(
                         modifier = Modifier.testTag("read_full_chapter_button")
                     ) {
                         Text(
-                            text = StringsLocale.get("read_full_chapter", normalizedLang),
+                            text = if (isEnglish) "Read full chapter" else "Leer capítulo completo",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,

@@ -3,7 +3,10 @@ package com.example.ui.util
 object StringsLocale {
 
     fun get(key: String, language: String): String {
-        val isEn = language.contains("English", ignoreCase = true)
+        val isEn = language.contains("English", ignoreCase = true) ||
+                language.equals("en", ignoreCase = true) ||
+                language.startsWith("en", ignoreCase = true) ||
+                language.contains("Inglés", ignoreCase = true)
         val isEsEs = language.contains("España", ignoreCase = true)
 
         return when (key) {

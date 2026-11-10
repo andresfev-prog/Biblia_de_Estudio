@@ -210,8 +210,8 @@ fun BottomNavBar(
                     spotColor = Color.Black.copy(alpha = if (appColors.isDark) 0.35f else 0.08f)
                 ),
             shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp,
+            color = MaterialTheme.colorScheme.background,
+            tonalElevation = 0.dp,
             border = BorderStroke(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)

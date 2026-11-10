@@ -218,18 +218,18 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // "Favoritos" item in Settings (situated above modules and preferences)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .clickable { viewModel.showFavoritesDialog(true) }
                 .testTag("settings_favorites_item"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else appColors.divider.copy(alpha = 0.5f)),
+            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -291,7 +291,7 @@ fun SettingsScreen(
         // 2. Interface Language Dropdown (Requirement 5: Only Español & English)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -367,10 +367,10 @@ fun SettingsScreen(
                             expanded = languageMenuOpen,
                             onDismissRequest = { languageMenuOpen = false },
                             shape = RoundedCornerShape(16.dp),
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 4.dp,
-                            shadowElevation = 6.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            containerColor = MaterialTheme.colorScheme.background,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                         ) {
                             languages.forEach { languageName ->
                                 DropdownMenuItem(
@@ -407,7 +407,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("theme_selector_card"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -484,7 +484,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("typography_controls_card"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -552,10 +552,10 @@ fun SettingsScreen(
                             expanded = fontMenuOpen,
                             onDismissRequest = { fontMenuOpen = false },
                             shape = RoundedCornerShape(16.dp),
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 4.dp,
-                            shadowElevation = 6.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            containerColor = MaterialTheme.colorScheme.background,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                         ) {
                             fontFamilies.forEach { font ->
                                 DropdownMenuItem(
