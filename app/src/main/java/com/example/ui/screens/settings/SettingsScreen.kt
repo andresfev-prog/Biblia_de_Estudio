@@ -133,7 +133,7 @@ fun SettingsScreen(
                 .testTag("user_profile_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -229,60 +229,51 @@ fun SettingsScreen(
                 .testTag("settings_favorites_item"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.padding(18.dp)) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(appColors.surfaceVariant),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Favorite,
                             contentDescription = null,
-                            tint = appColors.accent,
-                            modifier = Modifier.size(22.dp)
+                            tint = appColors.accent
                         )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = StringsLocale.get("favorites_option", lang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.titleColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = String.format(StringsLocale.get("saved_favorites_count", lang), uiState.favorites.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = appColors.textSecondary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = StringsLocale.get("favorites_option", lang),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.titleColor,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Text(
-                            text = String.format(StringsLocale.get("saved_favorites_count", lang), uiState.favorites.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = appColors.textSecondary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
 
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = appColors.textSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = appColors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
@@ -293,7 +284,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -409,7 +400,7 @@ fun SettingsScreen(
                 .testTag("theme_selector_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -486,7 +477,7 @@ fun SettingsScreen(
                 .testTag("typography_controls_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {

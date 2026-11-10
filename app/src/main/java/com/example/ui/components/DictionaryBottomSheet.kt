@@ -286,30 +286,14 @@ fun DictionaryBottomSheet(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = match.module.title,
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = appColors.titleColor,
-                                                    maxLines = 1,
-                                                    softWrap = false
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(if (appColors.isDark) appColors.accent.copy(alpha = 0.25f) else appColors.accent)
-                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(
-                                                        text = match.module.versionTag,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (appColors.isDark) appColors.accent else androidx.compose.ui.graphics.Color.White
-                                                    )
-                                                }
-                                            }
+                                            Text(
+                                                text = match.module.title,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = appColors.titleColor,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 text = "${match.module.author} · ${match.module.language}",
@@ -326,7 +310,7 @@ fun DictionaryBottomSheet(
                                                         match.entry.originalWord.takeIf { it.isNotBlank() }
                                                     ).filterNotNull().joinToString(" · "),
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = appColors.accent,
+                                                    color = appColors.textSecondary,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             }
@@ -337,7 +321,7 @@ fun DictionaryBottomSheet(
                                         AppIcon(
                                             glyph = AppIcons.ForwardArrow,
                                             contentDescription = null,
-                                            tint = appColors.accent,
+                                            tint = appColors.textSecondary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }

@@ -82,9 +82,9 @@ fun PassageSelectorDialog(
                 .padding(14.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .testTag("passage_selector_dialog"),
-            color = appColors.surface,
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
-            tonalElevation = 6.dp
+            color = MaterialTheme.colorScheme.background,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            tonalElevation = 0.dp
         ) {
             Column(
                 modifier = Modifier
@@ -155,7 +155,7 @@ fun PassageSelectorDialog(
                         PrimaryTabRow(
                             selectedTabIndex = testamentTab,
                             modifier = Modifier.fillMaxWidth(),
-                            containerColor = appColors.surface
+                            containerColor = MaterialTheme.colorScheme.background
                         ) {
                             Tab(
                                 selected = testamentTab == 0,
@@ -203,22 +203,21 @@ fun PassageSelectorDialog(
                         ) {
                             items(filteredBooks) { book ->
                                 val isSelected = book.number == selectedBook.number
-                                Card(
+                                Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(64.dp)
+                                        .height(56.dp)
+                                        .clip(CircleShape)
                                         .clickable { onBookSelected(book) }
                                         .testTag("book_card_${book.number}"),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) appColors.pillBg else appColors.surfaceVariant
-                                    ),
-                                    border = if (appColors.isDark && !isSelected) BorderStroke(1.dp, appColors.border) else null,
-                                    shape = RoundedCornerShape(50)
+                                    shape = CircleShape,
+                                    color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
+                                    tonalElevation = 0.dp
                                 ) {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(6.dp),
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
                                         verticalArrangement = Arrangement.Center,
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
@@ -268,26 +267,26 @@ fun PassageSelectorDialog(
                         ) {
                             items(chapterList) { chap ->
                                 val isSelected = chap == selectedChapter
-                                Box(
+                                Surface(
                                     modifier = Modifier
                                         .size(52.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) appColors.pillBg
-                                             else appColors.surfaceVariant
-                                        )
                                         .clickable { onChapterSelected(chap) }
                                         .testTag("chapter_button_$chap"),
-                                    contentAlignment = Alignment.Center
+                                    shape = CircleShape,
+                                    color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
+                                    tonalElevation = 0.dp
                                 ) {
-                                    Text(
-                                        text = "$chap",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) appColors.pillText else appColors.textPrimary,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "$chap",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) appColors.pillText else appColors.textPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -327,23 +326,26 @@ fun PassageSelectorDialog(
                                 key = { index -> "picker_v_${verseList[index]}" }
                             ) { index ->
                                 val v = verseList[index]
-                                Box(
+                                Surface(
                                     modifier = Modifier
                                         .size(52.dp)
                                         .clip(CircleShape)
-                                        .background(appColors.surfaceVariant)
                                         .clickable { onVerseSelected(v) }
                                         .testTag("verse_button_$v"),
-                                    contentAlignment = androidx.compose.ui.BiasAlignment(0f, 0f)
+                                    shape = CircleShape,
+                                    color = appColors.surfaceVariant,
+                                    tonalElevation = 0.dp
                                 ) {
-                                    Text(
-                                        text = "$v",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = appColors.titleColor,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "$v",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = appColors.textPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                         }
