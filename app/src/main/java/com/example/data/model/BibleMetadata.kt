@@ -113,6 +113,8 @@ object BibleBooksData {
                 v.contains("NIV") || v.contains("NKJV") || v.contains("NLT") ||
                 v.contains("TPT") || v.contains("T4T") || v.contains("NASB") ||
                 v.contains("CSB") || v.contains("NET") || v.contains("ASV") ||
-                v.contains("WEB") || v.contains("YLT") || v.contains("DARBY")
+                v.contains("WEB") || v.contains("YLT") || v.contains("DARBY") ||
+                v.contains("MSG") || v.contains("ENGLISH") || v.contains("INGLES") ||
+                v.contains("INGLÉS")
     }
 }

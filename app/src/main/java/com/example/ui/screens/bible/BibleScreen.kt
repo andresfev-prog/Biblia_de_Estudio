@@ -379,12 +379,8 @@ private fun ReaderTopControls(
     var versionMenuExpanded by remember { mutableStateOf(false) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
 
-    val isEn = interfaceLanguage.contains("English", ignoreCase = true) ||
-            interfaceLanguage.equals("en", ignoreCase = true) ||
-            interfaceLanguage.startsWith("en", ignoreCase = true) ||
-            interfaceLanguage.contains("Inglés", ignoreCase = true) ||
-            BibleBooksData.isEnglishVersion(activeVersion)
-    val localizedBook = BibleBooksData.getLocalizedBookName(currentBook, isEn)
+    val isVersionEn = BibleBooksData.isEnglishVersion(activeVersion)
+    val localizedBook = BibleBooksData.getLocalizedBookName(currentBook, isVersionEn)
 
     Row(
         modifier = modifier
@@ -636,13 +632,8 @@ private fun SingleReaderView(
             .testTag("single_reader_list")
     ) {
         item {
-            val lang = uiState.userPreferences.interfaceLanguage
-            val isEn = lang.contains("English", ignoreCase = true) ||
-                    lang.equals("en", ignoreCase = true) ||
-                    lang.startsWith("en", ignoreCase = true) ||
-                    lang.contains("Inglés", ignoreCase = true) ||
-                    BibleBooksData.isEnglishVersion(uiState.activeVersion)
-            val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isEn)
+            val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+            val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isVersionEn)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -763,13 +754,8 @@ private fun ParallelReaderView(
                         .clickable { viewModel.openPassagePicker() }
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    val lang = uiState.userPreferences.interfaceLanguage
-                    val isEn = lang.contains("English", ignoreCase = true) ||
-                            lang.equals("en", ignoreCase = true) ||
-                            lang.startsWith("en", ignoreCase = true) ||
-                            lang.contains("Inglés", ignoreCase = true) ||
-                            BibleBooksData.isEnglishVersion(uiState.activeVersion)
-                    val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isEn)
+                    val isLeftVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+                    val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isLeftVersionEn)
                     Text(
                         text = "$displayBookName ${uiState.currentChapter}",
                         style = MaterialTheme.typography.titleSmall,

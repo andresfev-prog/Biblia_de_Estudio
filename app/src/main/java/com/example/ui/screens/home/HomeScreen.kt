@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.BibleBooksData
 import com.example.data.model.BibleVerse
 import com.example.ui.components.NotesBottomSheet
 import com.example.ui.theme.AppIcon
@@ -134,6 +135,7 @@ fun HomeScreen(
                 maxLines = 1,
                 softWrap = false
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = uiState.userPreferences.userName,
                 style = MaterialTheme.typography.headlineMedium,
@@ -142,9 +144,10 @@ fun HomeScreen(
                 maxLines = 1,
                 softWrap = false
             )
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = StringsLocale.get("home_subtitle", lang),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                 color = appColors.textSecondary
             )
         }
@@ -372,6 +375,9 @@ fun HomeScreen(
         val lastChapter = uiState.readingProgress?.chapter ?: 1
         val lastVersion = uiState.readingProgress?.version ?: "RVR 1960"
 
+        val shouldShowInEnglish = isEnglish || BibleBooksData.isEnglishVersion(lastVersion)
+        val displayLastBook = BibleBooksData.getLocalizedBookName(lastBook, shouldShowInEnglish)
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -405,7 +411,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "$lastBook $lastChapter",
+                            text = "$displayLastBook $lastChapter",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = appColors.titleColor,
