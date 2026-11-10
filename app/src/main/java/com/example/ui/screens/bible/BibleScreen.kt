@@ -649,6 +649,21 @@ private fun SingleReaderView(
         }
 
         item {
+            val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
+            ChapterBottomNavigationControls(
+                currentChapter = uiState.currentChapter,
+                totalChapters = totalChapters,
+                onPreviousChapter = {
+                    if (uiState.currentChapter > 1) {
+                        viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
+                    }
+                },
+                onNextChapter = {
+                    if (uiState.currentChapter < totalChapters) {
+                        viewModel.loadChapter(uiState.currentBook, uiState.currentChapter + 1)
+                    }
+                }
+            )
             Spacer(modifier = Modifier.height(90.dp))
         }
     }
@@ -840,6 +855,25 @@ private fun ParallelReaderView(
                         onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                         onFavoriteToggle = { viewModel.toggleFavorite(verse) }
                     )
+                }
+
+                item {
+                    val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
+                    ChapterBottomNavigationControls(
+                        currentChapter = uiState.currentChapter,
+                        totalChapters = totalChapters,
+                        onPreviousChapter = {
+                            if (uiState.currentChapter > 1) {
+                                viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
+                            }
+                        },
+                        onNextChapter = {
+                            if (uiState.currentChapter < totalChapters) {
+                                viewModel.loadChapter(uiState.currentBook, uiState.currentChapter + 1)
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(90.dp))
                 }
             }
         }
@@ -1040,6 +1074,35 @@ private fun ParallelReaderView(
                         onFavoriteToggle = { /* Sin acción en columna paralela */ }
                     )
                 }
+
+                item {
+                    val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
+                    val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
+                    val totalChapters = BibleBooksData.getBookByName(rightBook)?.chapterCount ?: 1
+                    ChapterBottomNavigationControls(
+                        currentChapter = activeRightChapter,
+                        totalChapters = totalChapters,
+                        onPreviousChapter = {
+                            if (activeRightChapter > 1) {
+                                if (isLinked) {
+                                    viewModel.loadChapter(uiState.currentBook, activeRightChapter - 1)
+                                } else {
+                                    onUpdateRightPassage(rightBook, activeRightChapter - 1, 1)
+                                }
+                            }
+                        },
+                        onNextChapter = {
+                            if (activeRightChapter < totalChapters) {
+                                if (isLinked) {
+                                    viewModel.loadChapter(uiState.currentBook, activeRightChapter + 1)
+                                } else {
+                                    onUpdateRightPassage(rightBook, activeRightChapter + 1, 1)
+                                }
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(90.dp))
+                }
             }
         }
     }
@@ -1075,6 +1138,93 @@ private fun ParallelReaderView(
                 rightPickerStep = 1
             }
         )
+    }
+}
+
+@Composable
+private fun ChapterBottomNavigationControls(
+    currentChapter: Int,
+    totalChapters: Int,
+    onPreviousChapter: () -> Unit,
+    onNextChapter: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val appColors = AppTheme.colors
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (currentChapter > 1) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = appColors.surfaceVariant,
+                border = BorderStroke(1.dp, appColors.border),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onPreviousChapter() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "‹",
+                        color = appColors.accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Capítulo ${currentChapter - 1}",
+                        color = appColors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.width(1.dp))
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        if (currentChapter < totalChapters) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = appColors.surfaceVariant,
+                border = BorderStroke(1.dp, appColors.border),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onNextChapter() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Capítulo ${currentChapter + 1}",
+                        color = appColors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "›",
+                        color = appColors.accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.width(1.dp))
+        }
     }
 }
 

@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ViewModule
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -240,7 +241,9 @@ fun BottomNavBar(
         tonalElevation = 0.dp
     ) {
         NavigationBar(
-            modifier = Modifier.testTag("main_bottom_nav_bar"),
+            modifier = Modifier
+                .height(60.dp)
+                .testTag("main_bottom_nav_bar"),
             containerColor = appColors.background,
             tonalElevation = 0.dp
         ) {
@@ -255,7 +258,7 @@ fun BottomNavBar(
             // Lista con íconos redondeados
             val navItems = listOf(
                 Triple(AppDestination.HOME, "nav_home", Icons.Rounded.Home),
-                Triple(AppDestination.BIBLE, "nav_bible", Icons.Rounded.Home), // Se reemplaza por el ícono vectorial exclusivo abajo
+                Triple(AppDestination.BIBLE, "nav_bible", Icons.Rounded.Home),
                 Triple(AppDestination.MODULES, "nav_modules", Icons.Rounded.ViewModule),
                 Triple(AppDestination.SEARCH, "nav_search", Icons.Rounded.Search),
                 Triple(AppDestination.SETTINGS, "nav_settings", Icons.Rounded.Settings)
@@ -270,23 +273,19 @@ fun BottomNavBar(
                     onClick = { onDestinationSelected(destination) },
                     icon = {
                         if (destination == AppDestination.BIBLE) {
-                            // Dibuja el libro cerrado con la cruz
                             BibleClosedCrossIcon(
-                                tint = if (isSelected) appColors.accent else appColors.textSecondary
+                                tint = if (isSelected) appColors.accent else appColors.textSecondary,
+                                modifier = Modifier.size(24.dp)
                             )
                         } else {
-                            Icon(imageVector = icon, contentDescription = labelText)
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = labelText,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     },
-                    label = {
-                        Text(
-                            text = labelText,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            softWrap = false,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
+                    alwaysShowLabel = false,
                     colors = navColors,
                     modifier = Modifier.testTag("nav_item_${destination.name.lowercase()}")
                 )
