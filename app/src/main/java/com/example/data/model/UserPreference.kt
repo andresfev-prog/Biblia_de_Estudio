@@ -14,7 +14,7 @@ data class UserPreference(
     val password: String = "123456",
     val interfaceLanguage: String = "Español",
     val themeMode: String = "AUTOMATIC", // "LIGHT", "DARK", "AUTOMATIC"
-    val fontFamily: String = "Google Sans", // "Google Sans", "Roboto Sans", "Arial", "Serif"
+    val fontFamily: String = "Google Sans Flex", // "Google Sans Flex", "Aktiv Grotesk", "Untitled Serif", "Serif", "Monospace"
     val fontSizePt: Float = 13f, // 8f to 16f
     val isFirstLaunch: Boolean = true
 )

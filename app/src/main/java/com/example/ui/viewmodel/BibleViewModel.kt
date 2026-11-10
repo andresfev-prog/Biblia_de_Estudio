@@ -248,6 +248,19 @@ class BibleViewModel(
             }
         }
 
+        viewModelScope.launch {
+            repository.getUserPreferences().collect { pref ->
+                if (pref != null) {
+                    val normalized = if (pref.fontFamily.equals("Google Sans", ignoreCase = true)) {
+                        pref.copy(fontFamily = "Google Sans Flex")
+                    } else {
+                        pref
+                    }
+                    _uiState.value = _uiState.value.copy(userPreferences = normalized)
+                }
+            }
+        }
+
         loadChapter("Juan", 1, "RVR1960", "KJV")
     }
 
@@ -1076,9 +1089,14 @@ class BibleViewModel(
 
     // --- Preferencias ---
     fun saveUserPreferences(preference: UserPreference = _uiState.value.userPreferences) {
-        _uiState.value = _uiState.value.copy(userPreferences = preference)
+        val normalized = if (preference.fontFamily.equals("Google Sans", ignoreCase = true)) {
+            preference.copy(fontFamily = "Google Sans Flex")
+        } else {
+            preference
+        }
+        _uiState.value = _uiState.value.copy(userPreferences = normalized)
         viewModelScope.launch {
-            repository.saveUserPreferences(preference)
+            repository.saveUserPreferences(normalized)
         }
     }
 
@@ -1089,7 +1107,8 @@ class BibleViewModel(
     }
 
     fun updateFontFamily(font: String) {
-        val updated = _uiState.value.userPreferences.copy(fontFamily = font)
+        val normalizedFont = if (font.equals("Google Sans", ignoreCase = true)) "Google Sans Flex" else font
+        val updated = _uiState.value.userPreferences.copy(fontFamily = normalizedFont)
         _uiState.value = _uiState.value.copy(userPreferences = updated)
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }

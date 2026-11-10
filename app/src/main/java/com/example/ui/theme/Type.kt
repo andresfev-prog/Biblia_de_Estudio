@@ -54,12 +54,14 @@ val NunitoFontFamily = FontFamily(
 
 fun resolveBibleFontFamily(fontName: String): FontFamily {
     return when (fontName.trim().lowercase()) {
-        "untitled serif", "untitled", "serif" -> UntitledSerifFontFamily
+        "google sans flex", "google sans" -> GoogleSansFlexFontFamily
         "aktiv grotesk", "aktiv", "grotesk" -> AktivGroteskFontFamily
+        "untitled serif", "untitled" -> UntitledSerifFontFamily
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
         "lexend" -> LexendFontFamily
         "nunito" -> NunitoFontFamily
-        "google sans" -> GoogleSansFlexFontFamily
-        else -> UntitledSerifFontFamily
+        else -> GoogleSansFlexFontFamily
     }
 }
 

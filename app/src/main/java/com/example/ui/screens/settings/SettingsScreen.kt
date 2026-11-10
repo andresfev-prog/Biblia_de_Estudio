@@ -84,7 +84,19 @@ fun SettingsScreen(
     val isEn = lang.contains("English", ignoreCase = true)
     // Opciones: English y Spanish en inglés, o Español e Inglés en español
     val languages = if (isEn) listOf("English", "Spanish") else listOf("Español", "Inglés")
-    val fontFamilies = listOf("Untitled Serif", "Aktiv Grotesk", "Serif", "Monospace")
+    val availableFonts = listOf(
+        "Google Sans Flex",
+        "Aktiv Grotesk",
+        "Untitled Serif",
+        "Serif",
+        "Monospace"
+    )
+
+    val currentFontDisplay = if (uiState.userPreferences.fontFamily.equals("Google Sans", ignoreCase = true)) {
+        "Google Sans Flex"
+    } else {
+        uiState.userPreferences.fontFamily
+    }
 
     val currentLanguageDisplay = if (isEn) "English" else "Español"
 
@@ -133,7 +145,7 @@ fun SettingsScreen(
                 .testTag("user_profile_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, appColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -229,7 +241,7 @@ fun SettingsScreen(
                 .testTag("settings_favorites_item"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, appColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -284,7 +296,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, appColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -361,7 +373,7 @@ fun SettingsScreen(
                             containerColor = MaterialTheme.colorScheme.background,
                             tonalElevation = 0.dp,
                             shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                            border = BorderStroke(1.dp, appColors.border)
                         ) {
                             languages.forEach { languageName ->
                                 DropdownMenuItem(
@@ -400,7 +412,7 @@ fun SettingsScreen(
                 .testTag("theme_selector_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, appColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -477,7 +489,7 @@ fun SettingsScreen(
                 .testTag("typography_controls_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, appColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -523,7 +535,7 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = uiState.userPreferences.fontFamily,
+                                    text = currentFontDisplay,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = appColors.pillText,
@@ -546,15 +558,15 @@ fun SettingsScreen(
                             containerColor = MaterialTheme.colorScheme.background,
                             tonalElevation = 0.dp,
                             shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                            border = BorderStroke(1.dp, appColors.border)
                         ) {
-                            fontFamilies.forEach { font ->
+                            availableFonts.forEach { font ->
                                 DropdownMenuItem(
                                     text = {
                                         Text(
                                             text = font,
-                                            fontWeight = if (uiState.userPreferences.fontFamily == font) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (uiState.userPreferences.fontFamily == font) appColors.accent else appColors.textPrimary,
+                                            fontWeight = if (currentFontDisplay == font) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (currentFontDisplay == font) appColors.accent else appColors.textPrimary,
                                             maxLines = 1,
                                             softWrap = false
                                         )
@@ -640,7 +652,7 @@ fun SettingsScreen(
                             text = sampleText,
                             fontSize = (uiState.userPreferences.fontSizePt * 1.35f).sp,
                             lineHeight = (uiState.userPreferences.fontSizePt * 1.9f).sp,
-                            fontFamily = resolveBibleFont(uiState.userPreferences.fontFamily), // <-- Vinculación de fuente en vivo
+                            fontFamily = resolveBibleFont(currentFontDisplay), // <-- Vinculación de fuente en vivo
                             color = appColors.textPrimary,
                             fontWeight = FontWeight.Normal
                         )
