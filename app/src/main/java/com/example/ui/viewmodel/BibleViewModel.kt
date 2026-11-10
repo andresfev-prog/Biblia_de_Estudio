@@ -206,7 +206,7 @@ class BibleViewModel(
     private fun observeData() {
         viewModelScope.launch {
             repository.getAllModules().collect { mods ->
-                if (mods.isEmpty() || mods.none { it.id == "mod_rvr1960" } || mods.any { it.id == "mod_wesley" && it.language != "Inglés" }) {
+                if (mods.isEmpty() || mods.size < 59 || mods.none { it.id == "mod_rvr1960" } || mods.none { it.id == "mod_kjv" }) {
                     repository.seedInitialModules()
                 } else {
                     _uiState.value = _uiState.value.copy(modules = mods)

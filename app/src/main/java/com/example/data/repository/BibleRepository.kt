@@ -109,7 +109,9 @@ class BibleRepository(
                 upper.contains("AMPC") -> "AMPC.commentaries.SQLite3"
                 upper.contains("ESV") -> "ESV.commentaries.SQLite3"
                 upper.contains("KJV") -> "KJV-c.commentaries.SQLite3"
+                upper.contains("NIV") -> "NIV.11.commentaries.SQLite3"
                 upper.contains("NKJV") -> "NKJV.commentaries.SQLite3"
+                upper.contains("NLT") -> "NLT.15.commentaries.SQLite3"
                 upper.contains("TPT") -> "TPT.commentaries.SQLite3"
                 upper.contains("T4T") -> "t4t.commentaries.SQLite3"
                 else -> null
@@ -129,7 +131,9 @@ class BibleRepository(
                     fn.startsWith("ampc.") ||
                     fn.startsWith("esv.") ||
                     fn.startsWith("kjv-c.") ||
+                    fn.startsWith("niv.11.") ||
                     fn.startsWith("nkjv.") ||
+                    fn.startsWith("nlt.15.") ||
                     fn.startsWith("tpt.") ||
                     fn.startsWith("t4t.")
         }
@@ -559,16 +563,7 @@ class BibleRepository(
     }
 
     fun getAllModules(): Flow<List<BibleModule>> {
-        return dao.getAllModules().map { list ->
-            list.filter { it.id != "mod_comentario_multilexico" }
-                .map { module ->
-                    if (module.id == "mod_wesley") {
-                        module.copy(language = "Inglés")
-                    } else {
-                        module
-                    }
-                }
-        }
+        return dao.getAllModules()
     }
 
     suspend fun seedInitialModules() {
@@ -578,35 +573,7 @@ class BibleRepository(
             // ==========================================
             // 1. VERSIONES BÍBLICAS (18 módulos)
             // ==========================================
-            // 1. Reina-Valera 1960
-            BibleModule(
-                id = "mod_rvr1960",
-                category = "VERSION",
-                title = "Reina-Valera 1960",
-                author = "Sociedades Bíblicas Unidas",
-                description = "Traducción clásica y representativa del texto bíblico en lengua castellana.",
-                language = "Español",
-                versionTag = "RVR1960",
-                sizeText = "4.2 MB",
-                isDownloaded = true, // Instalada por defecto
-                downloadUrl = "$GITHUB_BASE_URL/RVR1960.SQLite3",
-                fileName = "RVR1960.SQLite3"
-            ),
-
-            // 2. King James Version
-            BibleModule(
-                id = "mod_kjv",
-                category = "VERSION",
-                title = "King James Version",
-                author = "Cambridge University Press",
-                description = "Traducción histórica de referencia en inglés con fidelidad textual clásica.",
-                language = "Inglés",
-                versionTag = "KJV",
-                sizeText = "4.8 MB",
-                isDownloaded = true, // Instalada por defecto
-                downloadUrl = "$GITHUB_BASE_URL/KJV.SQLite3",
-                fileName = "KJV.SQLite3"
-            ),
+            // 1. Reina-Valera 1960 (Instalada por defecto)
             BibleModule(
                 id = "mod_rvr1960",
                 category = "VERSION",
@@ -620,84 +587,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/RVR1960.SQLite3",
                 fileName = "RVR1960.SQLite3"
             ),
+            // 2. King James Version (Instalada por defecto)
             BibleModule(
-                id = "mod_dhhd",
+                id = "mod_kjv",
                 category = "VERSION",
-                title = "Dios Habla Hoy",
-                author = "Sociedades Bíblicas Unidas",
-                description = "Versión en lenguaje accesible y ecuménico para lectura fluida.",
-                language = "Español",
-                versionTag = "DHHD",
-                sizeText = "4.9 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/DHHD.SQLite3",
-                fileName = "DHHD.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_kdsh",
-                category = "VERSION",
-                title = "Biblia Kadosh Mesiánica",
-                author = "Diego Ascunce",
-                description = "Restauración de nombres hebreos originales en el texto sagrado.",
-                language = "Español",
-                versionTag = "KDSH",
+                title = "King James Version",
+                author = "Cambridge University Press",
+                description = "Traducción histórica de referencia en inglés con fidelidad textual clásica.",
+                language = "Inglés",
+                versionTag = "KJV",
                 sizeText = "4.8 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/KDSH.SQLite3",
-                fileName = "KDSH.SQLite3"
+                isDownloaded = true,
+                downloadUrl = "$GITHUB_BASE_URL/KJV.SQLite3",
+                fileName = "KJV.SQLite3"
             ),
-            BibleModule(
-                id = "mod_ntv",
-                category = "VERSION",
-                title = "Nueva Traducción Viviente",
-                author = "Tyndale House Publishers",
-                description = "Traducción moderna y dinámica en lenguaje contemporáneo.",
-                language = "Español",
-                versionTag = "NTV",
-                sizeText = "4.6 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/NTV.SQLite3",
-                fileName = "NTV.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_nvi",
-                category = "VERSION",
-                title = "Nueva Versión Internacional",
-                author = "Biblica",
-                description = "Traducción contemporánea con equilibrio formal y dinámico.",
-                language = "Español",
-                versionTag = "NVI",
-                sizeText = "4.5 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/NVI.SQLite3",
-                fileName = "NVI.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_pdt",
-                category = "VERSION",
-                title = "Palabra de Dios para Todos",
-                author = "Liga Bíblica Mundial",
-                description = "Texto bíblico en lenguaje sencillo, directo y comprensible.",
-                language = "Español",
-                versionTag = "PDT",
-                sizeText = "4.3 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/PDT.SQLite3",
-                fileName = "PDT.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_tla",
-                category = "VERSION",
-                title = "Traducción en Lenguaje Actual",
-                author = "Sociedades Bíblicas Unidas",
-                description = "Texto con vocabulario adaptado para una lectura clara y directa.",
-                language = "Español",
-                versionTag = "TLA",
-                sizeText = "4.1 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/TLA.SQLite3",
-                fileName = "TLA.SQLite3"
-            ),
+            // 3. Amplified Bible
             BibleModule(
                 id = "mod_amp",
                 category = "VERSION",
@@ -711,6 +615,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/AMP.SQLite3",
                 fileName = "AMP.SQLite3"
             ),
+            // 4. Amplified Bible Classic
             BibleModule(
                 id = "mod_ampc",
                 category = "VERSION",
@@ -724,6 +629,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/AMPC.SQLite3",
                 fileName = "AMPC.SQLite3"
             ),
+            // 5. Dios Habla Hoy
+            BibleModule(
+                id = "mod_dhhd",
+                category = "VERSION",
+                title = "Dios Habla Hoy",
+                author = "Sociedades Bíblicas Unidas",
+                description = "Versión en lenguaje accesible y ecuménico para lectura fluida.",
+                language = "Español",
+                versionTag = "DHHD",
+                sizeText = "4.9 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/DHHD.SQLite3",
+                fileName = "DHHD.SQLite3"
+            ),
+            // 6. English Standard Version
             BibleModule(
                 id = "mod_esv",
                 category = "VERSION",
@@ -737,19 +657,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/ESV.SQLite3",
                 fileName = "ESV.SQLite3"
             ),
+            // 7. Biblia Kadosh Mesiánica
             BibleModule(
-                id = "mod_kjv",
+                id = "mod_kdsh",
                 category = "VERSION",
-                title = "King James Version",
-                author = "Cambridge University Press",
-                description = "Traducción histórica de referencia en inglés con fidelidad textual clásica.",
-                language = "Inglés",
-                versionTag = "KJV",
+                title = "Biblia Kadosh Mesiánica",
+                author = "Diego Ascunce",
+                description = "Restauración de nombres hebreos originales en el texto sagrado.",
+                language = "Español",
+                versionTag = "KDSH",
                 sizeText = "4.8 MB",
-                isDownloaded = true,
-                downloadUrl = "$GITHUB_BASE_URL/KJV.SQLite3",
-                fileName = "KJV.SQLite3"
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/KDSH.SQLite3",
+                fileName = "KDSH.SQLite3"
             ),
+            // 8. The Message
             BibleModule(
                 id = "mod_msg",
                 category = "VERSION",
@@ -763,6 +685,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/MSG.SQLite3",
                 fileName = "MSG.SQLite3"
             ),
+            // 9. New International Version (2011)
+            BibleModule(
+                id = "mod_niv11",
+                category = "VERSION",
+                title = "New International Version (2011)",
+                author = "Biblica",
+                description = "Traducción contemporánea en inglés con gran claridad y equilibrio formal.",
+                language = "Inglés",
+                versionTag = "NIV.11",
+                sizeText = "4.6 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NIV.11.SQLite3",
+                fileName = "NIV.11.SQLite3"
+            ),
+            // 10. New King James Version
             BibleModule(
                 id = "mod_nkjv",
                 category = "VERSION",
@@ -776,6 +713,77 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/NKJV.SQLite3",
                 fileName = "NKJV.SQLite3"
             ),
+            // 11. New Living Translation (2015)
+            BibleModule(
+                id = "mod_nlt15",
+                category = "VERSION",
+                title = "New Living Translation (2015)",
+                author = "Tyndale House Publishers",
+                description = "Traducción con lenguaje comprensible, vivo y devocional.",
+                language = "Inglés",
+                versionTag = "NLT.15",
+                sizeText = "4.7 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NLT.15.SQLite3",
+                fileName = "NLT.15.SQLite3"
+            ),
+            // 12. Nueva Traducción Viviente
+            BibleModule(
+                id = "mod_ntv",
+                category = "VERSION",
+                title = "Nueva Traducción Viviente",
+                author = "Tyndale House Publishers",
+                description = "Traducción moderna y dinámica en lenguaje contemporáneo.",
+                language = "Español",
+                versionTag = "NTV",
+                sizeText = "4.6 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NTV.SQLite3",
+                fileName = "NTV.SQLite3"
+            ),
+            // 13. Nueva Versión Internacional
+            BibleModule(
+                id = "mod_nvi",
+                category = "VERSION",
+                title = "Nueva Versión Internacional",
+                author = "Biblica",
+                description = "Traducción contemporánea con equilibrio formal y dinámico.",
+                language = "Español",
+                versionTag = "NVI",
+                sizeText = "4.5 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NVI.SQLite3",
+                fileName = "NVI.SQLite3"
+            ),
+            // 14. Palabra de Dios para Todos
+            BibleModule(
+                id = "mod_pdt",
+                category = "VERSION",
+                title = "Palabra de Dios para Todos",
+                author = "Liga Bíblica Mundial",
+                description = "Texto bíblico en lenguaje sencillo, directo y comprensible.",
+                language = "Español",
+                versionTag = "PDT",
+                sizeText = "4.3 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/PDT.SQLite3",
+                fileName = "PDT.SQLite3"
+            ),
+            // 15. Traducción en Lenguaje Actual
+            BibleModule(
+                id = "mod_tla",
+                category = "VERSION",
+                title = "Traducción en Lenguaje Actual",
+                author = "Sociedades Bíblicas Unidas",
+                description = "Texto con vocabulario adaptado para una lectura clara y directa.",
+                language = "Español",
+                versionTag = "TLA",
+                sizeText = "4.1 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/TLA.SQLite3",
+                fileName = "TLA.SQLite3"
+            ),
+            // 16. The Passion Translation
             BibleModule(
                 id = "mod_tpt",
                 category = "VERSION",
@@ -789,6 +797,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/TPT.SQLite3",
                 fileName = "TPT.SQLite3"
             ),
+            // 17. Young's Literal Translation
             BibleModule(
                 id = "mod_ylt",
                 category = "VERSION",
@@ -802,6 +811,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/YLT.SQLite3",
                 fileName = "YLT.SQLite3"
             ),
+            // 18. Translation 4 Translators
             BibleModule(
                 id = "mod_t4t",
                 category = "VERSION",
@@ -817,22 +827,23 @@ class BibleRepository(
             ),
 
             // ==========================================
-            // 2. DICCIONARIOS Y LÉXICOS (11 módulos)
+            // 2. DICCIONARIOS Y LÉXICOS (14 módulos)
             // ==========================================
-
+            // 19. Multilexicon Dictionary
             BibleModule(
-                id = "mod_es_dict",
+                id = "mod_multi_dict",
                 category = "DICTIONARY",
-                title = "Diccionario Bíblico General",
-                author = "Varios Autores",
-                description = "Compendio de términos y conceptos bíblicos en lengua española.",
-                language = "Español",
-                versionTag = "ES-DICT",
-                sizeText = "12.8 MB",
+                title = "Diccionario Multiléxico y Códigos Strong",
+                author = "Compilación Léxica MyBible",
+                description = "Definiciones etimológicas completas y concordancia Strong multilingüe.",
+                language = "Español / Hebreo / Griego",
+                versionTag = "MULTI",
+                sizeText = "15.2 MB",
                 isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/es.dictionary.SQLite3",
-                fileName = "es.dictionary.SQLite3"
+                downloadUrl = "$GITHUB_BASE_URL/Multi.dictionary.SQLite3",
+                fileName = "Multi.dictionary.SQLite3"
             ),
+            // 20. Concordancia Bíblica
             BibleModule(
                 id = "mod_conc_dict",
                 category = "DICTIONARY",
@@ -846,6 +857,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/Conc.dictionary.SQLite3",
                 fileName = "Conc.dictionary.SQLite3"
             ),
+            // 21. Diccionario Bíblico General
+            BibleModule(
+                id = "mod_es_dict",
+                category = "DICTIONARY",
+                title = "Diccionario Bíblico General",
+                author = "Varios Autores",
+                description = "Compendio de términos y conceptos bíblicos en lengua española.",
+                language = "Español",
+                versionTag = "ES-DICT",
+                sizeText = "12.8 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/es.dictionary.SQLite3",
+                fileName = "es.dictionary.SQLite3"
+            ),
+            // 22. Concordancia Strong Español
             BibleModule(
                 id = "mod_str_es",
                 category = "DICTIONARY",
@@ -859,19 +885,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/Str-ES.dictionary.SQLite3",
                 fileName = "Str-ES.dictionary.SQLite3"
             ),
-            BibleModule(
-                id = "mod_swanson",
-                category = "DICTIONARY",
-                title = "Dictionary of Biblical Languages",
-                author = "James Swanson",
-                description = "Léxico semántico exhaustivo del hebreo, arameo y griego bíblico.",
-                language = "Inglés",
-                versionTag = "SWANSON",
-                sizeText = "24.6 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/Swanson.dictionary.SQLite3",
-                fileName = "Swanson.dictionary.SQLite3"
-            ),
+            // 23. Enhanced Strong's Lexicon
             BibleModule(
                 id = "mod_str_plus",
                 category = "DICTIONARY",
@@ -885,32 +899,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/Str-Plus.dictionary.SQLite3",
                 fileName = "Str-Plus.dictionary.SQLite3"
             ),
+            // 24. Dictionary of Biblical Languages
             BibleModule(
-                id = "mod_mhwbc_c",
-                category = "COMMENTARY",
-                title = "Whole Bible Commentary",
-                author = "Matthew Henry",
-                description = "Comentario devocional y exegético exhaustivo de toda la Biblia versículo a versículo.",
-                language = "Inglés",
-                versionTag = "MHWBC",
-                sizeText = "58.7 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/MHWBC.commentaries.SQLite3",
-                fileName = "MHWBC.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_multi_dict",
+                id = "mod_swanson",
                 category = "DICTIONARY",
-                title = "Multilexicon Dictionary",
-                author = "The Word Project",
-                description = "Diccionario y léxico multilingüe integrado de consulta bíblica.",
+                title = "Dictionary of Biblical Languages",
+                author = "James Swanson",
+                description = "Léxico semántico exhaustivo del hebreo, arameo y griego bíblico.",
                 language = "Inglés",
-                versionTag = "MULTI",
-                sizeText = "15.2 MB",
-                isDownloaded = false, // Ahora disponible para descargar
-                downloadUrl = "$GITHUB_BASE_URL/Multi.dictionary.SQLite3",
-                fileName = "Multi.dictionary.SQLite3"
+                versionTag = "SWANSON",
+                sizeText = "24.6 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/Swanson.dictionary.SQLite3",
+                fileName = "Swanson.dictionary.SQLite3"
             ),
+            // 25. Theological Wordbook of the OT
             BibleModule(
                 id = "mod_twot",
                 category = "DICTIONARY",
@@ -924,6 +927,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/TWOT.dictionary.SQLite3",
                 fileName = "TWOT.dictionary.SQLite3"
             ),
+            // 26. Webster's 1828 Dictionary
             BibleModule(
                 id = "mod_webster",
                 category = "DICTIONARY",
@@ -937,6 +941,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/Webster.dictionary.SQLite3",
                 fileName = "Webster.dictionary.SQLite3"
             ),
+            // 27. Brown-Driver-Briggs Lexicon
             BibleModule(
                 id = "mod_bdb_t",
                 category = "DICTIONARY",
@@ -950,311 +955,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/BDB-T.dictionary.SQLite3",
                 fileName = "BDB-T.dictionary.SQLite3"
             ),
-
-            // ==========================================
-            // 3. COMENTARIOS BÍBLICOS (28 módulos)
-            // ==========================================
+            // 28. Léxico y Diccionario Semántico Español (LDS-es)
             BibleModule(
-                id = "mod_cbwm_c",
-                category = "COMMENTARY",
-                title = "Comentario Bíblico William MacDonald",
-                author = "William MacDonald",
-                description = "Comentario expositivo exhaustivo del Antiguo y Nuevo Testamento.",
+                id = "mod_lds_es",
+                category = "DICTIONARY",
+                title = "Léxico y Diccionario Semántico Español",
+                author = "Varios Autores",
+                description = "Diccionario de términos, lugares y nombres bíblicos en español.",
                 language = "Español",
-                versionTag = "CBWM",
-                sizeText = "3.5 MB",
+                versionTag = "LDS-ES",
+                sizeText = "6.1 MB",
                 isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/CBWM-c.commentaries.SQLite3",
-                fileName = "CBWM-c.commentaries.SQLite3"
+                downloadUrl = "$GITHUB_BASE_URL/LDS-es.dictionary.SQLite3",
+                fileName = "LDS-es.dictionary.SQLite3"
             ),
-            BibleModule(
-                id = "mod_cmh_c",
-                category = "COMMENTARY",
-                title = "Comentario Matthew Henry",
-                author = "Matthew Henry",
-                description = "Comentario devocional y exegético conciso de las Sagradas Escrituras.",
-                language = "Español",
-                versionTag = "CMH",
-                sizeText = "4.8 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/CMH-c.commentaries.SQLite3",
-                fileName = "CMH-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_flores_c",
-                category = "COMMENTARY",
-                title = "Comentario José Flores",
-                author = "José Flores",
-                description = "Notas pastorales y expositivas para la edificación bíblica.",
-                language = "Español",
-                versionTag = "FLORES",
-                sizeText = "3.2 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/Flores-c.commentaries.SQLite3",
-                fileName = "Flores-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_jfb_es_c",
-                category = "COMMENTARY",
-                title = "Comentario Jamieson-Fausset-Brown",
-                author = "Jamieson, Fausset & Brown",
-                description = "Comentario exegético y explicativo de toda la Biblia en español.",
-                language = "Español",
-                versionTag = "JFB-ES",
-                sizeText = "6.9 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/JFB-ES-c.commentaries.SQLite3",
-                fileName = "JFB-ES-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_ntv_c",
-                category = "COMMENTARY",
-                title = "Notas Explicativas NTV",
-                author = "Tyndale House Publishers",
-                description = "Notas aclaratorias al pie de página y perícopas de la NTV.",
-                language = "Español",
-                versionTag = "NTV-C",
-                sizeText = "1.9 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/NTV.commentaries.SQLite3",
-                fileName = "NTV.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_nvi_notes",
-                category = "COMMENTARY",
-                title = "Notas de Estudio NVI",
-                author = "Biblica",
-                description = "Notas textuales, aclaraciones culturales y referencias de la NVI.",
-                language = "Español",
-                versionTag = "NVI-N",
-                sizeText = "2.3 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/NVI.commentaries.SQLite3",
-                fileName = "NVI.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_nvi_c",
-                category = "COMMENTARY",
-                title = "Comentario Bíblico NVI",
-                author = "Biblica",
-                description = "Comentario temático y teológico complementario de la NVI.",
-                language = "Español",
-                versionTag = "NVI-C",
-                sizeText = "4.1 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/NVI-c.commentaries.SQLite3",
-                fileName = "NVI-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_pdt_c",
-                category = "COMMENTARY",
-                title = "Notas Explicativas PDT",
-                author = "Liga Bíblica Mundial",
-                description = "Notas explicativas de vocabulario y contexto histórico de la PDT.",
-                language = "Español",
-                versionTag = "PDT-C",
-                sizeText = "1.4 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/PDT.commentaries.SQLite3",
-                fileName = "PDT.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_rv1960_c",
-                category = "COMMENTARY",
-                title = "Comentario Reina-Valera 1960",
-                author = "Sociedades Bíblicas Unidas",
-                description = "Notas de estudio y referencias explicativas para la RVR1960.",
-                language = "Español",
-                versionTag = "RVR-C",
-                sizeText = "3.8 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/RV1960-c.commentaries.SQLite3",
-                fileName = "RV1960-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_tla_c",
-                category = "COMMENTARY",
-                title = "Notas Explicativas TLA",
-                author = "Sociedades Bíblicas Unidas",
-                description = "Aclaraciones de términos culturales, geográficos y de traducción de la TLA.",
-                language = "Español",
-                versionTag = "TLA-C",
-                sizeText = "1.2 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/TLA-c.commentaries.SQLite3",
-                fileName = "TLA-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_wca_c",
-                category = "COMMENTARY",
-                title = "When Critics Ask",
-                author = "Norman Geisler & Thomas Howe",
-                description = "Handbook on Biblical Difficulties.",
-                language = "Inglés",
-                versionTag = "WCA",
-                sizeText = "4.3 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/WCA-c.commentaries.SQLite3",
-                fileName = "WCA-c.commentaries.SQLite3"
-            ),
-            // Módulo AMP
-            BibleModule(
-                id = "mod_amp",
-                category = "COMMENTARY", // o "VERSION" según la sección donde esté ubicado
-                title = "Amplified Bible Notes",
-                author = "The Lockman Foundation",
-                description = "Texto y notas de la traducción Amplified.",
-                language = "Inglés",
-                versionTag = "AMP",
-                sizeText = "5.1 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/AMP.commentaries.SQLite3",
-                fileName = "AMP.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_ampc_c",
-                category = "COMMENTARY",
-                title = "Amplified Classic Notes",
-                author = "The Lockman Foundation",
-                description = "Anotaciones clásicas explicativas de la edición AMPC.",
-                language = "Inglés",
-                versionTag = "AMPC-C",
-                sizeText = "2.2 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/AMPC.commentaries.SQLite3",
-                fileName = "AMPC.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_edw_c",
-                category = "COMMENTARY",
-                title = "Jonathan Edwards Notes",
-                author = "Jonathan Edwards",
-                description = "Notas teológicas y reflexiones exegéticas de Jonathan Edwards.",
-                language = "Inglés",
-                versionTag = "EDW",
-                sizeText = "2.8 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/Edw-c.commentaries.SQLite3",
-                fileName = "Edw-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_esv_c",
-                category = "COMMENTARY",
-                title = "ESV Global Study Notes",
-                author = "Crossway",
-                description = "Notas de estudio y contexto doctrinal de la traducción ESV.",
-                language = "Inglés",
-                versionTag = "ESV-C",
-                sizeText = "5.6 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/ESV.commentaries.SQLite3",
-                fileName = "ESV.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_kjv_c",
-                category = "COMMENTARY",
-                title = "KJV Study Notes",
-                author = "Cambridge University Press",
-                description = "Notas contextuales y referencias históricas tradicionales de la KJV.",
-                language = "Inglés",
-                versionTag = "KJV-C",
-                sizeText = "2.7 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/KJV-c.commentaries.SQLite3",
-                fileName = "KJV-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_nkjv_c",
-                category = "COMMENTARY",
-                title = "NKJV Study Notes",
-                author = "Thomas Nelson",
-                description = "Notas explicativas, históricas y doctrinales de la versión NKJV.",
-                language = "Inglés",
-                versionTag = "NKJV-C",
-                sizeText = "5.4 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/NKJV.commentaries.SQLite3",
-                fileName = "NKJV.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_pchc_c",
-                category = "COMMENTARY",
-                title = "Preacher's Homiletical",
-                author = "Exell, Jones et al.",
-                description = "Comentario homilético exhaustivo con bosquejos y sermones.",
-                language = "Inglés",
-                versionTag = "PCHC",
-                sizeText = "8.4 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/PCHC-c.commentaries.SQLite3",
-                fileName = "PCHC-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_spurg_c",
-                category = "COMMENTARY",
-                title = "Charles Spurgeon Notes",
-                author = "Charles H. Spurgeon",
-                description = "Notas expositivas y sermones del reconocido pastor Charles Spurgeon.",
-                language = "Inglés",
-                versionTag = "SPURG",
-                sizeText = "3.1 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/Spurg-c.commentaries.SQLite3",
-                fileName = "Spurg-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_tsk2_c",
-                category = "COMMENTARY",
-                title = "Treasury of Scripture Knowledge 2",
-                author = "R. A. Torrey / Jerome Smith",
-                description = "Edición ampliada con más de 500,000 referencias cruzadas analíticas.",
-                language = "Inglés",
-                versionTag = "TSK2",
-                sizeText = "9.2 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/TSK2-c.commentaries.SQLite3",
-                fileName = "TSK2-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_tsk_c",
-                category = "COMMENTARY",
-                title = "Treasury of Scripture Knowledge",
-                author = "R. A. Torrey",
-                description = "Sistema exhaustivo de referencias cruzadas y temas bíblicos correlacionados.",
-                language = "Inglés",
-                versionTag = "TSK",
-                sizeText = "7.5 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/TSK-c.commentaries.SQLite3",
-                fileName = "TSK-c.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_tpt_c",
-                category = "COMMENTARY",
-                title = "The Passion Footnotes",
-                author = "Brian Simmons / BroadStreet",
-                description = "Notas de estudio devocional con trasfondo lingüístico hebreo y arameo.",
-                language = "Inglés",
-                versionTag = "TPT-C",
-                sizeText = "3.2 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/TPT.commentaries.SQLite3",
-                fileName = "TPT.commentaries.SQLite3"
-            ),
-            BibleModule(
-                id = "mod_t4t_c",
-                category = "COMMENTARY",
-                title = "Translation 4 Translators Notes",
-                author = "Ellis W. Deibler Jr.",
-                description = "Notas explicativas y lingüísticas para facilitadores de traducción.",
-                language = "Inglés",
-                versionTag = "T4T-C",
-                sizeText = "3.9 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/t4t.commentaries.SQLite3",
-                fileName = "t4t.commentaries.SQLite3"
-            ),
-            // Diccionario Vine Antiguo Testamento (Hebreo - Español)
+            // 29. Diccionario Vine Antiguo Testamento
             BibleModule(
                 id = "mod_vine_at_es",
                 category = "DICTIONARY",
@@ -1268,8 +983,7 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/VineAT-es.dictionary.SQLite3",
                 fileName = "VineAT-es.dictionary.SQLite3"
             ),
-
-            // Diccionario Vine Nuevo Testamento (Griego - Español)
+            // 30. Diccionario Vine Nuevo Testamento
             BibleModule(
                 id = "mod_vine_nt_es",
                 category = "DICTIONARY",
@@ -1283,8 +997,21 @@ class BibleRepository(
                 downloadUrl = "$GITHUB_BASE_URL/VineNT-es.dictionary.SQLite3",
                 fileName = "VineNT-es.dictionary.SQLite3"
             ),
-
-            // Vine's Expository Dictionary Old Testament (Inglés)
+            // 31. Vine's NT Expository Dictionary
+            BibleModule(
+                id = "mod_vine_nt",
+                category = "DICTIONARY",
+                title = "Vine's NT Expository Dictionary",
+                author = "William Edwy Vine",
+                description = "Expository dictionary of New Testament words with Greek analysis.",
+                language = "Inglés",
+                versionTag = "VINE-NT",
+                sizeText = "4.2 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/VineNT.dictionary.SQLite3",
+                fileName = "VineNT.dictionary.SQLite3"
+            ),
+            // 32. Vine's OT Expository Dictionary
             BibleModule(
                 id = "mod_vine_ot",
                 category = "DICTIONARY",
@@ -1299,21 +1026,11 @@ class BibleRepository(
                 fileName = "VineOT.dictionary.SQLite3"
             ),
 
-            // Vine's Expository Dictionary New Testament (Inglés)
-            BibleModule(
-                id = "mod_vine_nt",
-                category = "DICTIONARY",
-                title = "Vine's NT Expository Dictionary",
-                author = "William Edwy Vine",
-                description = "Expository dictionary of New Testament words with Greek analysis.",
-                language = "Inglés",
-                versionTag = "VINE-NT",
-                sizeText = "4.2 MB",
-                isDownloaded = false,
-                downloadUrl = "$GITHUB_BASE_URL/VineNT.dictionary.SQLite3",
-                fileName = "VineNT.dictionary.SQLite3"
-            ),
-            // Comentario John Wesley
+            // ==========================================
+            // 3. COMENTARIOS BÍBLICOS (27 módulos)
+            // ==========================================
+            // --- A. Comentarios exegéticos generales (12 módulos) ---
+            // 33. John Wesley's Explanatory Notes
             BibleModule(
                 id = "mod_wesley",
                 category = "COMMENTARY",
@@ -1323,9 +1040,375 @@ class BibleRepository(
                 language = "Inglés",
                 versionTag = "WESLEY",
                 sizeText = "4.7 MB",
-                isDownloaded = false, // Ahora disponible para descargar
+                isDownloaded = false,
                 downloadUrl = "$GITHUB_BASE_URL/Wesley-c.commentaries.SQLite3",
                 fileName = "Wesley-c.commentaries.SQLite3"
+            ),
+            // 34. Comentario Matthew Henry
+            BibleModule(
+                id = "mod_cmh_c",
+                category = "COMMENTARY",
+                title = "Comentario Matthew Henry",
+                author = "Matthew Henry",
+                description = "Comentario devocional y exegético conciso de las Sagradas Escrituras.",
+                language = "Español",
+                versionTag = "CMH",
+                sizeText = "4.8 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/CMH-c.commentaries.SQLite3",
+                fileName = "CMH-c.commentaries.SQLite3"
+            ),
+            // 35. Comentario Bíblico William MacDonald
+            BibleModule(
+                id = "mod_cbwm_c",
+                category = "COMMENTARY",
+                title = "Comentario Bíblico William MacDonald",
+                author = "William MacDonald",
+                description = "Comentario expositivo exhaustivo del Antiguo y Nuevo Testamento.",
+                language = "Español",
+                versionTag = "CBWM",
+                sizeText = "3.5 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/CBWM-c.commentaries.SQLite3",
+                fileName = "CBWM-c.commentaries.SQLite3"
+            ),
+            // 36. Comentario José Flores
+            BibleModule(
+                id = "mod_flores_c",
+                category = "COMMENTARY",
+                title = "Comentario José Flores",
+                author = "José Flores",
+                description = "Notas pastorales y expositivas para la edificación bíblica.",
+                language = "Español",
+                versionTag = "FLORES",
+                sizeText = "3.2 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/Flores-c.commentaries.SQLite3",
+                fileName = "Flores-c.commentaries.SQLite3"
+            ),
+            // 37. Comentario Jamieson-Fausset-Brown
+            BibleModule(
+                id = "mod_jfb_es_c",
+                category = "COMMENTARY",
+                title = "Comentario Jamieson-Fausset-Brown",
+                author = "Jamieson, Fausset & Brown",
+                description = "Comentario exegético y explicativo de toda la Biblia en español.",
+                language = "Español",
+                versionTag = "JFB-ES",
+                sizeText = "6.9 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/JFB-ES-c.commentaries.SQLite3",
+                fileName = "JFB-ES-c.commentaries.SQLite3"
+            ),
+            // 38. Matthew Henry Whole Bible Commentary (MHWBC)
+            BibleModule(
+                id = "mod_mhwbc_c",
+                category = "COMMENTARY",
+                title = "Whole Bible Commentary",
+                author = "Matthew Henry",
+                description = "Comentario devocional y exegético exhaustivo de toda la Biblia versículo a versículo.",
+                language = "Inglés",
+                versionTag = "MHWBC",
+                sizeText = "58.7 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/MHWBC.commentaries.SQLite3",
+                fileName = "MHWBC.commentaries.SQLite3"
+            ),
+            // 39. Jonathan Edwards Notes
+            BibleModule(
+                id = "mod_edw_c",
+                category = "COMMENTARY",
+                title = "Jonathan Edwards Notes",
+                author = "Jonathan Edwards",
+                description = "Notas teológicas y reflexiones exegéticas de Jonathan Edwards.",
+                language = "Inglés",
+                versionTag = "EDW",
+                sizeText = "2.8 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/Edw-c.commentaries.SQLite3",
+                fileName = "Edw-c.commentaries.SQLite3"
+            ),
+            // 40. Charles Spurgeon Notes
+            BibleModule(
+                id = "mod_spurg_c",
+                category = "COMMENTARY",
+                title = "Charles Spurgeon Notes",
+                author = "Charles H. Spurgeon",
+                description = "Notas expositivas y sermones del reconocido pastor Charles Spurgeon.",
+                language = "Inglés",
+                versionTag = "SPURG",
+                sizeText = "3.1 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/Spurg-c.commentaries.SQLite3",
+                fileName = "Spurg-c.commentaries.SQLite3"
+            ),
+            // 41. Preacher's Homiletical Commentary
+            BibleModule(
+                id = "mod_pchc_c",
+                category = "COMMENTARY",
+                title = "Preacher's Homiletical Commentary",
+                author = "Exell, Jones et al.",
+                description = "Comentario homilético exhaustivo con bosquejos y sermones.",
+                language = "Inglés",
+                versionTag = "PCHC",
+                sizeText = "8.4 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/PCHC-c.commentaries.SQLite3",
+                fileName = "PCHC-c.commentaries.SQLite3"
+            ),
+            // 42. Treasury of Scripture Knowledge
+            BibleModule(
+                id = "mod_tsk_c",
+                category = "COMMENTARY",
+                title = "Treasury of Scripture Knowledge",
+                author = "R. A. Torrey",
+                description = "Sistema exhaustivo de referencias cruzadas y temas bíblicos correlacionados.",
+                language = "Inglés",
+                versionTag = "TSK",
+                sizeText = "7.5 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/TSK-c.commentaries.SQLite3",
+                fileName = "TSK-c.commentaries.SQLite3"
+            ),
+            // 43. Treasury of Scripture Knowledge 2
+            BibleModule(
+                id = "mod_tsk2_c",
+                category = "COMMENTARY",
+                title = "Treasury of Scripture Knowledge 2",
+                author = "R. A. Torrey / Jerome Smith",
+                description = "Edición ampliada con más de 500,000 referencias cruzadas analíticas.",
+                language = "Inglés",
+                versionTag = "TSK2",
+                sizeText = "9.2 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/TSK2-c.commentaries.SQLite3",
+                fileName = "TSK2-c.commentaries.SQLite3"
+            ),
+            // 44. When Critics Ask
+            BibleModule(
+                id = "mod_wca_c",
+                category = "COMMENTARY",
+                title = "When Critics Ask",
+                author = "Norman Geisler & Thomas Howe",
+                description = "Manual exegético y apologético para resolver dificultades bíblicas.",
+                language = "Inglés",
+                versionTag = "WCA",
+                sizeText = "4.3 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/WCA-c.commentaries.SQLite3",
+                fileName = "WCA-c.commentaries.SQLite3"
+            ),
+
+            // --- B. Notas textuales de versiones (15 módulos) ---
+            // 45. Notas Reina-Valera 1960
+            BibleModule(
+                id = "mod_rv1960_c",
+                category = "COMMENTARY",
+                title = "Notas Reina-Valera 1960",
+                author = "Sociedades Bíblicas Unidas",
+                description = "Notas de estudio y referencias explicativas para la RVR1960.",
+                language = "Español",
+                versionTag = "RVR-C",
+                sizeText = "3.8 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/RV1960-c.commentaries.SQLite3",
+                fileName = "RV1960-c.commentaries.SQLite3"
+            ),
+            // 46. Notas Explicativas NTV
+            BibleModule(
+                id = "mod_ntv_c",
+                category = "COMMENTARY",
+                title = "Notas Explicativas NTV",
+                author = "Tyndale House Publishers",
+                description = "Notas aclaratorias al pie de página y perícopas de la NTV.",
+                language = "Español",
+                versionTag = "NTV-C",
+                sizeText = "1.9 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NTV.commentaries.SQLite3",
+                fileName = "NTV.commentaries.SQLite3"
+            ),
+            // 47. Notas de Estudio NVI
+            BibleModule(
+                id = "mod_nvi_notes",
+                category = "COMMENTARY",
+                title = "Notas de Estudio NVI",
+                author = "Biblica",
+                description = "Notas textuales, aclaraciones culturales y referencias de la NVI.",
+                language = "Español",
+                versionTag = "NVI-N",
+                sizeText = "2.3 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NVI.commentaries.SQLite3",
+                fileName = "NVI.commentaries.SQLite3"
+            ),
+            // 48. Comentario Bíblico NVI
+            BibleModule(
+                id = "mod_nvi_c",
+                category = "COMMENTARY",
+                title = "Comentario Bíblico NVI",
+                author = "Biblica",
+                description = "Comentario temático y teológico complementario de la NVI.",
+                language = "Español",
+                versionTag = "NVI-C",
+                sizeText = "4.1 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NVI-c.commentaries.SQLite3",
+                fileName = "NVI-c.commentaries.SQLite3"
+            ),
+            // 49. Notas Explicativas PDT
+            BibleModule(
+                id = "mod_pdt_c",
+                category = "COMMENTARY",
+                title = "Notas Explicativas PDT",
+                author = "Liga Bíblica Mundial",
+                description = "Notas explicativas de vocabulario y contexto histórico de la PDT.",
+                language = "Español",
+                versionTag = "PDT-C",
+                sizeText = "1.4 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/PDT.commentaries.SQLite3",
+                fileName = "PDT.commentaries.SQLite3"
+            ),
+            // 50. Notas Explicativas TLA
+            BibleModule(
+                id = "mod_tla_c",
+                category = "COMMENTARY",
+                title = "Notas Explicativas TLA",
+                author = "Sociedades Bíblicas Unidas",
+                description = "Aclaraciones de términos culturales, geográficos y de traducción de la TLA.",
+                language = "Español",
+                versionTag = "TLA-C",
+                sizeText = "1.2 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/TLA-c.commentaries.SQLite3",
+                fileName = "TLA-c.commentaries.SQLite3"
+            ),
+            // 51. Amplified Bible Notes
+            BibleModule(
+                id = "mod_amp_notes",
+                category = "COMMENTARY",
+                title = "Amplified Bible Notes",
+                author = "The Lockman Foundation",
+                description = "Notas explicativas y referencias contextuales de la versión Amplified.",
+                language = "Inglés",
+                versionTag = "AMP-C",
+                sizeText = "5.1 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/AMP.commentaries.SQLite3",
+                fileName = "AMP.commentaries.SQLite3"
+            ),
+            // 52. Amplified Classic Notes
+            BibleModule(
+                id = "mod_ampc_notes",
+                category = "COMMENTARY",
+                title = "Amplified Classic Notes",
+                author = "The Lockman Foundation",
+                description = "Anotaciones clásicas explicativas de la edición AMPC.",
+                language = "Inglés",
+                versionTag = "AMPC-N",
+                sizeText = "2.2 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/AMPC.commentaries.SQLite3",
+                fileName = "AMPC.commentaries.SQLite3"
+            ),
+            // 53. ESV Global Study Notes
+            BibleModule(
+                id = "mod_esv_c",
+                category = "COMMENTARY",
+                title = "ESV Global Study Notes",
+                author = "Crossway",
+                description = "Notas de estudio y contexto doctrinal de la traducción ESV.",
+                language = "Inglés",
+                versionTag = "ESV-C",
+                sizeText = "5.6 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/ESV.commentaries.SQLite3",
+                fileName = "ESV.commentaries.SQLite3"
+            ),
+            // 54. KJV Study Notes
+            BibleModule(
+                id = "mod_kjv_c",
+                category = "COMMENTARY",
+                title = "KJV Study Notes",
+                author = "Cambridge University Press",
+                description = "Notas contextuales y referencias históricas tradicionales de la KJV.",
+                language = "Inglés",
+                versionTag = "KJV-C",
+                sizeText = "2.7 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/KJV-c.commentaries.SQLite3",
+                fileName = "KJV-c.commentaries.SQLite3"
+            ),
+            // 55. NIV 2011 Study Notes
+            BibleModule(
+                id = "mod_niv11_notes",
+                category = "COMMENTARY",
+                title = "NIV 2011 Study Notes",
+                author = "Biblica",
+                description = "Notas aclaratorias, lingüísticas e históricas de la edición NIV 2011.",
+                language = "Inglés",
+                versionTag = "NIV11-N",
+                sizeText = "3.4 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NIV.11.commentaries.SQLite3",
+                fileName = "NIV.11.commentaries.SQLite3"
+            ),
+            // 56. NKJV Study Notes
+            BibleModule(
+                id = "mod_nkjv_c",
+                category = "COMMENTARY",
+                title = "NKJV Study Notes",
+                author = "Thomas Nelson",
+                description = "Notas explicativas, históricas y doctrinales de la versión NKJV.",
+                language = "Inglés",
+                versionTag = "NKJV-C",
+                sizeText = "5.4 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NKJV.commentaries.SQLite3",
+                fileName = "NKJV.commentaries.SQLite3"
+            ),
+            // 57. NLT 2015 Study Notes
+            BibleModule(
+                id = "mod_nlt15_notes",
+                category = "COMMENTARY",
+                title = "NLT 2015 Study Notes",
+                author = "Tyndale House Publishers",
+                description = "Notas y perícopas de estudio para la traducción NLT 2015.",
+                language = "Inglés",
+                versionTag = "NLT15-N",
+                sizeText = "3.1 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/NLT.15.commentaries.SQLite3",
+                fileName = "NLT.15.commentaries.SQLite3"
+            ),
+            // 58. The Passion Footnotes
+            BibleModule(
+                id = "mod_tpt_c",
+                category = "COMMENTARY",
+                title = "The Passion Footnotes",
+                author = "Brian Simmons / BroadStreet",
+                description = "Notas de estudio devocional con trasfondo lingüístico hebreo y arameo.",
+                language = "Inglés",
+                versionTag = "TPT-C",
+                sizeText = "3.2 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/TPT.commentaries.SQLite3",
+                fileName = "TPT.commentaries.SQLite3"
+            ),
+            // 59. Translation 4 Translators Notes
+            BibleModule(
+                id = "mod_t4t_c",
+                category = "COMMENTARY",
+                title = "Translation 4 Translators Notes",
+                author = "Ellis W. Deibler Jr.",
+                description = "Notas explicativas y lingüísticas para facilitadores de traducción.",
+                language = "Inglés",
+                versionTag = "T4T-C",
+                sizeText = "3.9 MB",
+                isDownloaded = false,
+                downloadUrl = "$GITHUB_BASE_URL/t4t.commentaries.SQLite3",
+                fileName = "t4t.commentaries.SQLite3"
             )
         )
 
