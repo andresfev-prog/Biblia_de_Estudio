@@ -66,13 +66,20 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -635,7 +642,8 @@ private fun SingleReaderView(
                 lineHeight = lineHeight,
                 onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                 onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                onWordClick = { word -> viewModel.lookupWord(word) },
+                onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                 onFavoriteToggle = { viewModel.toggleFavorite(verse) }
             )
         }
@@ -828,7 +836,8 @@ private fun ParallelReaderView(
                         lineHeight = lineHeight,
                         onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word) },
+                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                        onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                         onFavoriteToggle = { viewModel.toggleFavorite(verse) }
                     )
                 }
@@ -1026,7 +1035,8 @@ private fun ParallelReaderView(
                         lineHeight = lineHeight,
                         onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word) },
+                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                        onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                         onFavoriteToggle = { /* Sin acción en columna paralela */ }
                     )
                 }
@@ -1068,7 +1078,7 @@ private fun ParallelReaderView(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VerseRowItem(
     verse: BibleVerse,
@@ -1081,13 +1091,21 @@ private fun VerseRowItem(
     onCommentaryClick: (code: String) -> Unit,
     onCrossRefClick: () -> Unit,
     onWordClick: (String) -> Unit,
+    onNoteClick: (marker: String) -> Unit,
     onFavoriteToggle: () -> Unit
 ) {
     val appColors = AppTheme.colors
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
-    val rawCleanText = verse.text.replace(Regex("<[^>]*>"), "").trim()
+    val rawCleanText = remember(verse.text) {
+        verse.text
+            .replace(Regex("<S>.*?</S>|<.*?>"), "")
+            .replace(Regex("(?<=\\p{L})\\d+"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     val copyVerseToClipboard = {
         val formattedText = "${verse.bookName} ${verse.chapter}:${verse.verse}\n$rawCleanText"
         clipboardManager.setText(AnnotatedString(formattedText))
@@ -1097,6 +1115,70 @@ private fun VerseRowItem(
             Toast.LENGTH_SHORT
         ).show()
     }
+
+    val annotatedString = remember(
+        verse.verse,
+        rawCleanText,
+        appColors.verseNumberColor,
+        appColors.textPrimary,
+        appColors.accent,
+        fontSize
+    ) {
+        buildAnnotatedString {
+            // Número del versículo al inicio en la misma línea visual base
+            pushStringAnnotation(tag = "VERSE_NUM", annotation = "${verse.verse}")
+            withStyle(
+                SpanStyle(
+                    color = appColors.verseNumberColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fontSize
+                )
+            ) {
+                append("${verse.verse} ")
+            }
+            pop()
+
+            // Tokenizar texto en: notas de versión [n], palabras interactuables y puntuación/espacios
+            val tokenPattern = Regex("(\\[(\\d+)\\])|([\\p{L}\\p{Nd}]+)|([^\\s\\[\\]\\p{L}\\p{Nd}]+)|(\\s+)")
+            val noteStyle = SpanStyle(
+                color = appColors.accent,
+                fontSize = (fontSize.value * 0.70f).sp,
+                baselineShift = BaselineShift.Superscript,
+                fontWeight = FontWeight.Bold
+            )
+            val wordStyle = SpanStyle(
+                color = appColors.textPrimary
+            )
+
+            tokenPattern.findAll(rawCleanText).forEach { match ->
+                val noteMarker = match.groups[2]?.value
+                val word = match.groups[3]?.value
+                when {
+                    noteMarker != null -> {
+                        pushStringAnnotation(tag = "NOTE", annotation = noteMarker)
+                        withStyle(noteStyle) {
+                            append("[$noteMarker]")
+                        }
+                        pop()
+                    }
+                    word != null -> {
+                        pushStringAnnotation(tag = "WORD", annotation = word)
+                        withStyle(wordStyle) {
+                            append(word)
+                        }
+                        pop()
+                    }
+                    else -> {
+                        withStyle(wordStyle) {
+                            append(match.value)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(
         modifier = Modifier
@@ -1110,7 +1192,7 @@ private fun VerseRowItem(
                 onClick = { },
                 onLongClick = { copyVerseToClipboard() }
             )
-            .padding(vertical = 6.dp)
+            .padding(vertical = 4.dp, horizontal = 2.dp)
             .testTag("verse_item_${verse.verse}")
     ) {
         if (!verse.sectionTitle.isNullOrBlank()) {
@@ -1120,119 +1202,122 @@ private fun VerseRowItem(
                 fontWeight = FontWeight.Bold,
                 color = appColors.titleColor,
                 fontFamily = fontFamily,
-                modifier = Modifier.padding(top = 10.dp, bottom = 6.dp)
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
             )
         }
 
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "${verse.verse} ",
-                color = appColors.verseNumberColor,
-                fontWeight = FontWeight.Bold,
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                fontFamily = fontFamily,
-                modifier = Modifier
-                    .clickable { onFavoriteToggle() }
-                    .padding(end = 4.dp)
-            )
-
-            val cleanWords = rawCleanText.split(" ").filter { it.isNotBlank() }
-            cleanWords.forEach { rawWord ->
-                val pureWord = rawWord.trim().replace(Regex("[^\\p{L}\\p{Nd}]"), "")
-
-                Text(
-                    text = "$rawWord ",
-                    color = appColors.textPrimary,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight,
-                    fontFamily = fontFamily,
-                    modifier = Modifier.combinedClickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = {
-                            if (pureWord.isNotBlank()) {
-                                onWordClick(pureWord)
+        // Renderizado unificado y continuo en una sola pasada (sin descomposición FlowRow)
+        Text(
+            text = annotatedString,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            fontFamily = fontFamily,
+            onTextLayout = { layoutResult = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(annotatedString) {
+                    detectTapGestures(
+                        onLongPress = { copyVerseToClipboard() },
+                        onTap = { pos ->
+                            layoutResult?.let { layout ->
+                                val offset = layout.getOffsetForPosition(pos)
+                                val noteAnnotation = annotatedString.getStringAnnotations("NOTE", offset, offset).firstOrNull()
+                                if (noteAnnotation != null) {
+                                    onNoteClick(noteAnnotation.item)
+                                    return@detectTapGestures
+                                }
+                                val verseNumAnnotation = annotatedString.getStringAnnotations("VERSE_NUM", offset, offset).firstOrNull()
+                                if (verseNumAnnotation != null) {
+                                    onFavoriteToggle()
+                                    return@detectTapGestures
+                                }
+                                val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
+                                if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
+                                    onWordClick(wordAnnotation.item)
+                                    return@detectTapGestures
+                                }
                             }
-                        },
-                        onLongClick = {
-                            copyVerseToClipboard()
                         }
                     )
-                )
-            }
-
-            // Etiqueta COM (comentarios exegéticos)
-            if (hasCommentary) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (appColors.isDark) {
-                        androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.25f)
-                    } else {
-                        androidx.compose.ui.graphics.Color(0xFFE0F2FE)
-                    },
-                    border = BorderStroke(
-                        0.8.dp,
-                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                        else androidx.compose.ui.graphics.Color(0xFF0284C7)
-                    ),
-                    modifier = Modifier
-                        .padding(start = 5.dp, top = 2.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { onCommentaryClick("COM") }
-                        .testTag("badge_com_${verse.verse}")
-                ) {
-                    Text(
-                        text = "COM",
-                        color = if (appColors.isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFF0369A1)
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = fontFamily,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                    )
                 }
-            }
+        )
 
-            // Etiqueta REF (referencias cruzadas TSK)
-            if (hasCrossReference) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (appColors.isDark) {
-                        androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.25f)
-                    } else {
-                        androidx.compose.ui.graphics.Color(0xFFD1FAE5)
-                    },
-                    border = BorderStroke(
-                        0.8.dp,
-                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
-                        else androidx.compose.ui.graphics.Color(0xFF059669)
-                    ),
-                    modifier = Modifier
-                        .padding(start = 5.dp, top = 2.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { onCrossRefClick() }
-                        .testTag("badge_ref_${verse.verse}")
-                ) {
-                    Text(
-                        text = "REF",
+        // Píldoras compactas COM y REF alineadas a la derecha al cierre del versículo
+        if (hasCommentary || hasCrossReference) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, end = 2.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (hasCommentary) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
                         color = if (appColors.isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF34D399)
+                            androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
                         } else {
-                            androidx.compose.ui.graphics.Color(0xFF047857)
+                            androidx.compose.ui.graphics.Color(0xFFE0F2FE)
                         },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = fontFamily,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                    )
+                        border = BorderStroke(
+                            0.6.dp,
+                            if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
+                            else androidx.compose.ui.graphics.Color(0xFF0284C7)
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onCommentaryClick("COM") }
+                            .testTag("badge_com_${verse.verse}")
+                    ) {
+                        Text(
+                            text = "COM",
+                            color = if (appColors.isDark) {
+                                androidx.compose.ui.graphics.Color(0xFF38BDF8)
+                            } else {
+                                androidx.compose.ui.graphics.Color(0xFF0369A1)
+                            },
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
+                if (hasCrossReference) {
+                    if (hasCommentary) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (appColors.isDark) {
+                            androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
+                        } else {
+                            androidx.compose.ui.graphics.Color(0xFFD1FAE5)
+                        },
+                        border = BorderStroke(
+                            0.6.dp,
+                            if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
+                            else androidx.compose.ui.graphics.Color(0xFF059669)
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onCrossRefClick() }
+                            .testTag("badge_ref_${verse.verse}")
+                    ) {
+                        Text(
+                            text = "REF",
+                            color = if (appColors.isDark) {
+                                androidx.compose.ui.graphics.Color(0xFF34D399)
+                            } else {
+                                androidx.compose.ui.graphics.Color(0xFF047857)
+                            },
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
                 }
             }
         }

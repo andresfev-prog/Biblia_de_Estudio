@@ -329,6 +329,81 @@ class BibleAssetDatabaseHelper(private val context: Context) {
         return commentText
     }
 
+    fun getVersionNoteText(
+        dbName: String,
+        bookNameOrAbbr: String,
+        chapter: Int,
+        verse: Int,
+        marker: String
+    ): String? {
+        val database = openDatabaseReadOnly(context, dbName) ?: return null
+        val bookNumber = resolveBookNumber(bookNameOrAbbr)
+        val cleanMarker = marker.trim().removeSurrounding("[", "]")
+
+        var noteText: String? = null
+        try {
+            val queryMarker = """
+                SELECT text FROM commentaries 
+                WHERE book_number = ? 
+                  AND chapter_number_from = ? 
+                  AND verse_number_from = ? 
+                  AND (marker = ? OR marker = ? OR marker LIKE ?)
+                LIMIT 1
+            """.trimIndent()
+
+            database.rawQuery(
+                queryMarker,
+                arrayOf(
+                    bookNumber.toString(),
+                    chapter.toString(),
+                    verse.toString(),
+                    cleanMarker,
+                    "[$cleanMarker]",
+                    "%$cleanMarker%"
+                )
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val textIndex = cursor.getColumnIndex("text")
+                    if (textIndex >= 0) {
+                        noteText = cursor.getString(textIndex)
+                    }
+                }
+            }
+
+            if (noteText.isNullOrBlank()) {
+                val queryFallback = """
+                    SELECT text FROM commentaries 
+                    WHERE book_number = ? 
+                      AND chapter_number_from = ? 
+                      AND verse_number_from = ? 
+                    LIMIT 1
+                """.trimIndent()
+
+                database.rawQuery(
+                    queryFallback,
+                    arrayOf(
+                        bookNumber.toString(),
+                        chapter.toString(),
+                        verse.toString()
+                    )
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val textIndex = cursor.getColumnIndex("text")
+                        if (textIndex >= 0) {
+                            noteText = cursor.getString(textIndex)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error consultando nota de versión en $dbName: ${e.message}", e)
+        } finally {
+            database.close()
+        }
+
+        return noteText
+    }
+
     fun getDictionaryEntry(
         term: String,
         strongCode: String? = null,

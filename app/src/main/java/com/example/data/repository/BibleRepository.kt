@@ -16,6 +16,7 @@ import com.example.data.model.UserNote
 import com.example.data.model.UserPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -93,13 +94,93 @@ class BibleRepository(
         }
     }.flowOn(Dispatchers.IO)
 
-    fun getVersesWithComments(
+    companion object {
+        private const val GITHUB_BASE_URL = "https://github.com/andresfev-prog/Biblia_de_Estudio/releases/download/1.0.0"
+
+        fun resolveVersionCommentaryFileName(version: String): String? {
+            val upper = version.uppercase().trim()
+            return when {
+                upper.contains("RVR1960") || upper == "RV1960" || upper.contains("REINA") -> "RV1960-c.commentaries.SQLite3"
+                upper.contains("NTV") -> "NTV.commentaries.SQLite3"
+                upper.contains("NVI") -> "NVI.commentaries.SQLite3"
+                upper.contains("PDT") -> "PDT.commentaries.SQLite3"
+                upper.contains("TLA") -> "TLA-c.commentaries.SQLite3"
+                upper == "AMP" -> "AMP.commentaries.SQLite3"
+                upper.contains("AMPC") -> "AMPC.commentaries.SQLite3"
+                upper.contains("ESV") -> "ESV.commentaries.SQLite3"
+                upper.contains("KJV") -> "KJV-c.commentaries.SQLite3"
+                upper.contains("NKJV") -> "NKJV.commentaries.SQLite3"
+                upper.contains("TPT") -> "TPT.commentaries.SQLite3"
+                upper.contains("T4T") -> "t4t.commentaries.SQLite3"
+                else -> null
+            }
+        }
+
+        fun isVersionSpecificCommentary(fileName: String?): Boolean {
+            if (fileName.isNullOrBlank()) return false
+            val fn = fileName.lowercase().trim()
+            return fn.startsWith("rv1960-c") ||
+                    fn.startsWith("ntv.") ||
+                    fn.startsWith("nvi.") ||
+                    fn.startsWith("nvi-c.") ||
+                    fn.startsWith("pdt.") ||
+                    fn.startsWith("tla-c.") ||
+                    fn.startsWith("amp.") ||
+                    fn.startsWith("ampc.") ||
+                    fn.startsWith("esv.") ||
+                    fn.startsWith("kjv-c.") ||
+                    fn.startsWith("nkjv.") ||
+                    fn.startsWith("tpt.") ||
+                    fn.startsWith("t4t.")
+        }
+    }
+
+    suspend fun isModuleDownloaded(fileName: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val assetList = context.assets.list("databases") ?: emptyArray()
+            if (assetList.any { it.equals(fileName, ignoreCase = true) }) return@withContext true
+        } catch (_: Exception) {}
+
+        val dbFile = context.getDatabasePath(fileName)
+        if (dbFile.exists() && dbFile.length() > 0) return@withContext true
+
+        val mod = dao.getAllModules().first().find { it.fileName.equals(fileName, ignoreCase = true) }
+        return@withContext mod?.isDownloaded == true
+    }
+
+    suspend fun getVersionNote(
+        versionDbName: String,
         bookName: String,
         chapter: Int,
-        commentaryDb: String = defaultCommentaryDb
+        verse: Int,
+        marker: String
+    ): String? = withContext(Dispatchers.IO) {
+        helper.getVersionNoteText(versionDbName, bookName, chapter, verse, marker)
+    }
+
+    fun getVersesWithComments(
+        bookName: String,
+        chapter: Int
     ): Flow<Set<Int>> = flow {
-        val commentVerses = helper.getVersesWithComments(commentaryDb, bookName, chapter)
-        emit(commentVerses)
+        val modules = dao.getAllModules().first()
+        val generalCommentaries = modules
+            .filter { it.category == "COMMENTARY" && it.isDownloaded && !it.fileName.isNullOrBlank() && !isVersionSpecificCommentary(it.fileName) }
+            .mapNotNull { it.fileName }
+
+        val resultSet = mutableSetOf<Int>()
+        for (dbName in generalCommentaries) {
+            val file = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, dbName)
+            if (file.exists() && file.length() > 0) {
+                resultSet.addAll(helper.getVersesWithComments(dbName, bookName, chapter))
+            }
+        }
+        if (generalCommentaries.isEmpty()) {
+            val wesleyFile = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, defaultCommentaryDb)
+            if (wesleyFile.exists() && wesleyFile.length() > 0) {
+                resultSet.addAll(helper.getVersesWithComments(defaultCommentaryDb, bookName, chapter))
+            }
+        }
+        emit(resultSet)
     }.flowOn(Dispatchers.IO)
 
     fun getCommentaryForVerse(
@@ -488,10 +569,6 @@ class BibleRepository(
                     }
                 }
         }
-    }
-
-    companion object {
-        private const val GITHUB_BASE_URL = "https://github.com/andresfev-prog/Biblia_de_Estudio/releases/download/1.0.0"
     }
 
     suspend fun seedInitialModules() {

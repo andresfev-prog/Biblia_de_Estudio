@@ -445,45 +445,94 @@ class BibleViewModel(
         }
     }
 
-    // --- Comentarios ---
+    // --- Comentarios y Notas de Versión ---
     fun openCommentary(verse: BibleVerse, preferredCode: String? = null) {
         val cleanVerseText = DailyVerseCatalog.cleanBibleText(verse.text)
         val cleanVerse = verse.copy(text = cleanVerseText)
 
         viewModelScope.launch {
-            repository.getCommentaryForVerse(cleanVerse.bookName, cleanVerse.chapter, cleanVerse.verse).collect { realCommentText ->
-                val fullList = if (!realCommentText.isNullOrBlank()) {
-                    val cleanComment = realCommentText
-                        .replace(Regex("<.*?>"), "")
-                        .replace(Regex("\\s+"), " ")
-                        .trim()
-                    listOf(
-                        Commentary(
-                            bookName = cleanVerse.bookName,
-                            chapter = cleanVerse.chapter,
-                            verse = cleanVerse.verse,
-                            author = "John Wesley",
-                            title = "",
-                            content = cleanComment
+            val modules = repository.getAllModules().first()
+            val generalCommentaries = modules
+                .filter { it.category == "COMMENTARY" && it.isDownloaded && !it.fileName.isNullOrBlank() && !BibleRepository.isVersionSpecificCommentary(it.fileName) }
+
+            val list = mutableListOf<Commentary>()
+            withContext(Dispatchers.IO) {
+                for (mod in generalCommentaries) {
+                    val fn = mod.fileName ?: continue
+                    val commentText = assetHelper.getCommentaryText(fn, cleanVerse.bookName, cleanVerse.chapter, cleanVerse.verse)
+                    if (!commentText.isNullOrBlank()) {
+                        val clean = commentText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                        list.add(
+                            Commentary(
+                                bookName = cleanVerse.bookName,
+                                chapter = cleanVerse.chapter,
+                                verse = cleanVerse.verse,
+                                author = mod.author.ifBlank { mod.title },
+                                title = mod.title,
+                                content = clean
+                            )
                         )
-                    )
-                } else {
-                    listOf(
-                        Commentary(
-                            bookName = cleanVerse.bookName,
-                            chapter = cleanVerse.chapter,
-                            verse = cleanVerse.verse,
-                            author = "John Wesley",
-                            title = "",
-                            content = "«${cleanVerse.text}»\n\nExégesis pastoral orientada al discernimiento bíblico y la santidad práctica."
-                        )
-                    )
+                    }
                 }
 
+                if (list.isEmpty()) {
+                    val fallbackText = assetHelper.getCommentaryText("Wesley-c.commentaries.SQLite3", cleanVerse.bookName, cleanVerse.chapter, cleanVerse.verse)
+                    if (!fallbackText.isNullOrBlank()) {
+                        val clean = fallbackText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                        list.add(
+                            Commentary(
+                                bookName = cleanVerse.bookName,
+                                chapter = cleanVerse.chapter,
+                                verse = cleanVerse.verse,
+                                author = "John Wesley",
+                                title = "Notas de John Wesley",
+                                content = clean
+                            )
+                        )
+                    }
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(
+                selectedCommentaryVerse = cleanVerse,
+                currentVerseCommentaries = list,
+                lastConsultedCommentary = list.firstOrNull() ?: _uiState.value.lastConsultedCommentary
+            )
+        }
+    }
+
+    fun onVersionNoteClick(verse: BibleVerse, marker: String) {
+        val versionDbName = BibleRepository.resolveVersionCommentaryFileName(verse.version) ?: return
+
+        viewModelScope.launch {
+            val isDownloaded = repository.isModuleDownloaded(versionDbName)
+            if (!isDownloaded) {
+                // Silencioso (no-op) cuando la nota no está descargada
+                return@launch
+            }
+
+            val noteText = repository.getVersionNote(
+                versionDbName = versionDbName,
+                bookName = verse.bookName,
+                chapter = verse.chapter,
+                verse = verse.verse,
+                marker = marker
+            )
+
+            if (!noteText.isNullOrBlank()) {
+                val clean = noteText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                val noteCommentary = Commentary(
+                    bookName = verse.bookName,
+                    chapter = verse.chapter,
+                    verse = verse.verse,
+                    author = "Notas ${verse.version}",
+                    title = "Nota [$marker]",
+                    content = clean
+                )
+
                 _uiState.value = _uiState.value.copy(
-                    selectedCommentaryVerse = cleanVerse,
-                    currentVerseCommentaries = fullList,
-                    lastConsultedCommentary = fullList.firstOrNull() ?: _uiState.value.lastConsultedCommentary
+                    selectedCommentaryVerse = verse,
+                    currentVerseCommentaries = listOf(noteCommentary)
                 )
             }
         }

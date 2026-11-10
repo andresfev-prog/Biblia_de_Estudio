@@ -50,7 +50,12 @@ fun CommentaryBottomSheet(
     val appColors = AppTheme.colors
 
     val isEnglish = interfaceLanguage.contains("English", ignoreCase = true)
-    val modalMainTitle = if (isEnglish) "Biblical Commentary" else "Comentario bíblico"
+    val isVersionNote = commentaries.size == 1 && commentaries.first().author.contains("Nota", ignoreCase = true)
+    val modalMainTitle = if (isVersionNote) {
+        if (isEnglish) "Translation Notes" else "Notas explicativas"
+    } else {
+        if (isEnglish) "Biblical Commentary" else "Comentario bíblico"
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
