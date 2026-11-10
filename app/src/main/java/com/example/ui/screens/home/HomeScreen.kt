@@ -65,6 +65,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleVerse
 import com.example.ui.components.NotesBottomSheet
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.DailyVerseCatalog
 import com.example.ui.util.LoadedDailyVerse
@@ -426,8 +428,8 @@ fun HomeScreen(
                             .background(appColors.pillBg),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.MenuBook,
+                        AppIcon(
+                            glyph = AppIcons.Bible,
                             contentDescription = null,
                             tint = appColors.pillText,
                             modifier = Modifier.size(24.dp)
@@ -502,8 +504,8 @@ fun HomeScreen(
                                 .background(appColors.pillBg),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.EditNote,
+                            AppIcon(
+                                glyph = AppIcons.MyNotes,
                                 contentDescription = null,
                                 tint = appColors.pillText,
                                 modifier = Modifier.size(24.dp)

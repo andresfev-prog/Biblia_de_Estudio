@@ -95,6 +95,8 @@ import com.example.ui.components.PassageSelectorDialog
 import com.example.ui.components.TtsPlayerBar
 import com.example.ui.screens.settings.resolveBibleFont
 import com.example.ui.theme.AppColors
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
@@ -521,10 +523,11 @@ private fun ReaderTopControls(
                 ) {
                     DropdownMenuItem(
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            AppIcon(
+                                glyph = AppIcons.TtsAudio,
                                 contentDescription = null,
-                                tint = appColors.accent
+                                tint = appColors.accent,
+                                modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
@@ -542,10 +545,11 @@ private fun ReaderTopControls(
                     )
                     DropdownMenuItem(
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.VerticalSplit,
+                            AppIcon(
+                                glyph = AppIcons.SplitScreen,
                                 contentDescription = null,
-                                tint = if (isParallelMode) appColors.accent else appColors.textSecondary
+                                tint = if (isParallelMode) appColors.accent else appColors.textSecondary,
+                                modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
@@ -563,10 +567,11 @@ private fun ReaderTopControls(
                     )
                     DropdownMenuItem(
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.EditNote,
+                            AppIcon(
+                                glyph = AppIcons.MyNotes,
                                 contentDescription = null,
-                                tint = appColors.accent
+                                tint = appColors.accent,
+                                modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {

@@ -44,6 +44,8 @@ import com.example.ui.screens.home.HomeScreen
 import com.example.ui.screens.modules.ModulesScreen
 import com.example.ui.screens.search.SearchScreen
 import com.example.ui.screens.settings.SettingsScreen
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.BibleStudyTheme
 import com.example.ui.util.StringsLocale
@@ -171,55 +173,6 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BibleClosedCrossIcon(
-    tint: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier
-) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(24.dp)) {
-        val w = size.width
-        val h = size.height
-
-        // 1. Cubierta del libro cerrado con bordes suaves
-        drawRoundRect(
-            color = tint,
-            topLeft = androidx.compose.ui.geometry.Offset(w * 0.16f, h * 0.10f),
-            size = androidx.compose.ui.geometry.Size(w * 0.68f, h * 0.80f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f, w * 0.10f)
-        )
-
-        // 2. Detalle lateral de las páginas
-        drawRoundRect(
-            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.40f),
-            topLeft = androidx.compose.ui.geometry.Offset(w * 0.74f, h * 0.16f),
-            size = androidx.compose.ui.geometry.Size(w * 0.07f, h * 0.68f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.03f, w * 0.03f)
-        )
-
-        // 3. Cruz en la portada
-        val crossColor = androidx.compose.ui.graphics.Color.White
-        val strokeW = w * 0.075f
-
-        // Línea vertical
-        drawLine(
-            color = crossColor,
-            start = androidx.compose.ui.geometry.Offset(w * 0.45f, h * 0.28f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.45f, h * 0.64f),
-            strokeWidth = strokeW,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round
-        )
-
-        // Línea horizontal
-        drawLine(
-            color = crossColor,
-            start = androidx.compose.ui.geometry.Offset(w * 0.32f, h * 0.40f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.40f),
-            strokeWidth = strokeW,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round
-        )
-    }
-}
-
-@Composable
 fun BottomNavBar(
     currentDestination: AppDestination,
     interfaceLanguage: String,
@@ -273,7 +226,9 @@ fun BottomNavBar(
                     onClick = { onDestinationSelected(destination) },
                     icon = {
                         if (destination == AppDestination.BIBLE) {
-                            BibleClosedCrossIcon(
+                            AppIcon(
+                                glyph = AppIcons.Bible,
+                                contentDescription = labelText,
                                 tint = if (isSelected) appColors.accent else appColors.textSecondary,
                                 modifier = Modifier.size(24.dp)
                             )
