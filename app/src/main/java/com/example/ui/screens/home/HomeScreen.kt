@@ -135,7 +135,7 @@ fun HomeScreen(
                 maxLines = 1,
                 softWrap = false
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = uiState.userPreferences.userName,
                 style = MaterialTheme.typography.headlineMedium,
@@ -144,10 +144,10 @@ fun HomeScreen(
                 maxLines = 1,
                 softWrap = false
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = StringsLocale.get("home_subtitle", lang),
-                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
                 color = appColors.textSecondary
             )
         }
@@ -371,12 +371,15 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         // "Continúa donde quedaste" Card
-        val lastBook = uiState.readingProgress?.bookName ?: "Juan"
+        val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
         val lastChapter = uiState.readingProgress?.chapter ?: 1
         val lastVersion = uiState.readingProgress?.version ?: "RVR 1960"
 
-        val shouldShowInEnglish = isEnglish || BibleBooksData.isEnglishVersion(lastVersion)
-        val displayLastBook = BibleBooksData.getLocalizedBookName(lastBook, shouldShowInEnglish)
+        val isEnglishVersion = BibleBooksData.isEnglishVersion(lastVersion)
+        val shouldShowInEnglish = isEnglish || isEnglishVersion
+        val bookInfo = BibleBooksData.getBookByName(lastBookRaw)
+        val bookNumber = bookInfo?.number ?: 43
+        val displayLastBook = BibleBooksData.getLocalizedBookName(bookNumber, shouldShowInEnglish)
 
         Card(
             modifier = Modifier
@@ -447,7 +450,7 @@ fun HomeScreen(
 
                 Button(
                     onClick = {
-                        viewModel.navigateToPassage(lastBook, lastChapter)
+                        viewModel.navigateToPassage(lastBookRaw, lastChapter)
                     },
                     modifier = Modifier
                         .fillMaxWidth()

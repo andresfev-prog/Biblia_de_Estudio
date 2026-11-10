@@ -145,7 +145,7 @@ fun SettingsScreen(
                 .testTag("user_profile_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -241,7 +241,7 @@ fun SettingsScreen(
                 .testTag("settings_favorites_item"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -296,7 +296,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -412,7 +412,7 @@ fun SettingsScreen(
                 .testTag("theme_selector_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -489,7 +489,7 @@ fun SettingsScreen(
                 .testTag("typography_controls_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {

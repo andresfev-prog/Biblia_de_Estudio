@@ -102,6 +102,15 @@ object BibleBooksData {
         }
     }
 
+    fun getBookByNumber(number: Int): BookInfo? {
+        return books.firstOrNull { it.number == number }
+    }
+
+    fun getLocalizedBookName(bookNumber: Int, isEnglish: Boolean): String {
+        val book = getBookByNumber(bookNumber) ?: return "Libro $bookNumber"
+        return if (isEnglish) book.englishName else book.name
+    }
+
     fun getLocalizedBookName(bookName: String, isEnglish: Boolean): String {
         val book = getBookByName(bookName) ?: return bookName
         return if (isEnglish) book.englishName else book.name

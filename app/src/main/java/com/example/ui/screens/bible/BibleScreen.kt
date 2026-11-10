@@ -676,11 +676,11 @@ private fun SingleReaderView(
 
         item {
             val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
-            val isEn = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+            val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
             ChapterBottomNavigationControls(
                 currentChapter = uiState.currentChapter,
                 totalChapters = totalChapters,
-                isEnglish = isEn,
+                isEnglish = isVersionEn,
                 onPreviousChapter = {
                     if (uiState.currentChapter > 1) {
                         viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
@@ -891,11 +891,11 @@ private fun ParallelReaderView(
 
                 item {
                     val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
-                    val isEn = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+                    val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
                     ChapterBottomNavigationControls(
                         currentChapter = uiState.currentChapter,
                         totalChapters = totalChapters,
-                        isEnglish = isEn,
+                        isEnglish = isVersionEn,
                         onPreviousChapter = {
                             if (uiState.currentChapter > 1) {
                                 viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
@@ -1113,11 +1113,11 @@ private fun ParallelReaderView(
                     val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
                     val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
                     val totalChapters = BibleBooksData.getBookByName(rightBook)?.chapterCount ?: 1
-                    val isEn = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+                    val isRightVersionEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
                     ChapterBottomNavigationControls(
                         currentChapter = activeRightChapter,
                         totalChapters = totalChapters,
-                        isEnglish = isEn,
+                        isEnglish = isRightVersionEn,
                         onPreviousChapter = {
                             if (activeRightChapter > 1) {
                                 if (isLinked) {
