@@ -635,13 +635,14 @@ fun HomeScreen(
                             .testTag("home_create_note_button"),
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.pillBg,
-                            contentColor = appColors.pillText
+                            containerColor = appColors.accent,
+                            contentColor = Color.White
                         )
                     ) {
                         Text(
                             text = StringsLocale.get("create_note", lang).replace("+", "").trim(),
                             fontWeight = FontWeight.Bold,
+                            color = Color.White,
                             maxLines = 1,
                             softWrap = false
                         )

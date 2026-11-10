@@ -72,6 +72,8 @@ class BibleRepository(
     fun getVerses(version: String, bookName: String, chapter: Int): Flow<List<BibleVerse>> = flow {
         val dbFileName = resolveBibleDatabaseFileName(version)
         val rawVerses = helper.getVersesFromAsset(dbFileName, bookName, chapter)
+        val isEnglish = BibleBooksData.isEnglishVersion(version)
+        val displayBookName = BibleBooksData.getLocalizedBookName(bookName, isEnglish)
 
         val realVerses = rawVerses.map { (verseNum, text) ->
             val book = BibleBooksData.getBookByName(bookName) ?: BibleBooksData.books[0]
@@ -80,11 +82,11 @@ class BibleRepository(
                 version = version,
                 testament = book.testament,
                 bookNumber = book.number,
-                bookName = bookName,
+                bookName = displayBookName,
                 chapter = chapter,
                 verse = verseNum,
                 text = text,
-                sectionTitle = if (verseNum == 1) getCanonicalSectionSubtitle(bookName, chapter) else null
+                sectionTitle = if (verseNum == 1) getCanonicalSectionSubtitle(bookName, chapter, isEnglish) else null
             )
         }
 
@@ -124,6 +126,7 @@ class BibleRepository(
         fun buildSearchWhereClause(
             cleanQuery: String,
             scope: String,
+            exactWord: Boolean = false,
             tablePrefix: String = "v."
         ): Pair<String, Array<String>> {
             val whereScopeClause = when (scope.uppercase().trim()) {
@@ -132,23 +135,36 @@ class BibleRepository(
                 else -> ""
             }
 
-            val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
-            if (words.isEmpty()) {
+            if (cleanQuery.isBlank()) {
                 return Pair("WHERE 1=0", emptyArray())
             }
 
-            val andClauses = mutableListOf<String>()
-            val params = mutableListOf<String>()
+            if (exactWord) {
+                // Modo Búsqueda Exacta (Activado):
+                // Debe buscar la cadena o frase de forma textual y continua sin permutar diacríticos
+                val sqlWhere = "WHERE ${tablePrefix}text LIKE ? $whereScopeClause"
+                return Pair(sqlWhere, arrayOf("%$cleanQuery%"))
+            } else {
+                // Modo Búsqueda Flexible (Desactivado):
+                // Aplica separación de palabras con operador AND e insensibilidad a tildes y diacríticos
+                val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+                if (words.isEmpty()) {
+                    return Pair("WHERE 1=0", emptyArray())
+                }
 
-            for (w in words) {
-                val variants = generateSpanishVariants(w)
-                val orClause = variants.joinToString(separator = " OR ") { "${tablePrefix}text LIKE ?" }
-                andClauses.add("($orClause)")
-                variants.forEach { params.add("%$it%") }
+                val andClauses = mutableListOf<String>()
+                val params = mutableListOf<String>()
+
+                for (w in words) {
+                    val variants = generateSpanishVariants(w)
+                    val orClause = variants.joinToString(separator = " OR ") { "${tablePrefix}text LIKE ?" }
+                    andClauses.add("($orClause)")
+                    variants.forEach { params.add("%$it%") }
+                }
+
+                val sqlWhere = "WHERE " + andClauses.joinToString(" AND ") + " " + whereScopeClause
+                return Pair(sqlWhere, params.toTypedArray())
             }
-
-            val sqlWhere = "WHERE " + andClauses.joinToString(" AND ") + " " + whereScopeClause
-            return Pair(sqlWhere, params.toTypedArray())
         }
 
         fun resolveVersionCommentaryFileName(version: String): String? {
@@ -428,15 +444,16 @@ class BibleRepository(
     }
 
     private fun generateFallbackChapter(version: String, bookName: String, chapter: Int): List<BibleVerse> {
+        val isEnglish = BibleBooksData.isEnglishVersion(version)
+        val displayBookName = BibleBooksData.getLocalizedBookName(bookName, isEnglish)
         val book = BibleBooksData.getBookByName(bookName) ?: BibleBooksData.books[0]
         val verseCount = getCanonicalVerseCount(bookName, chapter)
-        val isKjv = version.contains("KJV", ignoreCase = true)
 
         return (1..verseCount).map { v ->
-            val sampleText = if (isKjv) {
-                "The word of the Lord in $bookName chapter $chapter, verse $v: His truth and mercy endure for ever unto all generations."
+            val sampleText = if (isEnglish) {
+                "The word of the Lord in $displayBookName chapter $chapter, verse $v: His truth and mercy endure for ever unto all generations."
             } else {
-                "Palabra del Señor en $bookName capítulo $chapter, versículo $v: La fidelidad y la gracia de Dios permanecen para siempre."
+                "Palabra del Señor en $displayBookName capítulo $chapter, versículo $v: La fidelidad y la gracia de Dios permanecen para siempre."
             }
 
             BibleVerse(
@@ -444,31 +461,51 @@ class BibleRepository(
                 version = version,
                 testament = book.testament,
                 bookNumber = book.number,
-                bookName = bookName,
+                bookName = displayBookName,
                 chapter = chapter,
                 verse = v,
                 text = sampleText,
-                sectionTitle = if (v == 1) getCanonicalSectionSubtitle(bookName, chapter) else null
+                sectionTitle = if (v == 1) getCanonicalSectionSubtitle(bookName, chapter, isEnglish) else null
             )
         }
     }
 
-    private fun getCanonicalSectionSubtitle(bookName: String, chapter: Int): String? {
-        return when {
-            bookName == "Éxodo" && chapter == 3 -> "Llamamiento de Moisés"
-            bookName == "Éxodo" && chapter == 20 -> "Los Diez Mandamientos"
-            bookName == "Juan" && chapter == 1 -> "El Verbo hecho carne"
-            bookName == "Juan" && chapter == 3 -> "Jesús y Nicodemo"
-            bookName == "Juan" && chapter == 14 -> "Jesús, el camino al Padre"
-            bookName == "Salmos" && chapter == 23 -> "Jehová es mi pastor"
-            bookName == "Salmos" && chapter == 91 -> "Morando bajo la sombra del Omnipotente"
-            bookName == "Romanos" && chapter == 8 -> "La vida en el Espíritu"
-            bookName == "Filipenses" && chapter == 4 -> "Regocijaos en el Señor siempre"
-            bookName == "1 Corintios" && chapter == 13 -> "La preeminencia del amor"
-            bookName == "Mateo" && chapter == 5 -> "Las bienaventuranzas"
-            bookName == "Génesis" && chapter == 1 -> "La creación de los cielos y la tierra"
-            bookName == "Proverbios" && chapter == 3 -> "Exhortación a la sabiduría"
-            else -> null
+    private fun getCanonicalSectionSubtitle(bookName: String, chapter: Int, isEnglish: Boolean = false): String? {
+        val standardBook = BibleBooksData.getBookByName(bookName)?.name ?: bookName
+        return if (isEnglish) {
+            when {
+                standardBook == "Éxodo" && chapter == 3 -> "The Calling of Moses"
+                standardBook == "Éxodo" && chapter == 20 -> "The Ten Commandments"
+                standardBook == "Juan" && chapter == 1 -> "The Word Became Flesh"
+                standardBook == "Juan" && chapter == 3 -> "Jesus and Nicodemus"
+                standardBook == "Juan" && chapter == 14 -> "Jesus the Way to the Father"
+                standardBook == "Salmos" && chapter == 23 -> "The Lord Is My Shepherd"
+                standardBook == "Salmos" && chapter == 91 -> "Abiding in the Shadow of the Almighty"
+                standardBook == "Romanos" && chapter == 8 -> "Life in the Spirit"
+                standardBook == "Filipenses" && chapter == 4 -> "Rejoice in the Lord Always"
+                standardBook == "1 Corintios" && chapter == 13 -> "The Preeminence of Love"
+                standardBook == "Mateo" && chapter == 5 -> "The Beatitudes"
+                standardBook == "Génesis" && chapter == 1 -> "The Creation of the Heavens and the Earth"
+                standardBook == "Proverbios" && chapter == 3 -> "Trust in the Lord with All Your Heart"
+                else -> null
+            }
+        } else {
+            when {
+                standardBook == "Éxodo" && chapter == 3 -> "Llamamiento de Moisés"
+                standardBook == "Éxodo" && chapter == 20 -> "Los Diez Mandamientos"
+                standardBook == "Juan" && chapter == 1 -> "El Verbo hecho carne"
+                standardBook == "Juan" && chapter == 3 -> "Jesús y Nicodemo"
+                standardBook == "Juan" && chapter == 14 -> "Jesús, el camino al Padre"
+                standardBook == "Salmos" && chapter == 23 -> "Jehová es mi pastor"
+                standardBook == "Salmos" && chapter == 91 -> "Morando bajo la sombra del Omnipotente"
+                standardBook == "Romanos" && chapter == 8 -> "La vida en el Espíritu"
+                standardBook == "Filipenses" && chapter == 4 -> "Regocijaos en el Señor siempre"
+                standardBook == "1 Corintios" && chapter == 13 -> "La preeminencia del amor"
+                standardBook == "Mateo" && chapter == 5 -> "Las bienaventuranzas"
+                standardBook == "Génesis" && chapter == 1 -> "La creación de los cielos y la tierra"
+                standardBook == "Proverbios" && chapter == 3 -> "Exhortación a la sabiduría"
+                else -> null
+            }
         }
     }
 
@@ -506,7 +543,7 @@ class BibleRepository(
                     android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                 )
 
-                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, "v.")
+                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord, "v.")
 
                 val sql = """
                     SELECT b.long_name, v.book_number, v.chapter, v.verse, v.text 
@@ -516,14 +553,6 @@ class BibleRepository(
                     ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
                     LIMIT 100
                 """.trimIndent()
-
-                val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
-                val wordBoundaryRegexList = if (exactWord) {
-                    words.map { w ->
-                        val vars = generateSpanishVariants(w)
-                        Regex("(?i)(?<!\\p{L})(" + vars.joinToString("|") { Regex.escape(it) } + ")(?!\\p{L})")
-                    }
-                } else null
 
                 database.rawQuery(sql, params)?.use { cursor ->
                     val colBookName = cursor.getColumnIndexOrThrow("long_name")
@@ -540,7 +569,12 @@ class BibleRepository(
                             .replace(Regex("\\s+"), " ")
                             .trim()
 
-                        val matchesExact = wordBoundaryRegexList == null || wordBoundaryRegexList.all { it.containsMatchIn(cleanedText) }
+                        val matchesExact = if (exactWord) {
+                            cleanedText.contains(cleanQuery, ignoreCase = true)
+                        } else {
+                            true
+                        }
+
                         if (matchesExact) {
                             val bNum = cursor.getInt(colBookNumber)
                             val tName = if (bNum <= 460) "AT" else "NT"
@@ -561,7 +595,7 @@ class BibleRepository(
 
                 Log.i(
                     "BIBLE_DEBUG",
-                    "Búsqueda finalizada para '$cleanQuery' [$scope | $version] -> ${results.size} versículos encontrados."
+                    "Búsqueda finalizada para '$cleanQuery' [$scope | $version | exacta=$exactWord] -> ${results.size} versículos encontrados."
                 )
             } catch (e: Exception) {
                 Log.e("BIBLE_DEBUG", "Error ejecutando búsqueda de versículos en $dbName", e)
@@ -602,7 +636,7 @@ class BibleRepository(
                     android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                 )
 
-                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, "")
+                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord, "")
                 val sql = "SELECT COUNT(*) FROM verses $sqlWhere"
                 database.rawQuery(sql, params)?.use { cursor ->
                     if (cursor.moveToFirst()) {

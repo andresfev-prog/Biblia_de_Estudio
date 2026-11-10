@@ -5,6 +5,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.BibleBooksData
@@ -237,6 +238,7 @@ class BibleViewModel(
         viewModelScope.launch {
             repository.getAllModules().collect { mods ->
                 _uiState.value = _uiState.value.copy(modules = mods)
+                refreshCommentaryPills()
             }
         }
 
@@ -506,10 +508,16 @@ class BibleViewModel(
     fun onVersionNoteClick(verse: BibleVerse, marker: String) {
         val versionDbName = BibleRepository.resolveVersionCommentaryFileName(verse.version) ?: return
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val isDownloaded = repository.isModuleDownloaded(versionDbName)
             if (!isDownloaded) {
-                // Silencioso (no-op) cuando la nota no está descargada
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        getApplication(),
+                        "Descarga el módulo de notas de ${verse.version} para consultar la nota [$marker]",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
                 return@launch
             }
 
@@ -521,20 +529,60 @@ class BibleViewModel(
                 marker = marker
             )
 
-            if (!noteText.isNullOrBlank()) {
-                val clean = noteText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
-                val noteCommentary = Commentary(
-                    bookName = verse.bookName,
-                    chapter = verse.chapter,
-                    verse = verse.verse,
-                    author = "Notas ${verse.version}",
-                    title = "Nota [$marker]",
-                    content = clean
-                )
+            withContext(Dispatchers.Main) {
+                if (!noteText.isNullOrBlank()) {
+                    val clean = noteText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                    val noteCommentary = Commentary(
+                        bookName = verse.bookName,
+                        chapter = verse.chapter,
+                        verse = verse.verse,
+                        author = "Notas ${verse.version}",
+                        title = "Nota [$marker]",
+                        content = clean
+                    )
 
+                    _uiState.value = _uiState.value.copy(
+                        selectedCommentaryVerse = verse,
+                        currentVerseCommentaries = listOf(noteCommentary)
+                    )
+                } else {
+                    Toast.makeText(
+                        getApplication(),
+                        "No se encontró contenido para la nota [$marker]",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    fun refreshCommentaryPills() {
+        val bookName = _uiState.value.currentBook
+        val chapter = _uiState.value.currentChapter
+        if (bookName.isBlank() || chapter <= 0) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val modules = repository.getAllModules().first()
+            val generalCommentaries = modules
+                .filter { it.category == "COMMENTARY" && it.isDownloaded && !it.fileName.isNullOrBlank() && !BibleRepository.isVersionSpecificCommentary(it.fileName) }
+                .mapNotNull { it.fileName }
+
+            val resultSet = mutableSetOf<Int>()
+            for (dbName in generalCommentaries) {
+                val file = BibleAssetDatabaseHelper.ensureDatabaseExtracted(getApplication(), dbName)
+                if (file.exists() && file.length() > 0) {
+                    resultSet.addAll(assetHelper.getVersesWithComments(dbName, bookName, chapter))
+                }
+            }
+
+            withContext(Dispatchers.Main) {
                 _uiState.value = _uiState.value.copy(
-                    selectedCommentaryVerse = verse,
-                    currentVerseCommentaries = listOf(noteCommentary)
+                    versesWithComments = resultSet,
+                    parallelVersesWithComments = if (!_uiState.value.isParallelMode || _uiState.value.isParallelLinked) {
+                        resultSet
+                    } else {
+                        _uiState.value.parallelVersesWithComments
+                    }
                 )
             }
         }
@@ -979,6 +1027,7 @@ class BibleViewModel(
             if (result.isSuccess) {
                 // Actualiza en Room a isDownloaded = true
                 repository.toggleModuleDownload(module.id, false)
+                refreshCommentaryPills()
                 _uiState.value = _uiState.value.copy(
                     downloadProgress = updatedProgress,
                     toastMessage = if (isEn) "Module downloaded successfully" else "Módulo descargado correctamente"

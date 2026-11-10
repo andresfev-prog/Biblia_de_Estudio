@@ -22,7 +22,8 @@ class ModuleDownloader(private val context: Context) {
         try {
             destFile.parentFile?.mkdirs()
 
-            var currentUrl = downloadUrl
+            // Manejo de codificación de caracteres especiales (apóstrofes como en NIV'11)
+            var currentUrl = downloadUrl.replace("'", "%27")
             var redirectCount = 0
             val maxRedirects = 5
 
@@ -51,11 +52,11 @@ class ModuleDownloader(private val context: Context) {
                 }
             }
 
-            val totalBytes = connection!!.contentLength.toFloat()
+            val totalBytes = connection!!.contentLengthLong.toFloat()
 
             connection.inputStream.use { input ->
                 FileOutputStream(tempFile).use { output ->
-                    val buffer = ByteArray(8 * 1024)
+                    val buffer = ByteArray(128 * 1024)
                     var bytesRead: Int
                     var totalRead = 0L
 

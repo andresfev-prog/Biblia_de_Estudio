@@ -544,12 +544,15 @@ private fun buildHighlightedVerseText(
     query: String,
     exactWord: Boolean
 ): AnnotatedString {
-    if (query.isBlank()) return AnnotatedString(fullText)
+    val cleanQuery = query.trim()
+    if (cleanQuery.isBlank()) return AnnotatedString(fullText)
 
     val pattern = if (exactWord) {
-        Regex("(?i)(?<!\\p{L})" + Regex.escape(query) + "(?!\\p{L})")
+        Regex("(?i)" + Regex.escape(cleanQuery))
     } else {
-        Regex("(?i)" + Regex.escape(query))
+        val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val allVariants = words.flatMap { com.example.data.repository.BibleRepository.generateSpanishVariants(it) }
+        Regex("(?i)(" + allVariants.joinToString("|") { Regex.escape(it) } + ")")
     }
 
     val matches = pattern.findAll(fullText)
@@ -561,20 +564,22 @@ private fun buildHighlightedVerseText(
             val start = match.range.first
             val end = match.range.last + 1
 
-            if (start > lastIndex) {
-                append(fullText.substring(lastIndex, start))
-            }
+            if (start >= lastIndex) {
+                if (start > lastIndex) {
+                    append(fullText.substring(lastIndex, start))
+                }
 
-            pushStyle(
-                SpanStyle(
-                    fontWeight = FontWeight.ExtraBold,
-                    color = androidx.compose.ui.graphics.Color(0xFF0284C7)
+                pushStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.ExtraBold,
+                        color = androidx.compose.ui.graphics.Color(0xFF0284C7)
+                    )
                 )
-            )
-            append(fullText.substring(start, end))
-            pop()
+                append(fullText.substring(start, end))
+                pop()
 
-            lastIndex = end
+                lastIndex = end
+            }
         }
 
         if (lastIndex < fullText.length) {

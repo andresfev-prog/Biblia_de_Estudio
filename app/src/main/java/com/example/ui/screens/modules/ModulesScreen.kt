@@ -76,7 +76,7 @@ fun ModulesScreen(
     var languageMenuOpen by remember { mutableStateOf(false) }
     var onlyDownloaded by remember { mutableStateOf(false) }
 
-    val languages = listOf("Todos", "Español", "Inglés", "Griego / Hebreo")
+    val languages = listOf("Todos", "Español", "Inglés")
     val lang = uiState.userPreferences.interfaceLanguage
     val isEn = lang.contains("English", ignoreCase = true)
     val appColors = AppTheme.colors

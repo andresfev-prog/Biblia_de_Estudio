@@ -43,6 +43,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,8 +169,8 @@ private fun NotesListView(
                         .background(appColors.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.EditNote,
+                    AppIcon(
+                        glyph = AppIcons.MyNotes,
                         contentDescription = null,
                         tint = appColors.accent,
                         modifier = Modifier.size(20.dp)
@@ -205,7 +207,7 @@ private fun NotesListView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón "Nueva nota" limpio (sin icono +)
+        // Botón "Nueva nota" limpio con contraste absoluto (Color.White)
         Button(
             onClick = onNewNote,
             modifier = Modifier
@@ -214,15 +216,15 @@ private fun NotesListView(
                 .testTag("new_note_button"),
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = appColors.pillBg,
-                contentColor = appColors.pillText
+                containerColor = appColors.accent,
+                contentColor = Color.White
             )
         ) {
             Text(
                 text = StringsLocale.get("new_note", interfaceLanguage).replace("+", "").trim(),
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelLarge,
-                color = appColors.textPrimary
+                color = Color.White
             )
         }
 
