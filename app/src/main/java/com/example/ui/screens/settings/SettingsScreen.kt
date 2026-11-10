@@ -83,7 +83,7 @@ fun SettingsScreen(
 
     // Requirement 5: Exactly two options: "Español" and "English"
     val languages = listOf("Español", "English")
-    val fontFamilies = listOf("Google Sans", "Serif", "Slab Serif", "Monospace")
+    val fontFamilies = listOf("Untitled Serif", "Aktiv Grotesk", "Serif", "Monospace")
 
     val currentLanguageDisplay = if (lang.contains("English", ignoreCase = true)) "English" else "Español"
 
@@ -778,10 +778,5 @@ val SlabSerifFontFamily = FontFamily(
  * de contraste visual radical y comprobado.
  */
 fun resolveBibleFont(fontName: String): FontFamily {
-    return when (fontName.trim().lowercase()) {
-        "serif" -> FontFamily.Serif             // Nativa Android (Offline)
-        "monospace" -> FontFamily.Monospace     // Nativa Android (Offline, ancho fijo)
-        "slab serif", "slab" -> SlabSerifFontFamily // Slab editorial
-        else -> FontFamily.Default              // Google Sans / Sans-Serif moderna
-    }
+    return com.example.ui.theme.resolveBibleFontFamily(fontName)
 }

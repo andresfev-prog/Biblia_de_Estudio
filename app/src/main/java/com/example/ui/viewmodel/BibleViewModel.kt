@@ -14,6 +14,7 @@ import com.example.data.model.BookInfo
 import com.example.data.model.Commentary
 import com.example.data.model.CrossReference
 import com.example.data.model.DictionaryEntry
+import com.example.data.model.DictionaryMatch
 import com.example.data.model.FavoriteVerse
 import com.example.data.model.ReadingProgress
 import com.example.data.model.SearchHistoryItem
@@ -78,6 +79,7 @@ data class BibleUiState(
     val currentVerseCommentaries: List<Commentary> = emptyList(),
     val selectedDictionaryWord: String? = null,
     val currentDictionaryEntry: DictionaryEntry? = null,
+    val dictionaryMatches: List<DictionaryMatch> = emptyList(),
     val isWordLookupLoading: Boolean = false,
     val selectedCrossReferenceVerse: BibleVerse? = null,
     val currentVerseCrossReferences: List<CrossReference> = emptyList(),
@@ -580,26 +582,23 @@ class BibleViewModel(
 
         _uiState.value = _uiState.value.copy(
             selectedDictionaryWord = displayWord,
-            isWordLookupLoading = true
+            isWordLookupLoading = true,
+            dictionaryMatches = emptyList(),
+            currentDictionaryEntry = null
         )
 
         viewModelScope.launch {
-            val flowToCollect = if (verse != null) {
-                repository.getDictionaryEntryWithContext(
-                    term = searchLower,
-                    bookName = verse.bookName,
-                    chapter = verse.chapter,
-                    verse = verse.verse,
-                    version = verse.version
-                )
-            } else {
-                repository.getDictionaryEntry(searchLower)
-            }
-
-            flowToCollect.collect { entry ->
+            repository.getDictionaryMatchesForWord(
+                term = searchLower,
+                bookName = verse?.bookName,
+                chapter = verse?.chapter,
+                verse = verse?.verse,
+                version = verse?.version
+            ).collect { matches ->
                 _uiState.value = _uiState.value.copy(
-                    currentDictionaryEntry = entry,
-                    lastConsultedDictionary = entry ?: _uiState.value.lastConsultedDictionary,
+                    dictionaryMatches = matches,
+                    currentDictionaryEntry = matches.firstOrNull()?.entry,
+                    lastConsultedDictionary = matches.firstOrNull()?.entry ?: _uiState.value.lastConsultedDictionary,
                     isWordLookupLoading = false
                 )
             }
@@ -610,6 +609,7 @@ class BibleViewModel(
         _uiState.value = _uiState.value.copy(
             selectedDictionaryWord = null,
             currentDictionaryEntry = null,
+            dictionaryMatches = emptyList(),
             isWordLookupLoading = false
         )
     }

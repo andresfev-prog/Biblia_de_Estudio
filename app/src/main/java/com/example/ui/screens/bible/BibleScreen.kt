@@ -326,6 +326,7 @@ fun BibleScreen(
             DictionaryBottomSheet(
                 searchedWord = word,
                 entry = uiState.currentDictionaryEntry,
+                matches = uiState.dictionaryMatches,
                 isLoading = uiState.isWordLookupLoading,
                 interfaceLanguage = lang,
                 onDismiss = { viewModel.dismissDictionary() }
@@ -509,8 +510,8 @@ private fun ReaderTopControls(
                     onClick = { overflowMenuExpanded = true },
                     modifier = Modifier.size(36.dp).testTag("bible_overflow_menu_button")
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
+                    AppIcon(
+                        glyph = AppIcons.ThreeDotsMenu,
                         contentDescription = "Más opciones",
                         tint = appColors.textPrimary,
                         modifier = Modifier.size(22.dp)
@@ -1296,10 +1297,10 @@ private fun VerseRowItem(
             // Tokenizar texto en: notas de versión [n], palabras interactuables y puntuación/espacios
             val tokenPattern = Regex("(\\[(\\d+)\\])|([\\p{L}\\p{Nd}]+)|([^\\s\\[\\]\\p{L}\\p{Nd}]+)|(\\s+)")
             val noteStyle = SpanStyle(
-                color = appColors.accent,
-                fontSize = (fontSize.value * 0.70f).sp,
+                color = appColors.accent.copy(alpha = 0.85f),
+                fontSize = (fontSize.value * 0.65f).sp,
                 baselineShift = BaselineShift.Superscript,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Medium
             )
             val wordStyle = SpanStyle(
                 color = appColors.textPrimary

@@ -78,7 +78,12 @@ fun SearchScreen(
     val isEnglish = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
     val hasQuery = uiState.searchQuery.trim().length >= 2
     var isVersionMenuOpen by remember { mutableStateOf(false) }
-    val availableVersions = listOf("RVR1960", "KJV")
+    val availableVersions = remember(uiState.modules) {
+        val list = uiState.modules
+            .filter { it.category == "VERSION" && it.isDownloaded }
+            .map { it.versionTag }
+        if (list.isEmpty()) listOf("RVR1960", "KJV") else list
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(

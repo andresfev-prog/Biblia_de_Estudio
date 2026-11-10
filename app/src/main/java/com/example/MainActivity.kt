@@ -56,15 +56,25 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ViewModule
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ripple
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 
 
 class MainActivity : ComponentActivity() {
@@ -179,73 +189,76 @@ fun BottomNavBar(
     onDestinationSelected: (AppDestination) -> Unit
 ) {
     val appColors = AppTheme.colors
-    val navShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
 
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(navShape)
-            .border(
-                width = 1.dp,
-                color = appColors.divider.copy(alpha = if (appColors.isDark) 0.6f else 0.85f),
-                shape = navShape
-            ),
-        color = appColors.background, // Mismo fondo de la app en modo claro y oscuro
-        tonalElevation = 0.dp
+            .padding(start = 24.dp, end = 24.dp, bottom = 20.dp)
+            .testTag("main_bottom_nav_bar"),
+        contentAlignment = Alignment.Center
     ) {
-        NavigationBar(
+        Surface(
             modifier = Modifier
-                .height(60.dp)
-                .testTag("main_bottom_nav_bar"),
-            containerColor = appColors.background,
-            tonalElevation = 0.dp
+                .fillMaxWidth()
+                .height(64.dp)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = RoundedCornerShape(32.dp),
+                    spotColor = Color.Black.copy(alpha = if (appColors.isDark) 0.5f else 0.15f)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            color = appColors.cardBg,
+            tonalElevation = 6.dp,
+            border = BorderStroke(
+                width = 1.dp,
+                color = appColors.divider.copy(alpha = if (appColors.isDark) 0.35f else 0.7f)
+            )
         ) {
-            val navColors = NavigationBarItemDefaults.colors(
-                selectedIconColor = appColors.accent,
-                selectedTextColor = appColors.accent,
-                unselectedIconColor = appColors.textSecondary,
-                unselectedTextColor = appColors.textSecondary,
-                indicatorColor = androidx.compose.ui.graphics.Color.Transparent
-            )
-
-            // Lista con íconos redondeados
-            val navItems = listOf(
-                Triple(AppDestination.HOME, "nav_home", Icons.Rounded.Home),
-                Triple(AppDestination.BIBLE, "nav_bible", Icons.Rounded.Home),
-                Triple(AppDestination.MODULES, "nav_modules", Icons.Rounded.ViewModule),
-                Triple(AppDestination.SEARCH, "nav_search", Icons.Rounded.Search),
-                Triple(AppDestination.SETTINGS, "nav_settings", Icons.Rounded.Settings)
-            )
-
-            navItems.forEach { (destination, stringKey, icon) ->
-                val isSelected = currentDestination == destination
-                val labelText = StringsLocale.get(stringKey, interfaceLanguage)
-
-                NavigationBarItem(
-                    selected = isSelected,
-                    onClick = { onDestinationSelected(destination) },
-                    icon = {
-                        if (destination == AppDestination.BIBLE) {
-                            AppIcon(
-                                glyph = AppIcons.Bible,
-                                contentDescription = labelText,
-                                tint = if (isSelected) appColors.accent else appColors.textSecondary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = labelText,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    },
-                    alwaysShowLabel = false,
-                    colors = navColors,
-                    modifier = Modifier.testTag("nav_item_${destination.name.lowercase()}")
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val navItems = listOf(
+                    Pair(AppDestination.HOME, AppIcons.Home),
+                    Pair(AppDestination.BIBLE, AppIcons.Bible),
+                    Pair(AppDestination.MODULES, AppIcons.Modules),
+                    Pair(AppDestination.SEARCH, AppIcons.Search),
+                    Pair(AppDestination.SETTINGS, AppIcons.Settings)
                 )
+
+                navItems.forEach { (destination, glyph) ->
+                    val isSelected = currentDestination == destination
+                    val label = destination.name.lowercase()
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(bounded = false, radius = 28.dp)
+                            ) {
+                                onDestinationSelected(destination)
+                            }
+                            .testTag("nav_item_$label"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(
+                            glyph = glyph,
+                            contentDescription = label,
+                            tint = if (isSelected) appColors.accent else appColors.textSecondary.copy(alpha = 0.65f),
+                            fontSize = 24.sp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
             }
         }
     }
 }
+
 

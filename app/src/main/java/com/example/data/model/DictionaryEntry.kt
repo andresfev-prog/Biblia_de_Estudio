@@ -15,3 +15,11 @@ data class DictionaryEntry(
     val pronunciation: String = "",
     val theologicalNotes: String = ""
 )
+
+/**
+ * Representa una coincidencia de término dentro de un módulo de diccionario específico.
+ */
+data class DictionaryMatch(
+    val module: BibleModule,
+    val entry: DictionaryEntry
+)

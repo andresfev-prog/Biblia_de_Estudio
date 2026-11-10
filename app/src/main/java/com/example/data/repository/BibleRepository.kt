@@ -9,6 +9,7 @@ import com.example.data.model.BibleVerse
 import com.example.data.model.Commentary
 import com.example.data.model.CrossReference
 import com.example.data.model.DictionaryEntry
+import com.example.data.model.DictionaryMatch
 import com.example.data.model.FavoriteVerse
 import com.example.data.model.ReadingProgress
 import com.example.data.model.SearchHistoryItem
@@ -96,6 +97,59 @@ class BibleRepository(
 
     companion object {
         private const val GITHUB_BASE_URL = "https://github.com/andresfev-prog/Biblia_de_Estudio/releases/download/1.0.0"
+
+        fun generateSpanishVariants(word: String): List<String> {
+            val variants = mutableSetOf<String>()
+            val base = word.lowercase().trim()
+            if (base.isBlank()) return emptyList()
+            variants.add(base)
+            variants.add(word.trim())
+
+            val accentMap = mapOf('a' to 'á', 'e' to 'é', 'i' to 'í', 'o' to 'ó', 'u' to 'ú', 'n' to 'ñ')
+
+            val stripped = java.text.Normalizer.normalize(base, java.text.Normalizer.Form.NFD)
+                .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+            variants.add(stripped)
+
+            for (i in stripped.indices) {
+                val ch = stripped[i]
+                if (accentMap.containsKey(ch)) {
+                    val v = stripped.substring(0, i) + accentMap[ch] + stripped.substring(i + 1)
+                    variants.add(v)
+                }
+            }
+            return variants.toList()
+        }
+
+        fun buildSearchWhereClause(
+            cleanQuery: String,
+            scope: String,
+            tablePrefix: String = "v."
+        ): Pair<String, Array<String>> {
+            val whereScopeClause = when (scope.uppercase().trim()) {
+                "AT", "OT", "ANTIGUO" -> "AND ${tablePrefix}book_number <= 460"
+                "NT", "NUEVO" -> "AND ${tablePrefix}book_number >= 470"
+                else -> ""
+            }
+
+            val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+            if (words.isEmpty()) {
+                return Pair("WHERE 1=0", emptyArray())
+            }
+
+            val andClauses = mutableListOf<String>()
+            val params = mutableListOf<String>()
+
+            for (w in words) {
+                val variants = generateSpanishVariants(w)
+                val orClause = variants.joinToString(separator = " OR ") { "${tablePrefix}text LIKE ?" }
+                andClauses.add("($orClause)")
+                variants.forEach { params.add("%$it%") }
+            }
+
+            val sqlWhere = "WHERE " + andClauses.joinToString(" AND ") + " " + whereScopeClause
+            return Pair(sqlWhere, params.toTypedArray())
+        }
 
         fun resolveVersionCommentaryFileName(version: String): String? {
             val upper = version.uppercase().trim()
@@ -235,6 +289,73 @@ class BibleRepository(
     ): Flow<List<DictionaryEntry>> = flow {
         val results = helper.searchDictionary(query, dictionaryDb)
         emit(results)
+    }.flowOn(Dispatchers.IO)
+
+    fun getDictionaryMatchesForWord(
+        term: String,
+        bookName: String? = null,
+        chapter: Int? = null,
+        verse: Int? = null,
+        version: String? = null
+    ): Flow<List<DictionaryMatch>> = flow {
+        val cleanTerm = term.trim().lowercase()
+        if (cleanTerm.isBlank()) {
+            emit(emptyList())
+            return@flow
+        }
+
+        val allModules = dao.getDownloadedModules()
+        val dictModules = allModules.filter { it.category == "DICTIONARY" }
+
+        val strongCode = if (bookName != null && chapter != null && verse != null && version != null) {
+            val dbFileName = if (version.contains("KJV", ignoreCase = true)) "KJV.SQLite3" else "RVR1960.SQLite3"
+            val rawVerseText = helper.getRawVerseText(dbFileName, bookName, chapter, verse)
+            val bookNumber = BibleAssetDatabaseHelper.resolveBookNumber(bookName)
+            val isOldTestament = bookNumber <= 460
+            if (rawVerseText != null) {
+                helper.extractStrongCodeForWord(rawVerseText, cleanTerm, isOldTestament)
+            } else null
+        } else null
+
+        val matches = mutableListOf<DictionaryMatch>()
+
+        for (module in dictModules) {
+            val fileName = module.fileName ?: continue
+            val entry = helper.getDictionaryEntry(
+                term = cleanTerm,
+                strongCode = strongCode,
+                dbName = fileName
+            )
+            if (entry != null) {
+                matches.add(DictionaryMatch(module = module, entry = entry))
+            }
+        }
+
+        // Si no hay diccionarios descargados o ninguno tiene entrada, intentar con Multi.dictionary.SQLite3
+        if (matches.isEmpty()) {
+            val fallbackEntry = helper.getDictionaryEntry(
+                term = cleanTerm,
+                strongCode = strongCode,
+                dbName = defaultDictionaryDb
+            )
+            if (fallbackEntry != null) {
+                val multiModule = BibleModule(
+                    id = "mod_multi_dict",
+                    category = "DICTIONARY",
+                    title = "Diccionario Multiléxico",
+                    author = "MyBible",
+                    description = "Definiciones etimológicas completas y concordancia Strong.",
+                    language = "Español",
+                    versionTag = "MULTI",
+                    fileName = "Multi.dictionary.SQLite3",
+                    sizeText = "12.4 MB",
+                    isDownloaded = true
+                )
+                matches.add(DictionaryMatch(module = multiModule, entry = fallbackEntry))
+            }
+        }
+
+        emit(matches)
     }.flowOn(Dispatchers.IO)
 
     private fun getCanonicalVerseCount(bookName: String, chapter: Int): Int {
@@ -385,26 +506,26 @@ class BibleRepository(
                     android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                 )
 
-                val whereScopeClause = when (scope.uppercase().trim()) {
-                    "AT", "OT", "ANTIGUO" -> "AND v.book_number <= 460"
-                    "NT", "NUEVO" -> "AND v.book_number >= 470"
-                    else -> ""
-                }
+                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, "v.")
 
                 val sql = """
                     SELECT b.long_name, v.book_number, v.chapter, v.verse, v.text 
                     FROM verses v 
                     JOIN books b ON v.book_number = b.book_number 
-                    WHERE v.text LIKE ? $whereScopeClause 
+                    $sqlWhere 
                     ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
                     LIMIT 100
                 """.trimIndent()
 
-                val wordBoundaryRegex = if (exactWord) {
-                    Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+                val words = cleanQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+                val wordBoundaryRegexList = if (exactWord) {
+                    words.map { w ->
+                        val vars = generateSpanishVariants(w)
+                        Regex("(?i)(?<!\\p{L})(" + vars.joinToString("|") { Regex.escape(it) } + ")(?!\\p{L})")
+                    }
                 } else null
 
-                database.rawQuery(sql, arrayOf("%$cleanQuery%"))?.use { cursor ->
+                database.rawQuery(sql, params)?.use { cursor ->
                     val colBookName = cursor.getColumnIndexOrThrow("long_name")
                     val colBookNumber = cursor.getColumnIndexOrThrow("book_number")
                     val colChapter = cursor.getColumnIndexOrThrow("chapter")
@@ -419,7 +540,8 @@ class BibleRepository(
                             .replace(Regex("\\s+"), " ")
                             .trim()
 
-                        if (wordBoundaryRegex == null || wordBoundaryRegex.containsMatchIn(cleanedText)) {
+                        val matchesExact = wordBoundaryRegexList == null || wordBoundaryRegexList.all { it.containsMatchIn(cleanedText) }
+                        if (matchesExact) {
                             val bNum = cursor.getInt(colBookNumber)
                             val tName = if (bNum <= 460) "AT" else "NT"
                             results.add(
@@ -480,14 +602,9 @@ class BibleRepository(
                     android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                 )
 
-                val whereScopeClause = when (scope.uppercase().trim()) {
-                    "AT", "OT", "ANTIGUO" -> "AND book_number <= 460"
-                    "NT", "NUEVO" -> "AND book_number >= 470"
-                    else -> ""
-                }
-
-                val sql = "SELECT COUNT(*) FROM verses WHERE text LIKE ? $whereScopeClause"
-                database.rawQuery(sql, arrayOf("%$cleanQuery%"))?.use { cursor ->
+                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, "")
+                val sql = "SELECT COUNT(*) FROM verses $sqlWhere"
+                database.rawQuery(sql, params)?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         count = cursor.getInt(0)
                     }
@@ -500,6 +617,7 @@ class BibleRepository(
         }
         emit(count)
     }.flowOn(Dispatchers.IO)
+
 
     fun getCommentariesForVerse(bookName: String, chapter: Int, verse: Int): Flow<List<Commentary>> =
         dao.getCommentariesForVerse(bookName, chapter, verse)
