@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -127,7 +128,11 @@ fun HomeScreen(
             .testTag("home_screen")
     ) {
         // Greeting Header
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+        ) {
             Text(
                 text = "$greeting,",
                 style = MaterialTheme.typography.titleLarge,
@@ -413,6 +418,7 @@ fun HomeScreen(
                             softWrap = false
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        // Localized reading progress title: renders canonical localized book name and chapter
                         Text(
                             text = "$displayLastBook $lastChapter",
                             style = MaterialTheme.typography.headlineSmall,

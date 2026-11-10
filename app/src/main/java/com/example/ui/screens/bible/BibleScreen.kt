@@ -380,7 +380,9 @@ private fun ReaderTopControls(
     var overflowMenuExpanded by remember { mutableStateOf(false) }
 
     val isVersionEn = BibleBooksData.isEnglishVersion(activeVersion)
-    val localizedBook = BibleBooksData.getLocalizedBookName(currentBook, isVersionEn)
+    val bookInfo = BibleBooksData.getBookByName(currentBook)
+    val bookId = bookInfo?.number ?: 43
+    val bookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
 
     Row(
         modifier = modifier
@@ -404,7 +406,7 @@ private fun ReaderTopControls(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "$localizedBook $currentChapter",
+                        text = "$bookName $currentChapter",
                         style = MaterialTheme.typography.labelLarge,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -633,7 +635,9 @@ private fun SingleReaderView(
     ) {
         item {
             val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
-            val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isVersionEn)
+            val bookInfo = BibleBooksData.getBookByName(uiState.currentBook)
+            val bookId = bookInfo?.number ?: 43
+            val displayBookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -755,7 +759,9 @@ private fun ParallelReaderView(
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     val isLeftVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
-                    val displayBookName = BibleBooksData.getLocalizedBookName(uiState.currentBook, isLeftVersionEn)
+                    val leftBookInfo = BibleBooksData.getBookByName(uiState.currentBook)
+                    val leftBookId = leftBookInfo?.number ?: 43
+                    val displayBookName = BibleBooksData.getLocalizedBookName(leftBookId, isLeftVersionEn)
                     Text(
                         text = "$displayBookName ${uiState.currentChapter}",
                         style = MaterialTheme.typography.titleSmall,
@@ -929,7 +935,9 @@ private fun ParallelReaderView(
             val displayRightTitle = if (isLinked) uiState.currentBook else rightBookTitle
             val displayRightChapter = if (isLinked) uiState.currentChapter else rightChapter
             val isRightEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
-            val localizedRightBook = BibleBooksData.getLocalizedBookName(displayRightTitle, isRightEn)
+            val rightBookInfoResolved = BibleBooksData.getBookByName(displayRightTitle)
+            val rightBookId = rightBookInfoResolved?.number ?: 43
+            val localizedRightBook = BibleBooksData.getLocalizedBookName(rightBookId, isRightEn)
 
             Row(
                 modifier = Modifier

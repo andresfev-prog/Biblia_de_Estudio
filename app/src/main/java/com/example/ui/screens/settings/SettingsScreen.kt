@@ -138,10 +138,9 @@ fun SettingsScreen(
 
         // 1. User Profile Card (Interactive, opens Edit Profile dialog)
         Card(
+            onClick = { viewModel.showEditProfileDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .clickable { viewModel.showEditProfileDialog(true) }
                 .testTag("user_profile_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
@@ -234,10 +233,9 @@ fun SettingsScreen(
 
         // "Favoritos" item in Settings (situated above modules and preferences)
         Card(
+            onClick = { viewModel.showFavoritesDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .clickable { viewModel.showFavoritesDialog(true) }
                 .testTag("settings_favorites_item"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
