@@ -283,23 +283,16 @@ class BibleRepository(
         }
 
         val dbName = resolveBibleDatabaseFileName(version)
-        val dbFile = context.getDatabasePath(dbName)
-        if (!dbFile.exists()) {
+        val dbFile = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, dbName)
+        if (!dbFile.exists() || dbFile.length() == 0L) {
             Log.w("BIBLE_DEBUG", "No se encontró el archivo $dbName para la búsqueda.")
             emit(emptyList())
             return@flow
         }
 
         val results = mutableListOf<BibleVerse>()
-        var database: android.database.sqlite.SQLiteDatabase? = null
-
-        val wordBoundaryRegex = if (exactWord) {
-            Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
-        } else {
-            Regex("(?i)" + Regex.escape(cleanQuery))
-        }
-
         withContext(Dispatchers.IO) {
+            var database: android.database.sqlite.SQLiteDatabase? = null
             try {
                 database = android.database.sqlite.SQLiteDatabase.openDatabase(
                     dbFile.path,
@@ -319,10 +312,14 @@ class BibleRepository(
                     JOIN books b ON v.book_number = b.book_number 
                     WHERE v.text LIKE ? $whereScopeClause 
                     ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
-                    LIMIT 200
+                    LIMIT 100
                 """.trimIndent()
 
-                database?.rawQuery(sql, arrayOf("%$cleanQuery%"))?.use { cursor ->
+                val wordBoundaryRegex = if (exactWord) {
+                    Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+                } else null
+
+                database.rawQuery(sql, arrayOf("%$cleanQuery%"))?.use { cursor ->
                     val colBookName = cursor.getColumnIndexOrThrow("long_name")
                     val colBookNumber = cursor.getColumnIndexOrThrow("book_number")
                     val colChapter = cursor.getColumnIndexOrThrow("chapter")
@@ -337,7 +334,7 @@ class BibleRepository(
                             .replace(Regex("\\s+"), " ")
                             .trim()
 
-                        if (wordBoundaryRegex.containsMatchIn(cleanedText)) {
+                        if (wordBoundaryRegex == null || wordBoundaryRegex.containsMatchIn(cleanedText)) {
                             val bNum = cursor.getInt(colBookNumber)
                             val tName = if (bNum <= 460) "AT" else "NT"
                             results.add(
@@ -367,7 +364,7 @@ class BibleRepository(
         }
 
         emit(results)
-    }
+    }.flowOn(Dispatchers.IO)
 
     fun getSearchCount(
         query: String,
@@ -382,22 +379,15 @@ class BibleRepository(
         }
 
         val dbName = resolveBibleDatabaseFileName(version)
-        val dbFile = context.getDatabasePath(dbName)
-        if (!dbFile.exists()) {
+        val dbFile = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, dbName)
+        if (!dbFile.exists() || dbFile.length() == 0L) {
             emit(0)
             return@flow
         }
 
         var count = 0
-        var database: android.database.sqlite.SQLiteDatabase? = null
-
-        val wordBoundaryRegex = if (exactWord) {
-            Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
-        } else {
-            Regex("(?i)" + Regex.escape(cleanQuery))
-        }
-
         withContext(Dispatchers.IO) {
+            var database: android.database.sqlite.SQLiteDatabase? = null
             try {
                 database = android.database.sqlite.SQLiteDatabase.openDatabase(
                     dbFile.path,
@@ -411,36 +401,20 @@ class BibleRepository(
                     else -> ""
                 }
 
-                val sql = """
-                    SELECT text 
-                    FROM verses 
-                    WHERE text LIKE ? $whereScopeClause
-                """.trimIndent()
-
-                database?.rawQuery(sql, arrayOf("%$cleanQuery%"))?.use { cursor ->
-                    val colText = cursor.getColumnIndexOrThrow("text")
-
-                    while (cursor.moveToNext()) {
-                        val rawText = cursor.getString(colText) ?: ""
-                        val cleanedText = rawText
-                            .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                            .replace(Regex("(?<=\\p{L})\\d+"), "")
-                            .replace(Regex("\\s+"), " ")
-                            .trim()
-
-                        if (wordBoundaryRegex.containsMatchIn(cleanedText)) {
-                            count++
-                        }
+                val sql = "SELECT COUNT(*) FROM verses WHERE text LIKE ? $whereScopeClause"
+                database.rawQuery(sql, arrayOf("%$cleanQuery%"))?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        count = cursor.getInt(0)
                     }
                 }
             } catch (e: Exception) {
-                Log.e("BIBLE_DEBUG", "Error contando coincidencias en $dbName", e)
+                Log.e("BIBLE_DEBUG", "Error en COUNT(*) SQLite para $dbName", e)
             } finally {
                 database?.close()
             }
         }
         emit(count)
-    }
+    }.flowOn(Dispatchers.IO)
 
     fun getCommentariesForVerse(bookName: String, chapter: Int, verse: Int): Flow<List<Commentary>> =
         dao.getCommentariesForVerse(bookName, chapter, verse)

@@ -23,11 +23,14 @@ import com.example.data.repository.BibleAssetDatabaseHelper
 import com.example.data.repository.BibleRepository
 import com.example.ui.util.DailyVerseCatalog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -131,9 +134,12 @@ class BibleViewModel(
     private var isTtsInitialized = false
     private var hasSpokenChapterIntro = false
 
+    private val _searchQueryInput = MutableStateFlow("")
+
     init {
         initTts(application)
         observeData()
+        observeSearchQuery()
         loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter)
     }
 
@@ -685,32 +691,42 @@ class BibleViewModel(
         _uiState.value = _uiState.value.copy(showFavoritesDialog = show)
     }
 
-    // --- Búsqueda ---
+    // --- Búsqueda Optimizada ---
     private var searchJob: Job? = null
     private var searchCountJob: Job? = null
 
+    @OptIn(FlowPreview::class)
+    private fun observeSearchQuery() {
+        viewModelScope.launch {
+            _searchQueryInput
+                .debounce(300L)
+                .distinctUntilChanged()
+                .collect { query ->
+                    val clean = query.trim()
+                    if (clean.length < 2) {
+                        searchJob?.cancel()
+                        searchCountJob?.cancel()
+                        _uiState.value = _uiState.value.copy(
+                            searchResults = emptyList(),
+                            searchVerseResults = emptyList(),
+                            searchCommentaryResults = emptyList(),
+                            searchDictionaryResults = emptyList(),
+                            isSearching = false,
+                            searchCountAll = 0,
+                            searchCountOt = 0,
+                            searchCountNt = 0
+                        )
+                    } else {
+                        performSearch()
+                        updateSearchCounts()
+                    }
+                }
+        }
+    }
+
     fun onSearchQueryChanged(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
-        val clean = query.trim()
-
-        if (clean.length < 2) {
-            searchJob?.cancel()
-            searchCountJob?.cancel()
-            _uiState.value = _uiState.value.copy(
-                searchResults = emptyList(),
-                searchVerseResults = emptyList(),
-                searchCommentaryResults = emptyList(),
-                searchDictionaryResults = emptyList(),
-                isSearching = false,
-                searchCountAll = 0,
-                searchCountOt = 0,
-                searchCountNt = 0
-            )
-            return
-        }
-
-        performSearch()
-        updateSearchCounts()
+        _searchQueryInput.value = query
     }
 
     fun setSearchVersion(version: String) {
@@ -744,38 +760,69 @@ class BibleViewModel(
         searchJob?.cancel()
 
         if (query.length < 2) {
-            _uiState.value = _uiState.value.copy(searchResults = emptyList(), isSearching = false)
+            _uiState.value = _uiState.value.copy(
+                searchResults = emptyList(),
+                searchVerseResults = emptyList(),
+                isSearching = false
+            )
             return
         }
 
-        searchJob = viewModelScope.launch {
+        searchJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isSearching = true)
-
-            launch {
-                repository.searchVerses(
-                    query = query,
-                    scope = scope,
-                    version = version,
-                    exactWord = exactWord
-                ).collect { results ->
-                    _uiState.value = _uiState.value.copy(
-                        searchResults = results,
-                        searchVerseResults = results,
-                        isSearching = false
-                    )
+            try {
+                // 1. Búsqueda nativa SQLite en versículos (LIMIT 100)
+                val versesDeferred = async {
+                    try {
+                        repository.searchVerses(
+                            query = query,
+                            scope = scope,
+                            version = version,
+                            exactWord = exactWord
+                        ).first()
+                    } catch (e: Exception) {
+                        if (e !is kotlinx.coroutines.CancellationException) {
+                            Log.e("BIBLE_DEBUG", "Error en searchVerses", e)
+                        }
+                        emptyList()
+                    }
                 }
-            }
 
-            launch {
-                repository.searchCommentaries(query).collect { list ->
-                    _uiState.value = _uiState.value.copy(searchCommentaryResults = list)
+                // 2. Búsqueda en comentarios
+                val commDeferred = async {
+                    try {
+                        repository.searchCommentaries(query).first()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
                 }
-            }
 
-            launch {
-                repository.searchDictionary(query).collect { list ->
-                    _uiState.value = _uiState.value.copy(searchDictionaryResults = list)
+                // 3. Búsqueda en diccionario
+                val dictDeferred = async {
+                    try {
+                        repository.searchDictionary(query).first()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
                 }
+
+                val verses = versesDeferred.await()
+                val comms = commDeferred.await()
+                val dicts = dictDeferred.await()
+
+                _uiState.value = _uiState.value.copy(
+                    searchResults = verses,
+                    searchVerseResults = verses,
+                    searchCommentaryResults = comms,
+                    searchDictionaryResults = dicts
+                )
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e("BIBLE_DEBUG", "Error en performSearch", e)
+                }
+            } finally {
+                // Blindaje absoluto: restablecer isSearching = false siempre
+                _uiState.value = _uiState.value.copy(isSearching = false)
             }
         }
     }
@@ -811,11 +858,15 @@ class BibleViewModel(
     }
 
     fun submitSearch(query: String) {
-        if (query.isNotBlank()) {
+        val clean = query.trim()
+        if (clean.isNotBlank()) {
             viewModelScope.launch {
-                repository.addSearchHistory(query)
+                repository.addSearchHistory(clean)
             }
-            onSearchQueryChanged(query.trim())
+            _uiState.value = _uiState.value.copy(searchQuery = clean)
+            _searchQueryInput.value = clean
+            performSearch()
+            updateSearchCounts()
         }
     }
 
