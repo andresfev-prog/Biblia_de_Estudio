@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -44,6 +46,8 @@ import com.example.ui.screens.home.HomeScreen
 import com.example.ui.screens.modules.ModulesScreen
 import com.example.ui.screens.search.SearchScreen
 import com.example.ui.screens.settings.SettingsScreen
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.BibleStudyTheme
 import com.example.ui.util.StringsLocale
@@ -54,14 +58,25 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ViewModule
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ripple
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 
 
 class MainActivity : ComponentActivity() {
@@ -170,128 +185,83 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BibleClosedCrossIcon(
-    tint: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier
-) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(24.dp)) {
-        val w = size.width
-        val h = size.height
-
-        // 1. Cubierta del libro cerrado con bordes suaves
-        drawRoundRect(
-            color = tint,
-            topLeft = androidx.compose.ui.geometry.Offset(w * 0.16f, h * 0.10f),
-            size = androidx.compose.ui.geometry.Size(w * 0.68f, h * 0.80f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f, w * 0.10f)
-        )
-
-        // 2. Detalle lateral de las páginas
-        drawRoundRect(
-            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.40f),
-            topLeft = androidx.compose.ui.geometry.Offset(w * 0.74f, h * 0.16f),
-            size = androidx.compose.ui.geometry.Size(w * 0.07f, h * 0.68f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.03f, w * 0.03f)
-        )
-
-        // 3. Cruz en la portada
-        val crossColor = androidx.compose.ui.graphics.Color.White
-        val strokeW = w * 0.075f
-
-        // Línea vertical
-        drawLine(
-            color = crossColor,
-            start = androidx.compose.ui.geometry.Offset(w * 0.45f, h * 0.28f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.45f, h * 0.64f),
-            strokeWidth = strokeW,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round
-        )
-
-        // Línea horizontal
-        drawLine(
-            color = crossColor,
-            start = androidx.compose.ui.geometry.Offset(w * 0.32f, h * 0.40f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.40f),
-            strokeWidth = strokeW,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round
-        )
-    }
-}
-
-@Composable
 fun BottomNavBar(
     currentDestination: AppDestination,
     interfaceLanguage: String,
     onDestinationSelected: (AppDestination) -> Unit
 ) {
     val appColors = AppTheme.colors
-    val navShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
 
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(navShape)
-            .border(
-                width = 1.dp,
-                color = appColors.divider.copy(alpha = if (appColors.isDark) 0.6f else 0.85f),
-                shape = navShape
-            ),
-        color = appColors.background, // Mismo fondo de la app en modo claro y oscuro
-        tonalElevation = 0.dp
+            .navigationBarsPadding()
+            .padding(start = 24.dp, end = 24.dp, bottom = 20.dp)
+            .testTag("main_bottom_nav_bar"),
+        contentAlignment = Alignment.Center
     ) {
-        NavigationBar(
-            modifier = Modifier.testTag("main_bottom_nav_bar"),
-            containerColor = appColors.background,
-            tonalElevation = 0.dp
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .shadow(
+                    elevation = 6.dp,
+                    shape = RoundedCornerShape(32.dp),
+                    spotColor = Color.Black.copy(alpha = if (appColors.isDark) 0.35f else 0.08f)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.background,
+            tonalElevation = 0.dp,
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            )
         ) {
-            val navColors = NavigationBarItemDefaults.colors(
-                selectedIconColor = appColors.accent,
-                selectedTextColor = appColors.accent,
-                unselectedIconColor = appColors.textSecondary,
-                unselectedTextColor = appColors.textSecondary,
-                indicatorColor = androidx.compose.ui.graphics.Color.Transparent
-            )
-
-            // Lista con íconos redondeados
-            val navItems = listOf(
-                Triple(AppDestination.HOME, "nav_home", Icons.Rounded.Home),
-                Triple(AppDestination.BIBLE, "nav_bible", Icons.Rounded.Home), // Se reemplaza por el ícono vectorial exclusivo abajo
-                Triple(AppDestination.MODULES, "nav_modules", Icons.Rounded.ViewModule),
-                Triple(AppDestination.SEARCH, "nav_search", Icons.Rounded.Search),
-                Triple(AppDestination.SETTINGS, "nav_settings", Icons.Rounded.Settings)
-            )
-
-            navItems.forEach { (destination, stringKey, icon) ->
-                val isSelected = currentDestination == destination
-                val labelText = StringsLocale.get(stringKey, interfaceLanguage)
-
-                NavigationBarItem(
-                    selected = isSelected,
-                    onClick = { onDestinationSelected(destination) },
-                    icon = {
-                        if (destination == AppDestination.BIBLE) {
-                            // Dibuja el libro cerrado con la cruz
-                            BibleClosedCrossIcon(
-                                tint = if (isSelected) appColors.accent else appColors.textSecondary
-                            )
-                        } else {
-                            Icon(imageVector = icon, contentDescription = labelText)
-                        }
-                    },
-                    label = {
-                        Text(
-                            text = labelText,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            softWrap = false,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = navColors,
-                    modifier = Modifier.testTag("nav_item_${destination.name.lowercase()}")
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val navItems = listOf(
+                    Pair(AppDestination.HOME, AppIcons.Home),
+                    Pair(AppDestination.BIBLE, AppIcons.Bible),
+                    Pair(AppDestination.MODULES, AppIcons.Modules),
+                    Pair(AppDestination.SEARCH, AppIcons.Search),
+                    Pair(AppDestination.SETTINGS, AppIcons.Settings)
                 )
+
+                navItems.forEach { (destination, glyph) ->
+                    val isSelected = currentDestination == destination
+                    val label = destination.name.lowercase()
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(bounded = false, radius = 28.dp)
+                            ) {
+                                onDestinationSelected(destination)
+                            }
+                            .testTag("nav_item_$label"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(
+                            glyph = glyph,
+                            contentDescription = label,
+                            tint = if (isSelected) appColors.accent else appColors.textSecondary.copy(alpha = 0.65f),
+                            fontSize = 24.sp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
             }
         }
     }
 }
+
 

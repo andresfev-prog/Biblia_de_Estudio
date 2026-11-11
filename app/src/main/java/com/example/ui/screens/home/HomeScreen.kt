@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,8 +64,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.BibleBooksData
 import com.example.data.model.BibleVerse
 import com.example.ui.components.NotesBottomSheet
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.DailyVerseCatalog
 import com.example.ui.util.LoadedDailyVerse
@@ -124,7 +128,11 @@ fun HomeScreen(
             .testTag("home_screen")
     ) {
         // Greeting Header
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+        ) {
             Text(
                 text = "$greeting,",
                 style = MaterialTheme.typography.titleLarge,
@@ -132,6 +140,7 @@ fun HomeScreen(
                 maxLines = 1,
                 softWrap = false
             )
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = uiState.userPreferences.userName,
                 style = MaterialTheme.typography.headlineMedium,
@@ -140,9 +149,10 @@ fun HomeScreen(
                 maxLines = 1,
                 softWrap = false
             )
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = StringsLocale.get("home_subtitle", lang),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
                 color = appColors.textSecondary
             )
         }
@@ -242,7 +252,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = StringsLocale.get("verse_of_the_day", normalizedLang),
+                        text = if (isEnglish) "Verse of the Day" else "Versículo del día",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = appColors.titleColor,
@@ -303,7 +313,7 @@ fun HomeScreen(
                         modifier = Modifier.testTag("read_full_chapter_button")
                     ) {
                         Text(
-                            text = StringsLocale.get("read_full_chapter", normalizedLang),
+                            text = if (isEnglish) "Read full chapter" else "Leer capítulo completo",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -366,9 +376,15 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         // "Continúa donde quedaste" Card
-        val lastBook = uiState.readingProgress?.bookName ?: "Juan"
+        val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
         val lastChapter = uiState.readingProgress?.chapter ?: 1
         val lastVersion = uiState.readingProgress?.version ?: "RVR 1960"
+
+        val isEnglishVersion = BibleBooksData.isEnglishVersion(lastVersion)
+        val shouldShowInEnglish = isEnglish || isEnglishVersion
+        val bookInfo = BibleBooksData.getBookByName(lastBookRaw)
+        val bookNumber = bookInfo?.number ?: 43
+        val displayLastBook = BibleBooksData.getLocalizedBookName(bookNumber, shouldShowInEnglish)
 
         Card(
             modifier = Modifier
@@ -402,8 +418,9 @@ fun HomeScreen(
                             softWrap = false
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        // Localized reading progress title: renders canonical localized book name and chapter
                         Text(
-                            text = "$lastBook $lastChapter",
+                            text = "$displayLastBook $lastChapter",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = appColors.titleColor,
@@ -426,8 +443,8 @@ fun HomeScreen(
                             .background(appColors.pillBg),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.MenuBook,
+                        AppIcon(
+                            glyph = AppIcons.Bible,
                             contentDescription = null,
                             tint = appColors.pillText,
                             modifier = Modifier.size(24.dp)
@@ -439,7 +456,7 @@ fun HomeScreen(
 
                 Button(
                     onClick = {
-                        viewModel.navigateToPassage(lastBook, lastChapter)
+                        viewModel.navigateToPassage(lastBookRaw, lastChapter)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -502,8 +519,8 @@ fun HomeScreen(
                                 .background(appColors.pillBg),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.EditNote,
+                            AppIcon(
+                                glyph = AppIcons.MyNotes,
                                 contentDescription = null,
                                 tint = appColors.pillText,
                                 modifier = Modifier.size(24.dp)
@@ -519,8 +536,14 @@ fun HomeScreen(
                                 maxLines = 1,
                                 softWrap = false
                             )
+                            val noteCount = uiState.notes.size
+                            val notesCountText = if (isEnglish) {
+                                "$noteCount ${if (noteCount == 1) "note saved" else "notes saved"}"
+                            } else {
+                                "$noteCount ${if (noteCount == 1) "nota guardada" else "notas guardadas"}"
+                            }
                             Text(
-                                text = "${uiState.notes.size} ${if (uiState.notes.size == 1) "nota guardada" else "notas guardadas"}",
+                                text = notesCountText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = appColors.textSecondary
                             )
@@ -633,13 +656,14 @@ fun HomeScreen(
                             .testTag("home_create_note_button"),
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.pillBg,
-                            contentColor = appColors.pillText
+                            containerColor = appColors.accent,
+                            contentColor = Color.White
                         )
                     ) {
                         Text(
                             text = StringsLocale.get("create_note", lang).replace("+", "").trim(),
                             fontWeight = FontWeight.Bold,
+                            color = Color.White,
                             maxLines = 1,
                             softWrap = false
                         )

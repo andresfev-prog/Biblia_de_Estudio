@@ -2,6 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
@@ -9,22 +10,36 @@ import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
 import com.example.R
 
-// Proveedor oficial de Google Fonts para Compose
+// Tipografías maestras empaquetadas en res/font
+val AktivGroteskFontFamily = FontFamily(
+    Font(R.font.aktiv_grotesk, weight = FontWeight.Normal)
+)
+
+val UntitledSerifFontFamily = FontFamily(
+    Font(R.font.untitled_serif, weight = FontWeight.Normal)
+)
+
+val AppIconsFontFamily = FontFamily(
+    Font(R.font.appicons, weight = FontWeight.Normal)
+)
+
+// Tipografía base UI que hereda toda la aplicación: Aktiv Grotesk
+val AppGlobalFontFamily = AktivGroteskFontFamily
+
+// Proveedor oficial de Google Fonts para Compose (soporte adicional)
 val googleFontProvider = GoogleFont.Provider(
     providerAuthority = "com.google.android.gms.fonts",
     providerPackage = "com.google.android.gms",
     certificates = R.array.com_google_android_gms_fonts_certs
 )
 
-// Definición de Google Sans Flex
 val GoogleSansFlexFont = GoogleFont("Google Sans Flex")
-val AppGlobalFontFamily = FontFamily(
+val GoogleSansFlexFontFamily = FontFamily(
     Font(googleFont = GoogleSansFlexFont, fontProvider = googleFontProvider, weight = FontWeight.Normal),
     Font(googleFont = GoogleSansFlexFont, fontProvider = googleFontProvider, weight = FontWeight.Medium),
     Font(googleFont = GoogleSansFlexFont, fontProvider = googleFontProvider, weight = FontWeight.Bold)
 )
 
-// Tipografías para la lectura bíblica
 val LexendFont = GoogleFont("Lexend")
 val NunitoFont = GoogleFont("Nunito")
 
@@ -39,9 +54,14 @@ val NunitoFontFamily = FontFamily(
 
 fun resolveBibleFontFamily(fontName: String): FontFamily {
     return when (fontName.trim().lowercase()) {
+        "google sans flex", "google sans" -> GoogleSansFlexFontFamily
+        "aktiv grotesk", "aktiv", "grotesk" -> AktivGroteskFontFamily
+        "untitled serif", "untitled" -> UntitledSerifFontFamily
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
         "lexend" -> LexendFontFamily
         "nunito" -> NunitoFontFamily
-        else -> AppGlobalFontFamily // "Google Sans" por defecto
+        else -> GoogleSansFlexFontFamily
     }
 }
 

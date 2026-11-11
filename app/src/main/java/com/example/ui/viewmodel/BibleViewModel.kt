@@ -5,6 +5,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.BibleBooksData
@@ -14,6 +15,7 @@ import com.example.data.model.BookInfo
 import com.example.data.model.Commentary
 import com.example.data.model.CrossReference
 import com.example.data.model.DictionaryEntry
+import com.example.data.model.DictionaryMatch
 import com.example.data.model.FavoriteVerse
 import com.example.data.model.ReadingProgress
 import com.example.data.model.SearchHistoryItem
@@ -23,11 +25,14 @@ import com.example.data.repository.BibleAssetDatabaseHelper
 import com.example.data.repository.BibleRepository
 import com.example.ui.util.DailyVerseCatalog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,6 +80,7 @@ data class BibleUiState(
     val currentVerseCommentaries: List<Commentary> = emptyList(),
     val selectedDictionaryWord: String? = null,
     val currentDictionaryEntry: DictionaryEntry? = null,
+    val dictionaryMatches: List<DictionaryMatch> = emptyList(),
     val isWordLookupLoading: Boolean = false,
     val selectedCrossReferenceVerse: BibleVerse? = null,
     val currentVerseCrossReferences: List<CrossReference> = emptyList(),
@@ -131,9 +137,12 @@ class BibleViewModel(
     private var isTtsInitialized = false
     private var hasSpokenChapterIntro = false
 
+    private val _searchQueryInput = MutableStateFlow("")
+
     init {
         initTts(application)
         observeData()
+        observeSearchQuery()
         loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter)
     }
 
@@ -200,7 +209,7 @@ class BibleViewModel(
     private fun observeData() {
         viewModelScope.launch {
             repository.getAllModules().collect { mods ->
-                if (mods.isEmpty() || mods.none { it.id == "mod_rvr1960" } || mods.any { it.id == "mod_wesley" && it.language != "Inglés" }) {
+                if (mods.isEmpty() || mods.size < 59 || mods.none { it.id == "mod_rvr1960" } || mods.none { it.id == "mod_kjv" }) {
                     repository.seedInitialModules()
                 } else {
                     _uiState.value = _uiState.value.copy(modules = mods)
@@ -229,12 +238,26 @@ class BibleViewModel(
         viewModelScope.launch {
             repository.getAllModules().collect { mods ->
                 _uiState.value = _uiState.value.copy(modules = mods)
+                refreshCommentaryPills()
             }
         }
 
         viewModelScope.launch {
             repository.getAllNotes().collect { list ->
                 _uiState.value = _uiState.value.copy(notes = list)
+            }
+        }
+
+        viewModelScope.launch {
+            repository.getUserPreferences().collect { pref ->
+                if (pref != null) {
+                    val normalized = if (pref.fontFamily.equals("Google Sans", ignoreCase = true)) {
+                        pref.copy(fontFamily = "Google Sans Flex")
+                    } else {
+                        pref
+                    }
+                    _uiState.value = _uiState.value.copy(userPreferences = normalized)
+                }
             }
         }
 
@@ -439,45 +462,152 @@ class BibleViewModel(
         }
     }
 
-    // --- Comentarios ---
+    // --- Comentarios y Notas de Versión ---
     fun openCommentary(verse: BibleVerse, preferredCode: String? = null) {
         val cleanVerseText = DailyVerseCatalog.cleanBibleText(verse.text)
         val cleanVerse = verse.copy(text = cleanVerseText)
 
         viewModelScope.launch {
-            repository.getCommentaryForVerse(cleanVerse.bookName, cleanVerse.chapter, cleanVerse.verse).collect { realCommentText ->
-                val fullList = if (!realCommentText.isNullOrBlank()) {
-                    val cleanComment = realCommentText
-                        .replace(Regex("<.*?>"), "")
-                        .replace(Regex("\\s+"), " ")
-                        .trim()
-                    listOf(
-                        Commentary(
-                            bookName = cleanVerse.bookName,
-                            chapter = cleanVerse.chapter,
-                            verse = cleanVerse.verse,
-                            author = "John Wesley",
-                            title = "",
-                            content = cleanComment
+            val modules = repository.getAllModules().first()
+            val generalCommentaries = modules
+                .filter { it.category == "COMMENTARY" && it.isDownloaded && !it.fileName.isNullOrBlank() && !BibleRepository.isVersionSpecificCommentary(it.fileName) }
+
+            val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+            if (generalCommentaries.isEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = if (isEn) {
+                        "No commentaries downloaded. Go to the Modules tab to download biblical commentaries."
+                    } else {
+                        "No hay comentarios descargados. Ve a la sección Módulos para descargar comentarios bíblicos."
+                    }
+                )
+                return@launch
+            }
+
+            val list = mutableListOf<Commentary>()
+            withContext(Dispatchers.IO) {
+                for (mod in generalCommentaries) {
+                    val fn = mod.fileName ?: continue
+                    val commentText = assetHelper.getCommentaryText(fn, cleanVerse.bookName, cleanVerse.chapter, cleanVerse.verse)
+                    if (!commentText.isNullOrBlank()) {
+                        val clean = commentText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                        list.add(
+                            Commentary(
+                                bookName = cleanVerse.bookName,
+                                chapter = cleanVerse.chapter,
+                                verse = cleanVerse.verse,
+                                author = mod.author.ifBlank { mod.title },
+                                title = mod.title,
+                                content = clean
+                            )
                         )
-                    )
-                } else {
-                    listOf(
-                        Commentary(
-                            bookName = cleanVerse.bookName,
-                            chapter = cleanVerse.chapter,
-                            verse = cleanVerse.verse,
-                            author = "John Wesley",
-                            title = "",
-                            content = "«${cleanVerse.text}»\n\nExégesis pastoral orientada al discernimiento bíblico y la santidad práctica."
-                        )
-                    )
+                    }
                 }
 
+                if (list.isEmpty()) {
+                    val fallbackText = assetHelper.getCommentaryText("Wesley-c.commentaries.SQLite3", cleanVerse.bookName, cleanVerse.chapter, cleanVerse.verse)
+                    if (!fallbackText.isNullOrBlank()) {
+                        val clean = fallbackText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                        list.add(
+                            Commentary(
+                                bookName = cleanVerse.bookName,
+                                chapter = cleanVerse.chapter,
+                                verse = cleanVerse.verse,
+                                author = "John Wesley",
+                                title = "Notas de John Wesley",
+                                content = clean
+                            )
+                        )
+                    }
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(
+                selectedCommentaryVerse = cleanVerse,
+                currentVerseCommentaries = list,
+                lastConsultedCommentary = list.firstOrNull() ?: _uiState.value.lastConsultedCommentary
+            )
+        }
+    }
+
+    fun onVersionNoteClick(verse: BibleVerse, marker: String) {
+        val versionDbName = BibleRepository.resolveVersionCommentaryFileName(verse.version) ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val isDownloaded = repository.isModuleDownloaded(versionDbName)
+            if (!isDownloaded) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        getApplication(),
+                        "Descarga el módulo de notas de ${verse.version} para consultar la nota [$marker]",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return@launch
+            }
+
+            val noteText = repository.getVersionNote(
+                versionDbName = versionDbName,
+                bookName = verse.bookName,
+                chapter = verse.chapter,
+                verse = verse.verse,
+                marker = marker
+            )
+
+            withContext(Dispatchers.Main) {
+                if (!noteText.isNullOrBlank()) {
+                    val clean = noteText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
+                    val noteCommentary = Commentary(
+                        bookName = verse.bookName,
+                        chapter = verse.chapter,
+                        verse = verse.verse,
+                        author = "Notas ${verse.version}",
+                        title = "Nota [$marker]",
+                        content = clean
+                    )
+
+                    _uiState.value = _uiState.value.copy(
+                        selectedCommentaryVerse = verse,
+                        currentVerseCommentaries = listOf(noteCommentary)
+                    )
+                } else {
+                    Toast.makeText(
+                        getApplication(),
+                        "No se encontró contenido para la nota [$marker]",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    fun refreshCommentaryPills() {
+        val bookName = _uiState.value.currentBook
+        val chapter = _uiState.value.currentChapter
+        if (bookName.isBlank() || chapter <= 0) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val modules = repository.getAllModules().first()
+            val generalCommentaries = modules
+                .filter { it.category == "COMMENTARY" && it.isDownloaded && !it.fileName.isNullOrBlank() && !BibleRepository.isVersionSpecificCommentary(it.fileName) }
+                .mapNotNull { it.fileName }
+
+            val resultSet = mutableSetOf<Int>()
+            for (dbName in generalCommentaries) {
+                val file = BibleAssetDatabaseHelper.ensureDatabaseExtracted(getApplication(), dbName)
+                if (file.exists() && file.length() > 0) {
+                    resultSet.addAll(assetHelper.getVersesWithComments(dbName, bookName, chapter))
+                }
+            }
+
+            withContext(Dispatchers.Main) {
                 _uiState.value = _uiState.value.copy(
-                    selectedCommentaryVerse = cleanVerse,
-                    currentVerseCommentaries = fullList,
-                    lastConsultedCommentary = fullList.firstOrNull() ?: _uiState.value.lastConsultedCommentary
+                    versesWithComments = resultSet,
+                    parallelVersesWithComments = if (!_uiState.value.isParallelMode || _uiState.value.isParallelLinked) {
+                        resultSet
+                    } else {
+                        _uiState.value.parallelVersesWithComments
+                    }
                 )
             }
         }
@@ -525,26 +655,23 @@ class BibleViewModel(
 
         _uiState.value = _uiState.value.copy(
             selectedDictionaryWord = displayWord,
-            isWordLookupLoading = true
+            isWordLookupLoading = true,
+            dictionaryMatches = emptyList(),
+            currentDictionaryEntry = null
         )
 
         viewModelScope.launch {
-            val flowToCollect = if (verse != null) {
-                repository.getDictionaryEntryWithContext(
-                    term = searchLower,
-                    bookName = verse.bookName,
-                    chapter = verse.chapter,
-                    verse = verse.verse,
-                    version = verse.version
-                )
-            } else {
-                repository.getDictionaryEntry(searchLower)
-            }
-
-            flowToCollect.collect { entry ->
+            repository.getDictionaryMatchesForWord(
+                term = searchLower,
+                bookName = verse?.bookName,
+                chapter = verse?.chapter,
+                verse = verse?.verse,
+                version = verse?.version
+            ).collect { matches ->
                 _uiState.value = _uiState.value.copy(
-                    currentDictionaryEntry = entry,
-                    lastConsultedDictionary = entry ?: _uiState.value.lastConsultedDictionary,
+                    dictionaryMatches = matches,
+                    currentDictionaryEntry = matches.firstOrNull()?.entry,
+                    lastConsultedDictionary = matches.firstOrNull()?.entry ?: _uiState.value.lastConsultedDictionary,
                     isWordLookupLoading = false
                 )
             }
@@ -555,6 +682,7 @@ class BibleViewModel(
         _uiState.value = _uiState.value.copy(
             selectedDictionaryWord = null,
             currentDictionaryEntry = null,
+            dictionaryMatches = emptyList(),
             isWordLookupLoading = false
         )
     }
@@ -685,32 +813,42 @@ class BibleViewModel(
         _uiState.value = _uiState.value.copy(showFavoritesDialog = show)
     }
 
-    // --- Búsqueda ---
+    // --- Búsqueda Optimizada ---
     private var searchJob: Job? = null
     private var searchCountJob: Job? = null
 
+    @OptIn(FlowPreview::class)
+    private fun observeSearchQuery() {
+        viewModelScope.launch {
+            _searchQueryInput
+                .debounce(300L)
+                .distinctUntilChanged()
+                .collect { query ->
+                    val clean = query.trim()
+                    if (clean.length < 2) {
+                        searchJob?.cancel()
+                        searchCountJob?.cancel()
+                        _uiState.value = _uiState.value.copy(
+                            searchResults = emptyList(),
+                            searchVerseResults = emptyList(),
+                            searchCommentaryResults = emptyList(),
+                            searchDictionaryResults = emptyList(),
+                            isSearching = false,
+                            searchCountAll = 0,
+                            searchCountOt = 0,
+                            searchCountNt = 0
+                        )
+                    } else {
+                        performSearch()
+                        updateSearchCounts()
+                    }
+                }
+        }
+    }
+
     fun onSearchQueryChanged(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
-        val clean = query.trim()
-
-        if (clean.length < 2) {
-            searchJob?.cancel()
-            searchCountJob?.cancel()
-            _uiState.value = _uiState.value.copy(
-                searchResults = emptyList(),
-                searchVerseResults = emptyList(),
-                searchCommentaryResults = emptyList(),
-                searchDictionaryResults = emptyList(),
-                isSearching = false,
-                searchCountAll = 0,
-                searchCountOt = 0,
-                searchCountNt = 0
-            )
-            return
-        }
-
-        performSearch()
-        updateSearchCounts()
+        _searchQueryInput.value = query
     }
 
     fun setSearchVersion(version: String) {
@@ -744,38 +882,69 @@ class BibleViewModel(
         searchJob?.cancel()
 
         if (query.length < 2) {
-            _uiState.value = _uiState.value.copy(searchResults = emptyList(), isSearching = false)
+            _uiState.value = _uiState.value.copy(
+                searchResults = emptyList(),
+                searchVerseResults = emptyList(),
+                isSearching = false
+            )
             return
         }
 
-        searchJob = viewModelScope.launch {
+        searchJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isSearching = true)
-
-            launch {
-                repository.searchVerses(
-                    query = query,
-                    scope = scope,
-                    version = version,
-                    exactWord = exactWord
-                ).collect { results ->
-                    _uiState.value = _uiState.value.copy(
-                        searchResults = results,
-                        searchVerseResults = results,
-                        isSearching = false
-                    )
+            try {
+                // 1. Búsqueda nativa SQLite en versículos (LIMIT 100)
+                val versesDeferred = async {
+                    try {
+                        repository.searchVerses(
+                            query = query,
+                            scope = scope,
+                            version = version,
+                            exactWord = exactWord
+                        ).first()
+                    } catch (e: Exception) {
+                        if (e !is kotlinx.coroutines.CancellationException) {
+                            Log.e("BIBLE_DEBUG", "Error en searchVerses", e)
+                        }
+                        emptyList()
+                    }
                 }
-            }
 
-            launch {
-                repository.searchCommentaries(query).collect { list ->
-                    _uiState.value = _uiState.value.copy(searchCommentaryResults = list)
+                // 2. Búsqueda en comentarios
+                val commDeferred = async {
+                    try {
+                        repository.searchCommentaries(query).first()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
                 }
-            }
 
-            launch {
-                repository.searchDictionary(query).collect { list ->
-                    _uiState.value = _uiState.value.copy(searchDictionaryResults = list)
+                // 3. Búsqueda en diccionario
+                val dictDeferred = async {
+                    try {
+                        repository.searchDictionary(query).first()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
                 }
+
+                val verses = versesDeferred.await()
+                val comms = commDeferred.await()
+                val dicts = dictDeferred.await()
+
+                _uiState.value = _uiState.value.copy(
+                    searchResults = verses,
+                    searchVerseResults = verses,
+                    searchCommentaryResults = comms,
+                    searchDictionaryResults = dicts
+                )
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e("BIBLE_DEBUG", "Error en performSearch", e)
+                }
+            } finally {
+                // Blindaje absoluto: restablecer isSearching = false siempre
+                _uiState.value = _uiState.value.copy(isSearching = false)
             }
         }
     }
@@ -811,11 +980,15 @@ class BibleViewModel(
     }
 
     fun submitSearch(query: String) {
-        if (query.isNotBlank()) {
+        val clean = query.trim()
+        if (clean.isNotBlank()) {
             viewModelScope.launch {
-                repository.addSearchHistory(query)
+                repository.addSearchHistory(clean)
             }
-            onSearchQueryChanged(query.trim())
+            _uiState.value = _uiState.value.copy(searchQuery = clean)
+            _searchQueryInput.value = clean
+            performSearch()
+            updateSearchCounts()
         }
     }
 
@@ -879,6 +1052,7 @@ class BibleViewModel(
             if (result.isSuccess) {
                 // Actualiza en Room a isDownloaded = true
                 repository.toggleModuleDownload(module.id, false)
+                refreshCommentaryPills()
                 _uiState.value = _uiState.value.copy(
                     downloadProgress = updatedProgress,
                     toastMessage = if (isEn) "Module downloaded successfully" else "Módulo descargado correctamente"
@@ -915,9 +1089,14 @@ class BibleViewModel(
 
     // --- Preferencias ---
     fun saveUserPreferences(preference: UserPreference = _uiState.value.userPreferences) {
-        _uiState.value = _uiState.value.copy(userPreferences = preference)
+        val normalized = if (preference.fontFamily.equals("Google Sans", ignoreCase = true)) {
+            preference.copy(fontFamily = "Google Sans Flex")
+        } else {
+            preference
+        }
+        _uiState.value = _uiState.value.copy(userPreferences = normalized)
         viewModelScope.launch {
-            repository.saveUserPreferences(preference)
+            repository.saveUserPreferences(normalized)
         }
     }
 
@@ -928,7 +1107,8 @@ class BibleViewModel(
     }
 
     fun updateFontFamily(font: String) {
-        val updated = _uiState.value.userPreferences.copy(fontFamily = font)
+        val normalizedFont = if (font.equals("Google Sans", ignoreCase = true)) "Google Sans Flex" else font
+        val updated = _uiState.value.userPreferences.copy(fontFamily = normalizedFont)
         _uiState.value = _uiState.value.copy(userPreferences = updated)
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }

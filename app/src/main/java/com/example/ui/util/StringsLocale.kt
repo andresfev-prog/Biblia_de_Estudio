@@ -3,7 +3,10 @@ package com.example.ui.util
 object StringsLocale {
 
     fun get(key: String, language: String): String {
-        val isEn = language.contains("English", ignoreCase = true)
+        val isEn = language.contains("English", ignoreCase = true) ||
+                language.equals("en", ignoreCase = true) ||
+                language.startsWith("en", ignoreCase = true) ||
+                language.contains("Inglés", ignoreCase = true)
         val isEsEs = language.contains("España", ignoreCase = true)
 
         return when (key) {
@@ -20,9 +23,9 @@ object StringsLocale {
             "greeting_afternoon" -> if (isEn) "Good afternoon" else if (isEsEs) "Buenas tardes" else "Buenas tardes"
             "greeting_night" -> if (isEn) "Good evening" else if (isEsEs) "Buenas noches" else "Buenas noches"
             "home_subtitle" -> if (isEn) "Take a moment for the Word of God today" else "Dedica un momento a la Palabra de Dios hoy"
-            "verse_of_the_day" -> if (isEn) "VERSE OF THE DAY" else "VERSÍCULO DEL DÍA"
+            "verse_of_the_day" -> if (isEn) "Verse of the Day" else "Versículo del día"
             "read_full_chapter" -> if (isEn) "Read full chapter" else "Leer capítulo completo"
-            "continue_where_left" -> if (isEn) "CONTINUE WHERE YOU LEFT OFF" else "CONTINÚA DONDE QUEDASTE"
+            "continue_where_left" -> if (isEn) "Continue where you left off" else "Continúa donde quedaste"
             "continue_reading" -> if (isEn) "Continue reading" else "Continuar leyendo"
             "offline_ready" -> if (isEn) "Offline mode ready" else "Modo sin conexión listo"
             "copied_clipboard" -> if (isEn) "Copied to clipboard" else "Copiado al portapapeles"

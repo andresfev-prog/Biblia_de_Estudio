@@ -19,52 +19,39 @@ object DatabaseInitializer {
         if (bibleDao.getVerseCount() > 1000) return@withContext
 
         try {
-            // 1. Registrar los tres módulos reales con las categorías exactas de la interfaz
+            // 1. Registrar únicamente los dos módulos bíblicos base predeterminados
             val initialModules = listOf(
                 BibleModule(
-                    id = "rvr1960",
-                    title = "Reina-Valera 1960 (RVR1960)",
-                    author = "Casiodoro de Reina / Cipriano de Valera",
-                    category = "Versiones",
+                    id = "mod_rvr1960",
+                    title = "Reina-Valera 1960",
+                    author = "Sociedades Bíblicas Unidas",
+                    category = "VERSION",
                     language = "Español",
                     versionTag = "RVR1960",
-                    sizeText = "3.8 MB",
+                    sizeText = "4.2 MB",
                     isDownloaded = true,
-                    description = "Texto bíblico tradicional y fidedigno en lengua española."
+                    description = "Traducción clásica y representativa del texto bíblico en lengua castellana.",
+                    downloadUrl = "https://github.com/andresfev-prog/Biblia_de_Estudio/releases/download/1.0.0/RVR1960.SQLite3",
+                    fileName = "RVR1960.SQLite3"
                 ),
                 BibleModule(
-                    id = "wesley",
-                    title = "Notas Exegéticas de John Wesley",
-                    author = "John Wesley",
-                    category = "Comentarios",
-                    language = "Español",
-                    versionTag = "JW",
-                    sizeText = "8.5 MB",
+                    id = "mod_kjv",
+                    title = "King James Version",
+                    author = "Cambridge University Press",
+                    category = "VERSION",
+                    language = "Inglés",
+                    versionTag = "KJV",
+                    sizeText = "4.8 MB",
                     isDownloaded = true,
-                    description = "Explicaciones históricas y teológicas verso por verso."
-                ),
-                BibleModule(
-                    id = "multi",
-                    title = "Diccionario Bíblico y Códigos Strong",
-                    author = "Compilación Léxica MyBible",
-                    category = "Diccionarios",
-                    language = "Español / Hebreo / Griego",
-                    versionTag = "MULTI",
-                    sizeText = "15.0 MB",
-                    isDownloaded = true,
-                    description = "Definiciones etimológicas completas y concordancia Strong."
+                    description = "Traducción histórica de referencia en inglés con fidelidad textual clásica.",
+                    downloadUrl = "https://github.com/andresfev-prog/Biblia_de_Estudio/releases/download/1.0.0/KJV.SQLite3",
+                    fileName = "KJV.SQLite3"
                 )
             )
             bibleDao.insertModules(initialModules)
 
-            // 2. Extraer y cargar los versículos bíblicos reales de RVR1960.SQLite3
+            // 2. Extraer y cargar los versículos bíblicos de RVR1960.SQLite3
             loadVerses(context, bibleDao, "RVR1960.SQLite3")
-
-            // 3. Extraer y cargar los comentarios reales de Wesley-c.commentaries.SQLite3
-            loadCommentaries(context, bibleDao, "Wesley-c.commentaries.SQLite3")
-
-            // 4. Extraer y cargar el diccionario real de Multi.dictionary.SQLite3
-            loadDictionary(context, bibleDao, "Multi.dictionary.SQLite3")
 
         } catch (e: Exception) {
             e.printStackTrace()

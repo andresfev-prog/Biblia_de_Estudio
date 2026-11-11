@@ -100,6 +100,9 @@ interface BibleDao {
     @Query("SELECT * FROM bible_modules ORDER BY category, title")
     fun getAllModules(): Flow<List<BibleModule>>
 
+    @Query("SELECT * FROM bible_modules WHERE isDownloaded = 1 ORDER BY category, title")
+    suspend fun getDownloadedModules(): List<BibleModule>
+
     @Query("UPDATE bible_modules SET isDownloaded = :isDownloaded WHERE id = :id")
     suspend fun updateModuleDownloadState(id: String, isDownloaded: Boolean)
 

@@ -56,7 +56,7 @@ class ModuleDownloader(private val context: Context) {
 
             connection.inputStream.use { input ->
                 FileOutputStream(tempFile).use { output ->
-                    val buffer = ByteArray(8 * 1024)
+                    val buffer = ByteArray(128 * 1024)
                     var bytesRead: Int
                     var totalDownloaded = 0L
 

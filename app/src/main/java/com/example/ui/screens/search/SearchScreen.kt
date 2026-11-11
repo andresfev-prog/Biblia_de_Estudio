@@ -78,7 +78,12 @@ fun SearchScreen(
     val isEnglish = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
     val hasQuery = uiState.searchQuery.trim().length >= 2
     var isVersionMenuOpen by remember { mutableStateOf(false) }
-    val availableVersions = listOf("RVR1960", "KJV")
+    val availableVersions = remember(uiState.modules) {
+        val list = uiState.modules
+            .filter { it.category == "VERSION" && it.isDownloaded }
+            .map { it.versionTag }
+        if (list.isEmpty()) listOf("RVR1960", "KJV") else list
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(
@@ -178,7 +183,12 @@ fun SearchScreen(
 
                 DropdownMenu(
                     expanded = isVersionMenuOpen,
-                    onDismissRequest = { isVersionMenuOpen = false }
+                    onDismissRequest = { isVersionMenuOpen = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                 ) {
                     availableVersions.forEach { version ->
                         DropdownMenuItem(
@@ -493,11 +503,13 @@ private fun SearchResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val highlightedText = remember(verse.text, searchQuery, exactWord) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val highlightedText = remember(verse.text, searchQuery, exactWord, primaryColor) {
         buildHighlightedVerseText(
             fullText = verse.text,
             query = searchQuery.trim(),
-            exactWord = exactWord
+            exactWord = exactWord,
+            highlightColor = primaryColor
         )
     }
 
@@ -537,14 +549,19 @@ private fun SearchResultItem(
 private fun buildHighlightedVerseText(
     fullText: String,
     query: String,
-    exactWord: Boolean
+    exactWord: Boolean,
+    highlightColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color(0xFF0284C7)
 ): AnnotatedString {
-    if (query.isBlank()) return AnnotatedString(fullText)
+    val cleanQuery = query.trim()
+    if (cleanQuery.isBlank()) return AnnotatedString(fullText)
 
     val pattern = if (exactWord) {
-        Regex("(?i)(?<!\\p{L})" + Regex.escape(query) + "(?!\\p{L})")
+        Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
     } else {
-        Regex("(?i)" + Regex.escape(query))
+        val words = cleanQuery.split(Regex("\\s+")).filter { it.length > 1 }
+        val allVariants = words.flatMap { com.example.data.repository.BibleRepository.generateSpanishVariants(it) }
+        if (allVariants.isEmpty()) return AnnotatedString(fullText)
+        Regex("(?i)(" + allVariants.joinToString("|") { Regex.escape(it) } + ")")
     }
 
     val matches = pattern.findAll(fullText)
@@ -556,20 +573,22 @@ private fun buildHighlightedVerseText(
             val start = match.range.first
             val end = match.range.last + 1
 
-            if (start > lastIndex) {
-                append(fullText.substring(lastIndex, start))
-            }
+            if (start >= lastIndex) {
+                if (start > lastIndex) {
+                    append(fullText.substring(lastIndex, start))
+                }
 
-            pushStyle(
-                SpanStyle(
-                    fontWeight = FontWeight.ExtraBold,
-                    color = androidx.compose.ui.graphics.Color(0xFF0284C7)
+                pushStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.ExtraBold,
+                        color = highlightColor
+                    )
                 )
-            )
-            append(fullText.substring(start, end))
-            pop()
+                append(fullText.substring(start, end))
+                pop()
 
-            lastIndex = end
+                lastIndex = end
+            }
         }
 
         if (lastIndex < fullText.length) {

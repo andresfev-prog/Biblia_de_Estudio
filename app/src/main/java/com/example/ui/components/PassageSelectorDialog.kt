@@ -61,6 +61,7 @@ fun PassageSelectorDialog(
     currentStep: Int,
     selectedBook: BookInfo,
     selectedChapter: Int,
+    interfaceLanguage: String = "Español",
     onBookSelected: (BookInfo) -> Unit,
     onChapterSelected: (Int) -> Unit,
     onVerseSelected: (Int) -> Unit,
@@ -68,6 +69,8 @@ fun PassageSelectorDialog(
     onDismiss: () -> Unit
 ) {
     val appColors = AppTheme.colors
+    val isEn = interfaceLanguage.contains("English", ignoreCase = true)
+    val bookDisplayName = if (isEn) selectedBook.englishName else selectedBook.name
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -79,9 +82,9 @@ fun PassageSelectorDialog(
                 .padding(14.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .testTag("passage_selector_dialog"),
-            color = appColors.surface,
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
-            tonalElevation = 6.dp
+            color = MaterialTheme.colorScheme.background,
+            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            tonalElevation = 0.dp
         ) {
             Column(
                 modifier = Modifier
@@ -105,7 +108,7 @@ fun PassageSelectorDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Volver",
+                                    contentDescription = if (isEn) "Back" else "Volver",
                                     tint = appColors.titleColor
                                 )
                             }
@@ -113,9 +116,9 @@ fun PassageSelectorDialog(
                         Spacer(modifier = Modifier.width(4.dp))
                         Column {
                             val headerTitle = when (currentStep) {
-                                1 -> "Selecciona Libro"
-                                2 -> "${selectedBook.name} • Capítulo"
-                                else -> "${selectedBook.name} $selectedChapter • Versículo"
+                                1 -> if (isEn) "Select Book" else "Selecciona Libro"
+                                2 -> "$bookDisplayName • ${if (isEn) "Chapter" else "Capítulo"}"
+                                else -> "$bookDisplayName $selectedChapter • ${if (isEn) "Verse" else "Versículo"}"
                             }
                             Text(
                                 text = headerTitle,
@@ -126,7 +129,7 @@ fun PassageSelectorDialog(
                                 softWrap = false
                             )
                             Text(
-                                text = "Paso $currentStep de 3",
+                                text = if (isEn) "Step $currentStep of 3" else "Paso $currentStep de 3",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = appColors.textSecondary,
                                 maxLines = 1,
@@ -152,14 +155,14 @@ fun PassageSelectorDialog(
                         PrimaryTabRow(
                             selectedTabIndex = testamentTab,
                             modifier = Modifier.fillMaxWidth(),
-                            containerColor = appColors.surface
+                            containerColor = MaterialTheme.colorScheme.background
                         ) {
                             Tab(
                                 selected = testamentTab == 0,
                                 onClick = { testamentTab = 0 },
                                 text = {
                                     Text(
-                                        text = "Antiguo T. (39)",
+                                        text = if (isEn) "Old Testament (39)" else "Antiguo T. (39)",
                                         fontWeight = if (testamentTab == 0) FontWeight.Bold else FontWeight.Normal,
                                         color = if (testamentTab == 0) appColors.accent else appColors.textSecondary,
                                         maxLines = 1,
@@ -172,7 +175,7 @@ fun PassageSelectorDialog(
                                 onClick = { testamentTab = 1 },
                                 text = {
                                     Text(
-                                        text = "Nuevo T. (27)",
+                                        text = if (isEn) "New Testament (27)" else "Nuevo T. (27)",
                                         fontWeight = if (testamentTab == 1) FontWeight.Bold else FontWeight.Normal,
                                         color = if (testamentTab == 1) appColors.accent else appColors.textSecondary,
                                         maxLines = 1,
@@ -200,27 +203,26 @@ fun PassageSelectorDialog(
                         ) {
                             items(filteredBooks) { book ->
                                 val isSelected = book.number == selectedBook.number
-                                Card(
+                                Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(64.dp)
+                                        .height(56.dp)
+                                        .clip(CircleShape)
                                         .clickable { onBookSelected(book) }
                                         .testTag("book_card_${book.number}"),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) appColors.pillBg else appColors.surfaceVariant
-                                    ),
-                                    border = if (appColors.isDark && !isSelected) BorderStroke(1.dp, appColors.border) else null,
-                                    shape = RoundedCornerShape(50)
+                                    shape = CircleShape,
+                                    color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
+                                    tonalElevation = 0.dp
                                 ) {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(6.dp),
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
                                         verticalArrangement = Arrangement.Center,
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(
-                                            text = book.name,
+                                            text = if (isEn) book.englishName else book.name,
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (isSelected) appColors.pillText else appColors.textPrimary,
@@ -229,7 +231,7 @@ fun PassageSelectorDialog(
                                             textAlign = TextAlign.Center
                                         )
                                         Text(
-                                            text = "${book.chapterCount} cap.",
+                                            text = "${book.chapterCount} ${if (isEn) "ch." else "cap."}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (isSelected) appColors.pillText.copy(alpha = 0.8f) else appColors.textSecondary,
                                             maxLines = 1,
@@ -244,7 +246,7 @@ fun PassageSelectorDialog(
                     2 -> {
                         // Step 2: Chapters Numeric Grid
                         Text(
-                            text = "Capítulos disponibles en ${selectedBook.name}:",
+                            text = if (isEn) "Available chapters in $bookDisplayName:" else "Capítulos disponibles en ${selectedBook.name}:",
                             style = MaterialTheme.typography.bodyMedium,
                             color = appColors.textSecondary,
                             maxLines = 1,
@@ -265,26 +267,26 @@ fun PassageSelectorDialog(
                         ) {
                             items(chapterList) { chap ->
                                 val isSelected = chap == selectedChapter
-                                Box(
+                                Surface(
                                     modifier = Modifier
                                         .size(52.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) appColors.pillBg
-                                            else appColors.surfaceVariant
-                                        )
                                         .clickable { onChapterSelected(chap) }
                                         .testTag("chapter_button_$chap"),
-                                    contentAlignment = Alignment.Center
+                                    shape = CircleShape,
+                                    color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
+                                    tonalElevation = 0.dp
                                 ) {
-                                    Text(
-                                        text = "$chap",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) appColors.pillText else appColors.textPrimary,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "$chap",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) appColors.pillText else appColors.textPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -296,7 +298,7 @@ fun PassageSelectorDialog(
                         val bookTitle = selectedBook?.name ?: ""
 
                         Text(
-                            text = "Versículos en $bookTitle $selectedChapter:",
+                            text = if (isEn) "Verses in $bookDisplayName $selectedChapter:" else "Versículos en $bookTitle $selectedChapter:",
                             style = MaterialTheme.typography.bodyMedium,
                             color = appColors.textSecondary,
                             maxLines = 1,
@@ -324,23 +326,26 @@ fun PassageSelectorDialog(
                                 key = { index -> "picker_v_${verseList[index]}" }
                             ) { index ->
                                 val v = verseList[index]
-                                Box(
+                                Surface(
                                     modifier = Modifier
                                         .size(52.dp)
                                         .clip(CircleShape)
-                                        .background(appColors.surfaceVariant)
                                         .clickable { onVerseSelected(v) }
                                         .testTag("verse_button_$v"),
-                                    contentAlignment = androidx.compose.ui.BiasAlignment(0f, 0f)
+                                    shape = CircleShape,
+                                    color = appColors.surfaceVariant,
+                                    tonalElevation = 0.dp
                                 ) {
-                                    Text(
-                                        text = "$v",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = appColors.titleColor,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "$v",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = appColors.textPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                         }

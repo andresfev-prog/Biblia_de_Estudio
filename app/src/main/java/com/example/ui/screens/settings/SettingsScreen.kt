@@ -81,11 +81,24 @@ fun SettingsScreen(
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
 
-    // Requirement 5: Exactly two options: "Español" and "English"
-    val languages = listOf("Español", "English")
-    val fontFamilies = listOf("Google Sans", "Serif", "Slab Serif", "Monospace")
+    val isEn = lang.contains("English", ignoreCase = true)
+    // Opciones: English y Spanish en inglés, o Español e Inglés en español
+    val languages = if (isEn) listOf("English", "Spanish") else listOf("Español", "Inglés")
+    val availableFonts = listOf(
+        "Google Sans Flex",
+        "Aktiv Grotesk",
+        "Untitled Serif",
+        "Serif",
+        "Monospace"
+    )
 
-    val currentLanguageDisplay = if (lang.contains("English", ignoreCase = true)) "English" else "Español"
+    val currentFontDisplay = if (uiState.userPreferences.fontFamily.equals("Google Sans", ignoreCase = true)) {
+        "Google Sans Flex"
+    } else {
+        uiState.userPreferences.fontFamily
+    }
+
+    val currentLanguageDisplay = if (isEn) "English" else "Español"
 
     // Dynamic initials from user name
     val initials = remember(uiState.userPreferences.userName) {
@@ -125,14 +138,13 @@ fun SettingsScreen(
 
         // 1. User Profile Card (Interactive, opens Edit Profile dialog)
         Card(
+            onClick = { viewModel.showEditProfileDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .clickable { viewModel.showEditProfileDialog(true) }
                 .testTag("user_profile_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
@@ -217,71 +229,61 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // "Favoritos" item in Settings (situated above modules and preferences)
         Card(
+            onClick = { viewModel.showFavoritesDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable { viewModel.showFavoritesDialog(true) }
                 .testTag("settings_favorites_item"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.padding(18.dp)) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(appColors.surfaceVariant),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Favorite,
                             contentDescription = null,
-                            tint = appColors.accent,
-                            modifier = Modifier.size(22.dp)
+                            tint = appColors.accent
                         )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = StringsLocale.get("favorites_option", lang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.titleColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = String.format(StringsLocale.get("saved_favorites_count", lang), uiState.favorites.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = appColors.textSecondary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = StringsLocale.get("favorites_option", lang),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.titleColor,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Text(
-                            text = String.format(StringsLocale.get("saved_favorites_count", lang), uiState.favorites.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = appColors.textSecondary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
 
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = appColors.textSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = appColors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
@@ -290,9 +292,9 @@ fun SettingsScreen(
         // 2. Interface Language Dropdown (Requirement 5: Only Español & English)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -364,7 +366,12 @@ fun SettingsScreen(
 
                         DropdownMenu(
                             expanded = languageMenuOpen,
-                            onDismissRequest = { languageMenuOpen = false }
+                            onDismissRequest = { languageMenuOpen = false },
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         ) {
                             languages.forEach { languageName ->
                                 DropdownMenuItem(
@@ -378,7 +385,12 @@ fun SettingsScreen(
                                         )
                                     },
                                     onClick = {
-                                        viewModel.updateInterfaceLanguage(languageName)
+                                        val targetLanguage = when (languageName) {
+                                            "Spanish" -> "Español"
+                                            "English", "Inglés" -> "English"
+                                            else -> languageName
+                                        }
+                                        viewModel.updateInterfaceLanguage(targetLanguage)
                                         languageMenuOpen = false
                                     }
                                 )
@@ -396,9 +408,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("theme_selector_card"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -473,9 +485,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("typography_controls_card"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -521,7 +533,7 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = uiState.userPreferences.fontFamily,
+                                    text = currentFontDisplay,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = appColors.pillText,
@@ -539,15 +551,20 @@ fun SettingsScreen(
 
                         DropdownMenu(
                             expanded = fontMenuOpen,
-                            onDismissRequest = { fontMenuOpen = false }
+                            onDismissRequest = { fontMenuOpen = false },
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = MaterialTheme.colorScheme.background,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         ) {
-                            fontFamilies.forEach { font ->
+                            availableFonts.forEach { font ->
                                 DropdownMenuItem(
                                     text = {
                                         Text(
                                             text = font,
-                                            fontWeight = if (uiState.userPreferences.fontFamily == font) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (uiState.userPreferences.fontFamily == font) appColors.accent else appColors.textPrimary,
+                                            fontWeight = if (currentFontDisplay == font) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (currentFontDisplay == font) appColors.accent else appColors.textPrimary,
                                             maxLines = 1,
                                             softWrap = false
                                         )
@@ -624,11 +641,16 @@ fun SettingsScreen(
                             softWrap = false
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        val sampleText = if (isEn) {
+                            "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life. — John 3:16"
+                        } else {
+                            "1 En el principio era el Verbo, y el Verbo era con Dios, y el Verbo era Dios."
+                        }
                         Text(
-                            text = "1 En el principio era el Verbo, y el Verbo era con Dios, y el Verbo era Dios.",
+                            text = sampleText,
                             fontSize = (uiState.userPreferences.fontSizePt * 1.35f).sp,
                             lineHeight = (uiState.userPreferences.fontSizePt * 1.9f).sp,
-                            fontFamily = resolveBibleFont(uiState.userPreferences.fontFamily), // <-- Vinculación de fuente en vivo
+                            fontFamily = resolveBibleFont(currentFontDisplay), // <-- Vinculación de fuente en vivo
                             color = appColors.textPrimary,
                             fontWeight = FontWeight.Normal
                         )
@@ -778,10 +800,5 @@ val SlabSerifFontFamily = FontFamily(
  * de contraste visual radical y comprobado.
  */
 fun resolveBibleFont(fontName: String): FontFamily {
-    return when (fontName.trim().lowercase()) {
-        "serif" -> FontFamily.Serif             // Nativa Android (Offline)
-        "monospace" -> FontFamily.Monospace     // Nativa Android (Offline, ancho fijo)
-        "slab serif", "slab" -> SlabSerifFontFamily // Slab editorial
-        else -> FontFamily.Default              // Google Sans / Sans-Serif moderna
-    }
+    return com.example.ui.theme.resolveBibleFontFamily(fontName)
 }

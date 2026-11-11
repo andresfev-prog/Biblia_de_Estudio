@@ -66,13 +66,24 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,6 +99,8 @@ import com.example.ui.components.PassageSelectorDialog
 import com.example.ui.components.TtsPlayerBar
 import com.example.ui.screens.settings.resolveBibleFont
 import com.example.ui.theme.AppColors
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
@@ -283,6 +296,7 @@ fun BibleScreen(
                 currentStep = uiState.pickerStep,
                 selectedBook = uiState.pickerSelectedBook,
                 selectedChapter = uiState.pickerSelectedChapter,
+                interfaceLanguage = lang,
                 onBookSelected = { viewModel.onPickerBookSelected(it) },
                 onChapterSelected = { viewModel.onPickerChapterSelected(it) },
                 onVerseSelected = { viewModel.onPickerVerseSelected(it) },
@@ -317,6 +331,7 @@ fun BibleScreen(
             DictionaryBottomSheet(
                 searchedWord = word,
                 entry = uiState.currentDictionaryEntry,
+                matches = uiState.dictionaryMatches,
                 isLoading = uiState.isWordLookupLoading,
                 interfaceLanguage = lang,
                 onDismiss = { viewModel.dismissDictionary() }
@@ -364,6 +379,11 @@ private fun ReaderTopControls(
     var versionMenuExpanded by remember { mutableStateOf(false) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
 
+    val isVersionEn = BibleBooksData.isEnglishVersion(activeVersion)
+    val bookInfo = BibleBooksData.getBookByName(currentBook)
+    val bookId = bookInfo?.number ?: 43
+    val bookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -386,7 +406,7 @@ private fun ReaderTopControls(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "$currentBook $currentChapter",
+                        text = "$bookName $currentChapter",
                         style = MaterialTheme.typography.labelLarge,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -454,7 +474,12 @@ private fun ReaderTopControls(
 
                     DropdownMenu(
                         expanded = versionMenuExpanded,
-                        onDismissRequest = { versionMenuExpanded = false }
+                        onDismissRequest = { versionMenuExpanded = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                     ) {
                         if (availableVersions.isEmpty()) {
                             DropdownMenuItem(
@@ -500,8 +525,8 @@ private fun ReaderTopControls(
                     onClick = { overflowMenuExpanded = true },
                     modifier = Modifier.size(36.dp).testTag("bible_overflow_menu_button")
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
+                    AppIcon(
+                        glyph = AppIcons.ThreeDotsMenu,
                         contentDescription = "Más opciones",
                         tint = appColors.textPrimary,
                         modifier = Modifier.size(22.dp)
@@ -510,14 +535,20 @@ private fun ReaderTopControls(
 
                 DropdownMenu(
                     expanded = overflowMenuExpanded,
-                    onDismissRequest = { overflowMenuExpanded = false }
+                    onDismissRequest = { overflowMenuExpanded = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                 ) {
                     DropdownMenuItem(
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            AppIcon(
+                                glyph = AppIcons.TtsAudio,
                                 contentDescription = null,
-                                tint = appColors.accent
+                                tint = appColors.accent,
+                                modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
@@ -535,10 +566,11 @@ private fun ReaderTopControls(
                     )
                     DropdownMenuItem(
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.VerticalSplit,
+                            AppIcon(
+                                glyph = AppIcons.SplitScreen,
                                 contentDescription = null,
-                                tint = if (isParallelMode) appColors.accent else appColors.textSecondary
+                                tint = if (isParallelMode) appColors.accent else appColors.textSecondary,
+                                modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
@@ -556,10 +588,11 @@ private fun ReaderTopControls(
                     )
                     DropdownMenuItem(
                         leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.EditNote,
+                            AppIcon(
+                                glyph = AppIcons.MyNotes,
                                 contentDescription = null,
-                                tint = appColors.accent
+                                tint = appColors.accent,
+                                modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
@@ -601,13 +634,17 @@ private fun SingleReaderView(
             .testTag("single_reader_list")
     ) {
         item {
+            val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+            val bookInfo = BibleBooksData.getBookByName(uiState.currentBook)
+            val bookId = bookInfo?.number ?: 43
+            val displayBookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp, bottom = 10.dp)
             ) {
                 Text(
-                    text = "${uiState.currentBook} ${uiState.currentChapter}",
+                    text = "$displayBookName ${uiState.currentChapter}",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = appColors.titleColor,
@@ -619,10 +656,10 @@ private fun SingleReaderView(
 
         items(
             count = uiState.verses.size,
-            key = { index -> "${uiState.verses[index].bookName}_${uiState.verses[index].chapter}_${uiState.verses[index].verse}_$index" }
+            key = { index -> uiState.verses[index].id }
         ) { index ->
             val verse = uiState.verses[index]
-            val hasCommentary = verse.verse in uiState.versesWithComments
+            val hasCommentary = true // La etiqueta COM debe mantenerse siempre visible en todos los versículos
             val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
 
             VerseRowItem(
@@ -635,12 +672,30 @@ private fun SingleReaderView(
                 lineHeight = lineHeight,
                 onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                 onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                onWordClick = { word -> viewModel.lookupWord(word) },
+                onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                 onFavoriteToggle = { viewModel.toggleFavorite(verse) }
             )
         }
 
         item {
+            val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
+            val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+            ChapterBottomNavigationControls(
+                currentChapter = uiState.currentChapter,
+                totalChapters = totalChapters,
+                isEnglish = isVersionEn,
+                onPreviousChapter = {
+                    if (uiState.currentChapter > 1) {
+                        viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
+                    }
+                },
+                onNextChapter = {
+                    if (uiState.currentChapter < totalChapters) {
+                        viewModel.loadChapter(uiState.currentBook, uiState.currentChapter + 1)
+                    }
+                }
+            )
             Spacer(modifier = Modifier.height(90.dp))
         }
     }
@@ -703,8 +758,12 @@ private fun ParallelReaderView(
                         .clickable { viewModel.openPassagePicker() }
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
+                    val isLeftVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+                    val leftBookInfo = BibleBooksData.getBookByName(uiState.currentBook)
+                    val leftBookId = leftBookInfo?.number ?: 43
+                    val displayBookName = BibleBooksData.getLocalizedBookName(leftBookId, isLeftVersionEn)
                     Text(
-                        text = "${uiState.currentBook} ${uiState.currentChapter}",
+                        text = "$displayBookName ${uiState.currentChapter}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = appColors.textPrimary,
@@ -754,7 +813,12 @@ private fun ParallelReaderView(
 
                     DropdownMenu(
                         expanded = isLeftVersionMenuOpen,
-                        onDismissRequest = { isLeftVersionMenuOpen = false }
+                        onDismissRequest = { isLeftVersionMenuOpen = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -809,13 +873,10 @@ private fun ParallelReaderView(
             ) {
                 items(
                     count = uiState.verses.size,
-                    key = { index ->
-                        val v = uiState.verses[index]
-                        "L_${v.bookName}_${v.chapter}_${v.verse}_$index"
-                    }
+                    key = { index -> "L_${uiState.verses[index].id}" }
                 ) { index ->
                     val verse = uiState.verses[index]
-                    val hasCommentary = verse.verse in uiState.versesWithComments
+                    val hasCommentary = true
                     val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
 
                     VerseRowItem(
@@ -828,9 +889,31 @@ private fun ParallelReaderView(
                         lineHeight = lineHeight,
                         onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word) },
+                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                        onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                         onFavoriteToggle = { viewModel.toggleFavorite(verse) }
                     )
+                }
+
+                item {
+                    val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
+                    val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+                    ChapterBottomNavigationControls(
+                        currentChapter = uiState.currentChapter,
+                        totalChapters = totalChapters,
+                        isEnglish = isVersionEn,
+                        onPreviousChapter = {
+                            if (uiState.currentChapter > 1) {
+                                viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
+                            }
+                        },
+                        onNextChapter = {
+                            if (uiState.currentChapter < totalChapters) {
+                                viewModel.loadChapter(uiState.currentBook, uiState.currentChapter + 1)
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(90.dp))
                 }
             }
         }
@@ -851,6 +934,10 @@ private fun ParallelReaderView(
         ) {
             val displayRightTitle = if (isLinked) uiState.currentBook else rightBookTitle
             val displayRightChapter = if (isLinked) uiState.currentChapter else rightChapter
+            val isRightEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
+            val rightBookInfoResolved = BibleBooksData.getBookByName(displayRightTitle)
+            val rightBookId = rightBookInfoResolved?.number ?: 43
+            val localizedRightBook = BibleBooksData.getLocalizedBookName(rightBookId, isRightEn)
 
             Row(
                 modifier = Modifier
@@ -875,7 +962,7 @@ private fun ParallelReaderView(
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "$displayRightTitle $displayRightChapter",
+                        text = "$localizedRightBook $displayRightChapter",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = appColors.textPrimary,
@@ -928,7 +1015,12 @@ private fun ParallelReaderView(
 
                     DropdownMenu(
                         expanded = isRightVersionMenuOpen,
-                        onDismissRequest = { isRightVersionMenuOpen = false }
+                        onDismissRequest = { isRightVersionMenuOpen = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -999,17 +1091,10 @@ private fun ParallelReaderView(
             ) {
                 items(
                     count = uiState.parallelVerses.size,
-                    key = { index ->
-                        val v = uiState.parallelVerses[index]
-                        "R_${v.bookName}_${v.chapter}_${v.verse}_$index"
-                    }
+                    key = { index -> "R_${uiState.parallelVerses[index].id}" }
                 ) { index ->
                     val verse = uiState.parallelVerses[index]
-                    val hasCommentary = if (isLinked) {
-                        verse.verse in uiState.versesWithComments
-                    } else {
-                        verse.verse in uiState.parallelVersesWithComments
-                    }
+                    val hasCommentary = true
                     val hasCrossReference = if (isLinked) {
                         verse.verse in uiState.versesWithCrossReferences
                     } else {
@@ -1026,9 +1111,41 @@ private fun ParallelReaderView(
                         lineHeight = lineHeight,
                         onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word) },
+                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                        onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
                         onFavoriteToggle = { /* Sin acción en columna paralela */ }
                     )
+                }
+
+                item {
+                    val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
+                    val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
+                    val totalChapters = BibleBooksData.getBookByName(rightBook)?.chapterCount ?: 1
+                    val isRightVersionEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
+                    ChapterBottomNavigationControls(
+                        currentChapter = activeRightChapter,
+                        totalChapters = totalChapters,
+                        isEnglish = isRightVersionEn,
+                        onPreviousChapter = {
+                            if (activeRightChapter > 1) {
+                                if (isLinked) {
+                                    viewModel.loadChapter(uiState.currentBook, activeRightChapter - 1)
+                                } else {
+                                    onUpdateRightPassage(rightBook, activeRightChapter - 1, 1)
+                                }
+                            }
+                        },
+                        onNextChapter = {
+                            if (activeRightChapter < totalChapters) {
+                                if (isLinked) {
+                                    viewModel.loadChapter(uiState.currentBook, activeRightChapter + 1)
+                                } else {
+                                    onUpdateRightPassage(rightBook, activeRightChapter + 1, 1)
+                                }
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(90.dp))
                 }
             }
         }
@@ -1039,6 +1156,7 @@ private fun ParallelReaderView(
             currentStep = rightPickerStep,
             selectedBook = rightBookInfo ?: BibleBooksData.books.first(),
             selectedChapter = rightPickerChapter,
+            interfaceLanguage = uiState.userPreferences.interfaceLanguage,
             onBookSelected = { selected ->
                 rightBookInfo = selected
                 rightPickerStep = 2
@@ -1068,7 +1186,95 @@ private fun ParallelReaderView(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
+@Composable
+private fun ChapterBottomNavigationControls(
+    currentChapter: Int,
+    totalChapters: Int,
+    isEnglish: Boolean = false,
+    onPreviousChapter: () -> Unit,
+    onNextChapter: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val appColors = AppTheme.colors
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (currentChapter > 1) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = appColors.surfaceVariant,
+                border = BorderStroke(1.dp, appColors.border),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onPreviousChapter() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "‹",
+                        color = appColors.accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isEnglish) "Chapter ${currentChapter - 1}" else "Capítulo ${currentChapter - 1}",
+                        color = appColors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.width(1.dp))
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        if (currentChapter < totalChapters) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = appColors.surfaceVariant,
+                border = BorderStroke(1.dp, appColors.border),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onNextChapter() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isEnglish) "Chapter ${currentChapter + 1}" else "Capítulo ${currentChapter + 1}",
+                        color = appColors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "›",
+                        color = appColors.accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.width(1.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VerseRowItem(
     verse: BibleVerse,
@@ -1081,22 +1287,195 @@ private fun VerseRowItem(
     onCommentaryClick: (code: String) -> Unit,
     onCrossRefClick: () -> Unit,
     onWordClick: (String) -> Unit,
+    onNoteClick: (marker: String) -> Unit,
     onFavoriteToggle: () -> Unit
 ) {
     val appColors = AppTheme.colors
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
-    val rawCleanText = verse.text.replace(Regex("<[^>]*>"), "").trim()
-    val copyVerseToClipboard = {
-        val formattedText = "${verse.bookName} ${verse.chapter}:${verse.verse}\n$rawCleanText"
-        clipboardManager.setText(AnnotatedString(formattedText))
-        Toast.makeText(
-            context,
-            "Copiado: ${verse.bookName} ${verse.chapter}:${verse.verse}",
-            Toast.LENGTH_SHORT
-        ).show()
+    val rawCleanText = remember(verse.text) {
+        verse.text
+            .replace(Regex("<S>.*?</S>|<.*?>"), "")
+            .replace(Regex("(?<=\\p{L})\\d+"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
+
+    val copyVerseToClipboard = remember(verse.bookName, verse.chapter, verse.verse, rawCleanText, context, clipboardManager) {
+        {
+            val formattedText = "${verse.bookName} ${verse.chapter}:${verse.verse}\n$rawCleanText"
+            clipboardManager.setText(AnnotatedString(formattedText))
+            Toast.makeText(
+                context,
+                "Copiado: ${verse.bookName} ${verse.chapter}:${verse.verse}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    val annotatedString = remember(
+        verse.verse,
+        rawCleanText,
+        appColors.verseNumberColor,
+        appColors.textPrimary,
+        appColors.accent,
+        fontSize,
+        hasCommentary,
+        hasCrossReference
+    ) {
+        buildAnnotatedString {
+            // Número del versículo al inicio en la misma línea visual base
+            pushStringAnnotation(tag = "VERSE_NUM", annotation = "${verse.verse}")
+            withStyle(
+                SpanStyle(
+                    color = appColors.verseNumberColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fontSize
+                )
+            ) {
+                append("${verse.verse} ")
+            }
+            pop()
+
+            // Tokenizar texto en: notas de versión [n], palabras interactuables y puntuación/espacios
+            val tokenPattern = Regex("(\\[(\\d+)\\])|([\\p{L}\\p{Nd}]+)|([^\\s\\[\\]\\p{L}\\p{Nd}]+)|(\\s+)")
+            val noteStyle = SpanStyle(
+                color = appColors.accent.copy(alpha = 0.85f),
+                fontSize = (fontSize.value * 0.65f).sp,
+                baselineShift = BaselineShift.Superscript,
+                fontWeight = FontWeight.Medium
+            )
+            val wordStyle = SpanStyle(
+                color = appColors.textPrimary
+            )
+
+            tokenPattern.findAll(rawCleanText).forEach { match ->
+                val noteMarker = match.groups[2]?.value
+                val word = match.groups[3]?.value
+                when {
+                    noteMarker != null -> {
+                        pushStringAnnotation(tag = "NOTE", annotation = noteMarker)
+                        withStyle(noteStyle) {
+                            append("[$noteMarker]")
+                        }
+                        pop()
+                    }
+                    word != null -> {
+                        pushStringAnnotation(tag = "WORD", annotation = word)
+                        withStyle(wordStyle) {
+                            append(word)
+                        }
+                        pop()
+                    }
+                    else -> {
+                        withStyle(wordStyle) {
+                            append(match.value)
+                        }
+                    }
+                }
+            }
+
+            // Píldoras compactas COM y REF posicionadas en la misma línea al cierre del versículo
+            if (hasCommentary) {
+                append(" ")
+                pushStringAnnotation(tag = "COM", annotation = "COM")
+                appendInlineContent(id = "COM_PILL", alternateText = "[COM]")
+                pop()
+            }
+            if (hasCrossReference) {
+                append(" ")
+                pushStringAnnotation(tag = "REF", annotation = "REF")
+                appendInlineContent(id = "REF_PILL", alternateText = "[REF]")
+                pop()
+            }
+        }
+    }
+
+    val inlineContent = remember(hasCommentary, hasCrossReference, appColors, fontFamily, verse.verse) {
+        mapOf(
+            "COM_PILL" to InlineTextContent(
+                Placeholder(
+                    width = 32.sp,
+                    height = 14.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (appColors.isDark) {
+                        androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
+                    } else {
+                        androidx.compose.ui.graphics.Color(0xFFE0F2FE)
+                    },
+                    border = BorderStroke(
+                        0.6.dp,
+                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
+                        else androidx.compose.ui.graphics.Color(0xFF0284C7)
+                    ),
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { onCommentaryClick("COM") }
+                        .testTag("badge_com_${verse.verse}")
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = "COM",
+                            color = if (appColors.isDark) {
+                                androidx.compose.ui.graphics.Color(0xFF38BDF8)
+                            } else {
+                                androidx.compose.ui.graphics.Color(0xFF0369A1)
+                            },
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily
+                        )
+                    }
+                }
+            },
+            "REF_PILL" to InlineTextContent(
+                Placeholder(
+                    width = 30.sp,
+                    height = 14.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (appColors.isDark) {
+                        androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
+                    } else {
+                        androidx.compose.ui.graphics.Color(0xFFD1FAE5)
+                    },
+                    border = BorderStroke(
+                        0.6.dp,
+                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
+                        else androidx.compose.ui.graphics.Color(0xFF059669)
+                    ),
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { onCrossRefClick() }
+                        .testTag("badge_ref_${verse.verse}")
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = "REF",
+                            color = if (appColors.isDark) {
+                                androidx.compose.ui.graphics.Color(0xFF34D399)
+                            } else {
+                                androidx.compose.ui.graphics.Color(0xFF047857)
+                            },
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(
         modifier = Modifier
@@ -1110,7 +1489,7 @@ private fun VerseRowItem(
                 onClick = { },
                 onLongClick = { copyVerseToClipboard() }
             )
-            .padding(vertical = 6.dp)
+            .padding(vertical = 4.dp, horizontal = 2.dp)
             .testTag("verse_item_${verse.verse}")
     ) {
         if (!verse.sectionTitle.isNullOrBlank()) {
@@ -1120,121 +1499,87 @@ private fun VerseRowItem(
                 fontWeight = FontWeight.Bold,
                 color = appColors.titleColor,
                 fontFamily = fontFamily,
-                modifier = Modifier.padding(top = 10.dp, bottom = 6.dp)
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
             )
         }
 
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "${verse.verse} ",
-                color = appColors.verseNumberColor,
-                fontWeight = FontWeight.Bold,
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                fontFamily = fontFamily,
-                modifier = Modifier
-                    .clickable { onFavoriteToggle() }
-                    .padding(end = 4.dp)
-            )
+        // Renderizado unificado y continuo en una sola pasada con píldoras y notas integradas
+        Text(
+            text = annotatedString,
+            inlineContent = inlineContent,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            fontFamily = fontFamily,
+            onTextLayout = { layoutResult = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(annotatedString) {
+                    val hitBoxExpandPx = 20.dp.toPx()
+                    detectTapGestures(
+                        onLongPress = { copyVerseToClipboard() },
+                        onTap = { pos ->
+                            layoutResult?.let { layout ->
+                                // 1. Hit-box ampliada (mínimo 40x40 dp) para notas de versión [n]
+                                val noteAnnotations = annotatedString.getStringAnnotations("NOTE", 0, annotatedString.length)
+                                var bestNote: String? = null
+                                var minDistance = Float.MAX_VALUE
 
-            val cleanWords = rawCleanText.split(" ").filter { it.isNotBlank() }
-            cleanWords.forEach { rawWord ->
-                val pureWord = rawWord.trim().replace(Regex("[^\\p{L}\\p{Nd}]"), "")
+                                for (annotation in noteAnnotations) {
+                                    if (annotation.start < layout.layoutInput.text.length && annotation.end <= layout.layoutInput.text.length) {
+                                        val startBox = layout.getBoundingBox(annotation.start)
+                                        val endBox = layout.getBoundingBox((annotation.end - 1).coerceAtLeast(annotation.start))
+                                        val left = minOf(startBox.left, endBox.left) - hitBoxExpandPx
+                                        val right = maxOf(startBox.right, endBox.right) + hitBoxExpandPx
+                                        val top = minOf(startBox.top, endBox.top) - hitBoxExpandPx
+                                        val bottom = maxOf(startBox.bottom, endBox.bottom) + hitBoxExpandPx
 
-                Text(
-                    text = "$rawWord ",
-                    color = appColors.textPrimary,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight,
-                    fontFamily = fontFamily,
-                    modifier = Modifier.combinedClickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = {
-                            if (pureWord.isNotBlank()) {
-                                onWordClick(pureWord)
+                                        if (pos.x in left..right && pos.y in top..bottom) {
+                                            val centerX = (left + right) / 2f
+                                            val centerY = (top + bottom) / 2f
+                                            val dist = (pos.x - centerX) * (pos.x - centerX) + (pos.y - centerY) * (pos.y - centerY)
+                                            if (dist < minDistance) {
+                                                minDistance = dist
+                                                bestNote = annotation.item
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (bestNote != null) {
+                                    onNoteClick(bestNote)
+                                    return@detectTapGestures
+                                }
+
+                                // 2. Verificación de toque en píldoras COM / REF
+                                val offset = layout.getOffsetForPosition(pos)
+                                val comAnnotation = annotatedString.getStringAnnotations("COM", offset, offset).firstOrNull()
+                                if (comAnnotation != null) {
+                                    onCommentaryClick("COM")
+                                    return@detectTapGestures
+                                }
+                                val refAnnotation = annotatedString.getStringAnnotations("REF", offset, offset).firstOrNull()
+                                if (refAnnotation != null) {
+                                    onCrossRefClick()
+                                    return@detectTapGestures
+                                }
+
+                                // 3. Número de versículo (favoritos)
+                                val verseNumAnnotation = annotatedString.getStringAnnotations("VERSE_NUM", offset, offset).firstOrNull()
+                                if (verseNumAnnotation != null) {
+                                    onFavoriteToggle()
+                                    return@detectTapGestures
+                                }
+
+                                // 4. Búsqueda de palabra en diccionario
+                                val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
+                                if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
+                                    onWordClick(wordAnnotation.item)
+                                    return@detectTapGestures
+                                }
                             }
-                        },
-                        onLongClick = {
-                            copyVerseToClipboard()
                         }
                     )
-                )
-            }
-
-            // Etiqueta COM (comentarios exegéticos)
-            if (hasCommentary) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (appColors.isDark) {
-                        androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.25f)
-                    } else {
-                        androidx.compose.ui.graphics.Color(0xFFE0F2FE)
-                    },
-                    border = BorderStroke(
-                        0.8.dp,
-                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                        else androidx.compose.ui.graphics.Color(0xFF0284C7)
-                    ),
-                    modifier = Modifier
-                        .padding(start = 5.dp, top = 2.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { onCommentaryClick("COM") }
-                        .testTag("badge_com_${verse.verse}")
-                ) {
-                    Text(
-                        text = "COM",
-                        color = if (appColors.isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFF0369A1)
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = fontFamily,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                    )
                 }
-            }
-
-            // Etiqueta REF (referencias cruzadas TSK)
-            if (hasCrossReference) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (appColors.isDark) {
-                        androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.25f)
-                    } else {
-                        androidx.compose.ui.graphics.Color(0xFFD1FAE5)
-                    },
-                    border = BorderStroke(
-                        0.8.dp,
-                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
-                        else androidx.compose.ui.graphics.Color(0xFF059669)
-                    ),
-                    modifier = Modifier
-                        .padding(start = 5.dp, top = 2.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { onCrossRefClick() }
-                        .testTag("badge_ref_${verse.verse}")
-                ) {
-                    Text(
-                        text = "REF",
-                        color = if (appColors.isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF34D399)
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFF047857)
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = fontFamily,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                    )
-                }
-            }
-        }
+        )
     }
 }

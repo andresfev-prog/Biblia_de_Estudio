@@ -1,5 +1,6 @@
 package com.example.ui.screens.modules
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -76,9 +77,9 @@ fun ModulesScreen(
     var languageMenuOpen by remember { mutableStateOf(false) }
     var onlyDownloaded by remember { mutableStateOf(false) }
 
-    val languages = listOf("Todos", "Español", "Inglés", "Griego / Hebreo")
     val lang = uiState.userPreferences.interfaceLanguage
     val isEn = lang.contains("English", ignoreCase = true)
+    val languages = if (isEn) listOf("All", "Spanish", "English") else listOf("Todos", "Español", "Inglés")
     val appColors = AppTheme.colors
 
     Column(
@@ -115,6 +116,13 @@ fun ModulesScreen(
         ) {
             // Filtro por Idioma
             Box {
+                val currentDisplayLang = when (uiState.moduleLanguageFilter) {
+                    "Todos", "All" -> if (isEn) "All" else "Todos"
+                    "Español", "Spanish" -> if (isEn) "Spanish" else "Español"
+                    "Inglés", "English" -> if (isEn) "English" else "Inglés"
+                    else -> uiState.moduleLanguageFilter
+                }
+
                 Surface(
                     shape = CircleShape,
                     color = appColors.pillBg,
@@ -129,7 +137,7 @@ fun ModulesScreen(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "${StringsLocale.get("language_label", lang)}: ${uiState.moduleLanguageFilter}",
+                            text = "${StringsLocale.get("language_label", lang)}: $currentDisplayLang",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = appColors.pillText,
@@ -149,10 +157,15 @@ fun ModulesScreen(
 
                 DropdownMenu(
                     expanded = languageMenuOpen,
-                    onDismissRequest = { languageMenuOpen = false }
+                    onDismissRequest = { languageMenuOpen = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                 ) {
                     languages.forEach { languageItem ->
-                        val isSelected = uiState.moduleLanguageFilter == languageItem
+                        val isSelected = currentDisplayLang == languageItem
                         DropdownMenuItem(
                             text = {
                                 Text(
@@ -246,8 +259,14 @@ fun ModulesScreen(
         }
 
         val baseFiltered = uiState.modules.filter { module ->
-            module.category == categoryKey &&
-                    (uiState.moduleLanguageFilter == "Todos" || module.language == uiState.moduleLanguageFilter)
+            val matchesCategory = module.category == categoryKey
+            val matchesLanguage = when (uiState.moduleLanguageFilter) {
+                "Todos", "All" -> true
+                "Español", "Spanish" -> module.language.contains("Español", ignoreCase = true)
+                "Inglés", "English" -> module.language.contains("Inglés", ignoreCase = true) || module.language.contains("English", ignoreCase = true)
+                else -> module.language == uiState.moduleLanguageFilter
+            }
+            matchesCategory && matchesLanguage
         }
 
         val downloadedModules = baseFiltered.filter { it.isDownloaded }
@@ -290,7 +309,15 @@ fun ModulesScreen(
                     .testTag("modules_list"),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 1. Recursos instalados en la parte superior
+                // 1. Recursos instalados en la parte superior con divisor de sección
+                if (downloadedModules.isNotEmpty()) {
+                    item(key = "divider_installed_section") {
+                        LabeledDivider(
+                            label = if (isEn) "Installed (${downloadedModules.size})" else "Instalados (${downloadedModules.size})"
+                        )
+                    }
+                }
+
                 items(downloadedModules, key = { it.id }) { item ->
                     ModuleItemCard(
                         module = item,
@@ -301,14 +328,12 @@ fun ModulesScreen(
                     )
                 }
 
-                // 2. Divisor centrado (Opción 2) y recursos pendientes de descarga
+                // 2. Divisor centrado y recursos pendientes de descarga
                 if (!onlyDownloaded && availableModules.isNotEmpty()) {
-                    if (downloadedModules.isNotEmpty()) {
-                        item(key = "divider_available_section") {
-                            LabeledDivider(
-                                label = if (isEn) "Available (${availableModules.size})" else "Disponibles (${availableModules.size})"
-                            )
-                        }
+                    item(key = "divider_available_section") {
+                        LabeledDivider(
+                            label = if (isEn) "Available (${availableModules.size})" else "Disponibles (${availableModules.size})"
+                        )
                     }
 
                     items(availableModules, key = { it.id }) { item ->
@@ -440,7 +465,7 @@ private fun ModuleItemCard(
             .testTag("module_card_${module.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-        border = if (appColors.isDark) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+        border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else appColors.divider.copy(alpha = 0.5f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         // Fila principal: Centra verticalmente la columna de textos y el botón de acción
@@ -479,7 +504,7 @@ private fun ModuleItemCard(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = module.description,
+                    text = getLocalizedModuleDescription(module, isEn),
                     style = MaterialTheme.typography.bodySmall,
                     color = appColors.textPrimary,
                     lineHeight = 18.sp,
@@ -489,7 +514,7 @@ private fun ModuleItemCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Progreso durante la descarga activa
-                if (isDownloading && progress != null) {
+                if (progress != null) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -597,5 +622,74 @@ private fun ModuleItemCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Traduce las descripciones del catálogo de módulos al idioma inglés cuando la interfaz está en dicho idioma.
+ */
+private fun getLocalizedModuleDescription(module: BibleModule, isEn: Boolean): String {
+    if (!isEn) return module.description
+    return when (module.id) {
+        "mod_rvr1960" -> "Classic and representative translation of the biblical text in Spanish."
+        "mod_kjv" -> "Historical benchmark English translation with classic textual fidelity."
+        "mod_amp" -> "Translation with clarifying contextual nuances in brackets."
+        "mod_ampc" -> "Classic edition of the Amplified Bible in English."
+        "mod_dhhd" -> "Accessible and ecumenical version for smooth, modern reading."
+        "mod_esv" -> "Rigorous and literal translation in contemporary English."
+        "mod_kdsh" -> "Restoration of original Hebrew names throughout the sacred text."
+        "mod_msg" -> "Contemporary paraphrase in vibrant, conversational language."
+        "mod_niv11" -> "Contemporary English translation combining clarity and formal balance."
+        "mod_nkjv" -> "Modern revision maintaining textual precision and classic cadence."
+        "mod_nlt15" -> "Translation with lively, devotional, and understandable language."
+        "mod_ntv" -> "Modern and dynamic translation in contemporary Spanish."
+        "mod_nvi" -> "Contemporary translation offering formal and dynamic balance."
+        "mod_pdt" -> "Biblical text in simple, direct, and universally clear language."
+        "mod_tla" -> "Text adapted with clear, direct vocabulary for modern readers."
+        "mod_tpt" -> "Expressive and poetic translation crafted for devotional passion."
+        "mod_ylt" -> "Historical translation with strict verbal and idiomatic literalness."
+        "mod_t4t" -> "Simplified explanatory biblical text for translation facilitators."
+        "mod_multi_dict" -> "Comprehensive etymological definitions and multilingual Strong's concordance."
+        "mod_conc_dict" -> "Alphabetical concordance of key biblical words and references."
+        "mod_es_dict" -> "Compendium of biblical terms and concepts in Spanish."
+        "mod_str_es" -> "Lexical definitions and Spanish concordance keyed to Strong's numbers."
+        "mod_str_plus" -> "Enhanced Strong's dictionary with analytical references."
+        "mod_swanson" -> "Exhaustive semantic lexicon of biblical Hebrew, Aramaic, and Greek."
+        "mod_twot" -> "Theological wordbook of the Old Testament Hebrew and Aramaic."
+        "mod_webster" -> "Traditional classic English biblical and historical definitions."
+        "mod_bdb_t" -> "Standard academic Hebrew and Aramaic reference lexicon."
+        "mod_lds_es" -> "Dictionary of biblical terms, places, and names in Spanish."
+        "mod_vine_at_es" -> "Expository dictionary of Old Testament words (Hebrew-Spanish)."
+        "mod_vine_nt_es" -> "Expository dictionary of New Testament words (Greek-Spanish)."
+        "mod_vine_nt" -> "Expository dictionary of New Testament words with Greek analysis."
+        "mod_vine_ot" -> "Expository dictionary of Old Testament words with Hebrew analysis."
+        "mod_wesley" -> "Explanatory and practical notes on the Old and New Testaments."
+        "mod_cmh_c" -> "Concise devotional and exegetical commentary on Scripture."
+        "mod_cbwm_c" -> "Comprehensive expository commentary on the Old and New Testaments."
+        "mod_flores_c" -> "Pastoral and expository notes for biblical edification."
+        "mod_jfb_es_c" -> "Exegetical and explanatory commentary on the whole Bible in Spanish."
+        "mod_mhwbc_c" -> "Comprehensive verse-by-verse devotional and exegetical commentary."
+        "mod_edw_c" -> "Theological notes and exegetical reflections of Jonathan Edwards."
+        "mod_spurg_c" -> "Expository notes and sermons by renowned pastor Charles Spurgeon."
+        "mod_pchc_c" -> "Comprehensive homiletical commentary with outlines and sermon points."
+        "mod_tsk_c" -> "Exhaustive cross-reference system and correlated biblical themes."
+        "mod_tsk2_c" -> "Expanded edition with over 500,000 analytical cross-references."
+        "mod_wca_c" -> "Exegetical and apologetic handbook addressing biblical difficulties."
+        "mod_rv1960_c" -> "Study notes and explanatory references for the RVR1960."
+        "mod_ntv_c" -> "Footnotes, explanatory notes, and section headings for the NTV."
+        "mod_nvi_notes" -> "Textual notes, cultural background, and cross-references for the NVI."
+        "mod_nvi_c" -> "Thematic and theological commentary complementing the NVI."
+        "mod_pdt_c" -> "Explanatory notes on vocabulary and historical context for the PDT."
+        "mod_tla_c" -> "Clarifications of cultural, geographical, and translational terms for the TLA."
+        "mod_amp_notes" -> "Explanatory notes and contextual references for the Amplified Bible."
+        "mod_ampc_notes" -> "Classic explanatory annotations for the AMPC edition."
+        "mod_esv_c" -> "Study notes and doctrinal context for the ESV translation."
+        "mod_kjv_c" -> "Contextual notes and traditional historical references for the KJV."
+        "mod_niv11_notes" -> "Explanatory, linguistic, and historical notes for the NIV 2011 edition."
+        "mod_nkjv_c" -> "Explanatory, historical, and doctrinal notes for the NKJV."
+        "mod_nlt15_notes" -> "Study notes and section headings for the NLT 2015 translation."
+        "mod_tpt_c" -> "Devotional study notes with Hebrew and Aramaic linguistic background."
+        "mod_t4t_c" -> "Explanatory and linguistic notes for translation facilitators."
+        else -> module.description
     }
 }
