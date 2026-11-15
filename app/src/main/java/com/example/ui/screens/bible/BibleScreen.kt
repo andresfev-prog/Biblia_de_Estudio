@@ -76,7 +76,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
@@ -1325,13 +1330,18 @@ private fun VerseRowItem(
         }
     }
 
+    val currentOnCommentaryClick by rememberUpdatedState(onCommentaryClick)
+    val currentOnCrossRefClick by rememberUpdatedState(onCrossRefClick)
+
     val annotatedString = remember(
         verse.verse,
         rawCleanText,
         appColors.verseNumberColor,
         appColors.textPrimary,
         appColors.accent,
-        fontSize
+        fontSize,
+        hasCommentary,
+        hasCrossReference
     ) {
         buildAnnotatedString {
             // Número del versículo al inicio en la misma línea visual base
@@ -1384,7 +1394,106 @@ private fun VerseRowItem(
                     }
                 }
             }
+
+            // Bloque compacto e indivisible de etiquetas COM y REF en línea al cierre del versículo
+            if (hasCommentary || hasCrossReference) {
+                withStyle(SpanStyle(fontSize = (fontSize.value * 0.45f).sp)) {
+                    append(" ")
+                }
+                when {
+                    hasCommentary && hasCrossReference -> {
+                        appendInlineContent(id = "study_badges_both", alternateText = "[COM][REF]")
+                    }
+                    hasCommentary -> {
+                        pushStringAnnotation(tag = "COM", annotation = "COM")
+                        appendInlineContent(id = "study_badge_com", alternateText = "[COM]")
+                        pop()
+                    }
+                    hasCrossReference -> {
+                        pushStringAnnotation(tag = "REF", annotation = "REF")
+                        appendInlineContent(id = "study_badge_ref", alternateText = "[REF]")
+                        pop()
+                    }
+                }
+            }
         }
+    }
+
+    val inlineContent = remember(appColors.isDark, fontFamily, verse.verse) {
+        mapOf(
+            "study_badges_both" to InlineTextContent(
+                Placeholder(
+                    width = 58.sp,
+                    height = 14.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StudyBadgePill(
+                        label = "COM",
+                        isCommentary = true,
+                        isDark = appColors.isDark,
+                        fontFamily = fontFamily,
+                        onClick = { currentOnCommentaryClick("COM") },
+                        modifier = Modifier.testTag("badge_com_${verse.verse}")
+                    )
+                    StudyBadgePill(
+                        label = "REF",
+                        isCommentary = false,
+                        isDark = appColors.isDark,
+                        fontFamily = fontFamily,
+                        onClick = { currentOnCrossRefClick() },
+                        modifier = Modifier.testTag("badge_ref_${verse.verse}")
+                    )
+                }
+            },
+            "study_badge_com" to InlineTextContent(
+                Placeholder(
+                    width = 29.sp,
+                    height = 14.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) {
+                Box(
+                    contentAlignment = Alignment.CenterStart,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    StudyBadgePill(
+                        label = "COM",
+                        isCommentary = true,
+                        isDark = appColors.isDark,
+                        fontFamily = fontFamily,
+                        onClick = { currentOnCommentaryClick("COM") },
+                        modifier = Modifier.testTag("badge_com_${verse.verse}")
+                    )
+                }
+            },
+            "study_badge_ref" to InlineTextContent(
+                Placeholder(
+                    width = 28.sp,
+                    height = 14.sp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) {
+                Box(
+                    contentAlignment = Alignment.CenterStart,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    StudyBadgePill(
+                        label = "REF",
+                        isCommentary = false,
+                        isDark = appColors.isDark,
+                        fontFamily = fontFamily,
+                        onClick = { currentOnCrossRefClick() },
+                        modifier = Modifier.testTag("badge_ref_${verse.verse}")
+                    )
+                }
+            }
+        )
     }
 
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -1401,7 +1510,7 @@ private fun VerseRowItem(
                 onClick = { },
                 onLongClick = { copyVerseToClipboard() }
             )
-            .padding(vertical = 8.dp, horizontal = 2.dp)
+            .padding(vertical = 4.dp, horizontal = 2.dp)
             .testTag("verse_item_${verse.verse}")
     ) {
         if (!verse.sectionTitle.isNullOrBlank()) {
@@ -1415,9 +1524,10 @@ private fun VerseRowItem(
             )
         }
 
-        // Elemento 1: Texto del versículo finalizando al natural con su puntuación
+        // Renderizado unificado y continuo en una sola pasada con píldoras atómicas y notas integradas
         Text(
             text = annotatedString,
+            inlineContent = inlineContent,
             fontSize = fontSize,
             lineHeight = lineHeight,
             fontFamily = fontFamily,
@@ -1463,14 +1573,26 @@ private fun VerseRowItem(
 
                                 val offset = layout.getOffsetForPosition(pos)
 
-                                // 2. Número de versículo (favoritos)
+                                // 2. Fallback para etiquetas individuales si el toque cae en el margen del Placeholder
+                                val comAnnotation = annotatedString.getStringAnnotations("COM", offset, offset).firstOrNull()
+                                if (comAnnotation != null) {
+                                    onCommentaryClick("COM")
+                                    return@detectTapGestures
+                                }
+                                val refAnnotation = annotatedString.getStringAnnotations("REF", offset, offset).firstOrNull()
+                                if (refAnnotation != null) {
+                                    onCrossRefClick()
+                                    return@detectTapGestures
+                                }
+
+                                // 3. Número de versículo (favoritos)
                                 val verseNumAnnotation = annotatedString.getStringAnnotations("VERSE_NUM", offset, offset).firstOrNull()
                                 if (verseNumAnnotation != null) {
                                     onFavoriteToggle()
                                     return@detectTapGestures
                                 }
 
-                                // 3. Búsqueda de palabra en diccionario
+                                // 4. Búsqueda de palabra en diccionario
                                 val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
                                 if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
                                     onWordClick(wordAnnotation.item)
@@ -1481,92 +1603,63 @@ private fun VerseRowItem(
                     )
                 }
         )
+    }
+}
 
-        // Elemento 2: Etiquetas COM y REF alineadas al margen izquierdo debajo del texto del versículo
-        if (hasCommentary || hasCrossReference) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (hasCommentary) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (appColors.isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFFE0F2FE)
-                        },
-                        border = BorderStroke(
-                            0.6.dp,
-                            if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                            else androidx.compose.ui.graphics.Color(0xFF0284C7)
-                        ),
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { onCommentaryClick("COM") }
-                            .testTag("badge_com_${verse.verse}")
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "COM",
-                                color = if (appColors.isDark) {
-                                    androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                                } else {
-                                    androidx.compose.ui.graphics.Color(0xFF0369A1)
-                                },
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = fontFamily,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
+@Composable
+private fun StudyBadgePill(
+    label: String,
+    isCommentary: Boolean,
+    isDark: Boolean,
+    fontFamily: FontFamily,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = if (isCommentary) {
+        if (isDark) androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
+        else androidx.compose.ui.graphics.Color(0xFFE0F2FE)
+    } else {
+        if (isDark) androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
+        else androidx.compose.ui.graphics.Color(0xFFD1FAE5)
+    }
+    val borderColor = if (isCommentary) {
+        if (isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
+        else androidx.compose.ui.graphics.Color(0xFF0284C7)
+    } else {
+        if (isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
+        else androidx.compose.ui.graphics.Color(0xFF059669)
+    }
+    val textColor = if (isCommentary) {
+        if (isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
+        else androidx.compose.ui.graphics.Color(0xFF0369A1)
+    } else {
+        if (isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
+        else androidx.compose.ui.graphics.Color(0xFF047857)
+    }
 
-                if (hasCrossReference) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (appColors.isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFFD1FAE5)
-                        },
-                        border = BorderStroke(
-                            0.6.dp,
-                            if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
-                            else androidx.compose.ui.graphics.Color(0xFF059669)
-                        ),
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { onCrossRefClick() }
-                            .testTag("badge_ref_${verse.verse}")
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "REF",
-                                color = if (appColors.isDark) {
-                                    androidx.compose.ui.graphics.Color(0xFF34D399)
-                                } else {
-                                    androidx.compose.ui.graphics.Color(0xFF047857)
-                                },
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = fontFamily,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-            }
+    Surface(
+        shape = CircleShape,
+        color = containerColor,
+        border = BorderStroke(0.6.dp, borderColor),
+        modifier = modifier
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 4.5.dp, vertical = 1.dp)
+        ) {
+            Text(
+                text = label,
+                color = textColor,
+                fontSize = 8.sp,
+                lineHeight = 9.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.2.sp,
+                fontFamily = fontFamily,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }
