@@ -2,6 +2,7 @@ package com.example.ui.screens.bible
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,10 +21,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,10 +76,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -276,6 +277,10 @@ fun BibleScreen(
             }
         }
 
+        val ttsBottomPadding by animateDpAsState(
+            targetValue = if (uiState.isBottomBarVisible) 88.dp else 4.dp,
+            label = "ttsBottomPadding"
+        )
         TtsPlayerBar(
             isVisible = uiState.isTtsVisible,
             isPlaying = uiState.isTtsPlaying,
@@ -288,7 +293,10 @@ fun BibleScreen(
             onNext = { viewModel.nextTtsVerse() },
             onPrev = { viewModel.prevTtsVerse() },
             onClose = { viewModel.stopTts() },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = ttsBottomPadding)
         )
 
         if (uiState.isPassagePickerVisible) {
@@ -625,12 +633,17 @@ private fun SingleReaderView(
     modifier: Modifier = Modifier
 ) {
     val appColors = AppTheme.colors
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     LazyColumn(
         state = listState,
+        contentPadding = PaddingValues(
+            start = 18.dp,
+            end = 18.dp,
+            bottom = 96.dp + navBarBottom
+        ),
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp)
             .testTag("single_reader_list")
     ) {
         item {
@@ -696,7 +709,6 @@ private fun SingleReaderView(
                     }
                 }
             )
-            Spacer(modifier = Modifier.height(90.dp))
         }
     }
 }
@@ -719,6 +731,7 @@ private fun ParallelReaderView(
 ) {
     val downloadedVersions = uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
     val isLinked = uiState.isParallelLinked
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     var isLeftVersionMenuOpen by remember { mutableStateOf(false) }
     var isRightVersionMenuOpen by remember { mutableStateOf(false) }
@@ -868,7 +881,7 @@ private fun ParallelReaderView(
                     start = 16.dp,
                     end = 10.dp,
                     top = 8.dp,
-                    bottom = 16.dp
+                    bottom = 96.dp + navBarBottom
                 )
             ) {
                 items(
@@ -913,7 +926,6 @@ private fun ParallelReaderView(
                             }
                         }
                     )
-                    Spacer(modifier = Modifier.height(90.dp))
                 }
             }
         }
@@ -1086,7 +1098,7 @@ private fun ParallelReaderView(
                     start = 10.dp,
                     end = 16.dp,
                     top = 8.dp,
-                    bottom = 16.dp
+                    bottom = 96.dp + navBarBottom
                 )
             ) {
                 items(
@@ -1145,7 +1157,6 @@ private fun ParallelReaderView(
                             }
                         }
                     )
-                    Spacer(modifier = Modifier.height(90.dp))
                 }
             }
         }
@@ -1320,9 +1331,7 @@ private fun VerseRowItem(
         appColors.verseNumberColor,
         appColors.textPrimary,
         appColors.accent,
-        fontSize,
-        hasCommentary,
-        hasCrossReference
+        fontSize
     ) {
         buildAnnotatedString {
             // Número del versículo al inicio en la misma línea visual base
@@ -1375,104 +1384,7 @@ private fun VerseRowItem(
                     }
                 }
             }
-
-            // Píldoras compactas COM y REF posicionadas en la misma línea al cierre del versículo
-            if (hasCommentary) {
-                append(" ")
-                pushStringAnnotation(tag = "COM", annotation = "COM")
-                appendInlineContent(id = "COM_PILL", alternateText = "[COM]")
-                pop()
-            }
-            if (hasCrossReference) {
-                append(" ")
-                pushStringAnnotation(tag = "REF", annotation = "REF")
-                appendInlineContent(id = "REF_PILL", alternateText = "[REF]")
-                pop()
-            }
         }
-    }
-
-    val inlineContent = remember(hasCommentary, hasCrossReference, appColors, fontFamily, verse.verse) {
-        mapOf(
-            "COM_PILL" to InlineTextContent(
-                Placeholder(
-                    width = 32.sp,
-                    height = 14.sp,
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-                )
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (appColors.isDark) {
-                        androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
-                    } else {
-                        androidx.compose.ui.graphics.Color(0xFFE0F2FE)
-                    },
-                    border = BorderStroke(
-                        0.6.dp,
-                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                        else androidx.compose.ui.graphics.Color(0xFF0284C7)
-                    ),
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onCommentaryClick("COM") }
-                        .testTag("badge_com_${verse.verse}")
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Text(
-                            text = "COM",
-                            color = if (appColors.isDark) {
-                                androidx.compose.ui.graphics.Color(0xFF38BDF8)
-                            } else {
-                                androidx.compose.ui.graphics.Color(0xFF0369A1)
-                            },
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = fontFamily
-                        )
-                    }
-                }
-            },
-            "REF_PILL" to InlineTextContent(
-                Placeholder(
-                    width = 30.sp,
-                    height = 14.sp,
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-                )
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (appColors.isDark) {
-                        androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
-                    } else {
-                        androidx.compose.ui.graphics.Color(0xFFD1FAE5)
-                    },
-                    border = BorderStroke(
-                        0.6.dp,
-                        if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
-                        else androidx.compose.ui.graphics.Color(0xFF059669)
-                    ),
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onCrossRefClick() }
-                        .testTag("badge_ref_${verse.verse}")
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Text(
-                            text = "REF",
-                            color = if (appColors.isDark) {
-                                androidx.compose.ui.graphics.Color(0xFF34D399)
-                            } else {
-                                androidx.compose.ui.graphics.Color(0xFF047857)
-                            },
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = fontFamily
-                        )
-                    }
-                }
-            }
-        )
     }
 
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -1489,7 +1401,7 @@ private fun VerseRowItem(
                 onClick = { },
                 onLongClick = { copyVerseToClipboard() }
             )
-            .padding(vertical = 4.dp, horizontal = 2.dp)
+            .padding(vertical = 8.dp, horizontal = 2.dp)
             .testTag("verse_item_${verse.verse}")
     ) {
         if (!verse.sectionTitle.isNullOrBlank()) {
@@ -1503,10 +1415,9 @@ private fun VerseRowItem(
             )
         }
 
-        // Renderizado unificado y continuo en una sola pasada con píldoras y notas integradas
+        // Elemento 1: Texto del versículo finalizando al natural con su puntuación
         Text(
             text = annotatedString,
-            inlineContent = inlineContent,
             fontSize = fontSize,
             lineHeight = lineHeight,
             fontFamily = fontFamily,
@@ -1550,27 +1461,16 @@ private fun VerseRowItem(
                                     return@detectTapGestures
                                 }
 
-                                // 2. Verificación de toque en píldoras COM / REF
                                 val offset = layout.getOffsetForPosition(pos)
-                                val comAnnotation = annotatedString.getStringAnnotations("COM", offset, offset).firstOrNull()
-                                if (comAnnotation != null) {
-                                    onCommentaryClick("COM")
-                                    return@detectTapGestures
-                                }
-                                val refAnnotation = annotatedString.getStringAnnotations("REF", offset, offset).firstOrNull()
-                                if (refAnnotation != null) {
-                                    onCrossRefClick()
-                                    return@detectTapGestures
-                                }
 
-                                // 3. Número de versículo (favoritos)
+                                // 2. Número de versículo (favoritos)
                                 val verseNumAnnotation = annotatedString.getStringAnnotations("VERSE_NUM", offset, offset).firstOrNull()
                                 if (verseNumAnnotation != null) {
                                     onFavoriteToggle()
                                     return@detectTapGestures
                                 }
 
-                                // 4. Búsqueda de palabra en diccionario
+                                // 3. Búsqueda de palabra en diccionario
                                 val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
                                 if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
                                     onWordClick(wordAnnotation.item)
@@ -1581,5 +1481,92 @@ private fun VerseRowItem(
                     )
                 }
         )
+
+        // Elemento 2: Etiquetas COM y REF alineadas al margen izquierdo debajo del texto del versículo
+        if (hasCommentary || hasCrossReference) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (hasCommentary) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (appColors.isDark) {
+                            androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
+                        } else {
+                            androidx.compose.ui.graphics.Color(0xFFE0F2FE)
+                        },
+                        border = BorderStroke(
+                            0.6.dp,
+                            if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
+                            else androidx.compose.ui.graphics.Color(0xFF0284C7)
+                        ),
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onCommentaryClick("COM") }
+                            .testTag("badge_com_${verse.verse}")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "COM",
+                                color = if (appColors.isDark) {
+                                    androidx.compose.ui.graphics.Color(0xFF38BDF8)
+                                } else {
+                                    androidx.compose.ui.graphics.Color(0xFF0369A1)
+                                },
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+
+                if (hasCrossReference) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (appColors.isDark) {
+                            androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
+                        } else {
+                            androidx.compose.ui.graphics.Color(0xFFD1FAE5)
+                        },
+                        border = BorderStroke(
+                            0.6.dp,
+                            if (appColors.isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
+                            else androidx.compose.ui.graphics.Color(0xFF059669)
+                        ),
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onCrossRefClick() }
+                            .testTag("badge_ref_${verse.verse}")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "REF",
+                                color = if (appColors.isDark) {
+                                    androidx.compose.ui.graphics.Color(0xFF34D399)
+                                } else {
+                                    androidx.compose.ui.graphics.Color(0xFF047857)
+                                },
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

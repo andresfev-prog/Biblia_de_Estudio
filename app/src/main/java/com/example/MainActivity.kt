@@ -6,8 +6,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -32,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -109,6 +114,12 @@ class MainActivity : ComponentActivity() {
             // Root dynamic theme switcher
             BibleStudyTheme(themeMode = uiState.userPreferences.themeMode) {
                 val appColors = AppTheme.colors
+                val layoutDirection = LocalLayoutDirection.current
+                val isBottomBarVisible = uiState.isBottomBarVisible || uiState.currentDestination != AppDestination.BIBLE
+                val snackbarBottomPadding by animateDpAsState(
+                    targetValue = if (isBottomBarVisible) 92.dp else 12.dp,
+                    label = "snackbarBottomPadding"
+                )
 
                 if (uiState.currentDestination != AppDestination.HOME) {
                     BackHandler {
@@ -116,13 +127,74 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = appColors.background,
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                    bottomBar = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(appColors.background)
+                ) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color.Transparent,
+                        snackbarHost = {
+                            SnackbarHost(
+                                hostState = snackbarHostState,
+                                modifier = Modifier.padding(bottom = snackbarBottomPadding)
+                            )
+                        }
+                    ) { innerPadding ->
+                        val edgeToEdgeContentModifier = Modifier.padding(
+                            start = innerPadding.calculateStartPadding(layoutDirection),
+                            top = innerPadding.calculateTopPadding(),
+                            end = innerPadding.calculateEndPadding(layoutDirection)
+                        )
+                        when (uiState.currentDestination) {
+                            AppDestination.HOME -> {
+                                HomeScreen(
+                                    uiState = uiState,
+                                    viewModel = viewModel,
+                                    modifier = edgeToEdgeContentModifier
+                                )
+                            }
+                            AppDestination.BIBLE -> {
+                                BibleScreen(
+                                    uiState = uiState,
+                                    viewModel = viewModel,
+                                    modifier = edgeToEdgeContentModifier
+                                )
+                            }
+                            AppDestination.MODULES -> {
+                                ModulesScreen(
+                                    uiState = uiState,
+                                    viewModel = viewModel,
+                                    modifier = edgeToEdgeContentModifier
+                                )
+                            }
+                            AppDestination.SEARCH -> {
+                                SearchScreen(
+                                    uiState = uiState,
+                                    viewModel = viewModel,
+                                    modifier = edgeToEdgeContentModifier
+                                )
+                            }
+                            AppDestination.SETTINGS -> {
+                                SettingsScreen(
+                                    uiState = uiState,
+                                    viewModel = viewModel,
+                                    modifier = edgeToEdgeContentModifier
+                                )
+                            }
+                        }
+                    }
+
+                    // Contenedor 100% transparente que aloja la barra flotante sin recortes rectangulares
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(Color.Transparent)
+                    ) {
                         AnimatedVisibility(
-                            visible = uiState.isBottomBarVisible || uiState.currentDestination != AppDestination.BIBLE,
+                            visible = isBottomBarVisible,
                             enter = slideInVertically(initialOffsetY = { it }),
                             exit = slideOutVertically(targetOffsetY = { it })
                         ) {
@@ -133,44 +205,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel.navigateTo(dest)
                                     viewModel.setBottomBarVisible(true)
                                 }
-                            )
-                        }
-                    }
-                ) { innerPadding ->
-                    when (uiState.currentDestination) {
-                        AppDestination.HOME -> {
-                            HomeScreen(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                modifier = Modifier.padding(innerPadding)
-                            )
-                        }
-                        AppDestination.BIBLE -> {
-                            BibleScreen(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                modifier = Modifier.padding(innerPadding)
-                            )
-                        }
-                        AppDestination.MODULES -> {
-                            ModulesScreen(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                modifier = Modifier.padding(innerPadding)
-                            )
-                        }
-                        AppDestination.SEARCH -> {
-                            SearchScreen(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                modifier = Modifier.padding(innerPadding)
-                            )
-                        }
-                        AppDestination.SETTINGS -> {
-                            SettingsScreen(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                modifier = Modifier.padding(innerPadding)
                             )
                         }
                     }
@@ -195,8 +229,9 @@ fun BottomNavBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .background(Color.Transparent)
             .navigationBarsPadding()
-            .padding(start = 24.dp, end = 24.dp, bottom = 20.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 20.dp)
             .testTag("main_bottom_nav_bar"),
         contentAlignment = Alignment.Center
     ) {

@@ -10,18 +10,23 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
@@ -85,6 +90,7 @@ fun SearchScreen(
         if (list.isEmpty()) listOf("RVR1960", "KJV") else list
     }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Column(
         modifier = modifier
@@ -330,7 +336,8 @@ fun SearchScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(top = 12.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 12.dp, bottom = 96.dp + navBarBottom)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -406,7 +413,7 @@ fun SearchScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 10.dp),
+                        contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp + navBarBottom),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(

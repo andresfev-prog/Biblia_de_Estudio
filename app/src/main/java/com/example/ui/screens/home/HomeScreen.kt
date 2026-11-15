@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -119,12 +122,19 @@ fun HomeScreen(
         )
     }
 
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(appColors.background)
             .verticalScroll(scrollState)
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .padding(
+                start = 20.dp,
+                end = 20.dp,
+                top = 14.dp,
+                bottom = 96.dp + navBarBottom
+            )
             .testTag("home_screen")
     ) {
         // Greeting Header
@@ -157,7 +167,7 @@ fun HomeScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // =========================================================================
         // Versículo del Día: Detección Robusta de Idioma (Español vs English)
@@ -244,7 +254,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -277,7 +287,7 @@ fun HomeScreen(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "«${dailyVerse.text}»",
                     style = MaterialTheme.typography.bodyLarge,
@@ -286,7 +296,7 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold,
                     color = appColors.textPrimary
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "${dailyVerse.bookName} ${dailyVerse.chapter}:${dailyVerse.verse}",
                     style = MaterialTheme.typography.titleMedium,
@@ -295,7 +305,7 @@ fun HomeScreen(
                     maxLines = 1,
                     softWrap = false
                 )
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -373,7 +383,7 @@ fun HomeScreen(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // "Continúa donde quedaste" Card
         val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
@@ -400,7 +410,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -452,7 +462,7 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Button(
                     onClick = {
@@ -483,7 +493,7 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // "Mis Notas" Card (Dynamic: preview if notes exist, elegant prompt with "Crear nota" if empty)
         val latestNote = uiState.notes.firstOrNull()
@@ -503,7 +513,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 // Header Row
                 Row(
@@ -671,8 +681,6 @@ fun HomeScreen(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         // Notes Sheet on Home
         if (uiState.isNotesSheetOpen) {
