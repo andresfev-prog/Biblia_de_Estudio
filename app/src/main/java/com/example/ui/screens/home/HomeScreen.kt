@@ -230,14 +230,7 @@ fun HomeScreen(
             )
         }
 
-        val isCurrentVotdFav = uiState.favorites.any {
-            val favBook = it.bookName.trim()
-            val matchesBook = favBook.equals(dailyVerse.bookName.trim(), ignoreCase = true) ||
-                    favBook.equals(todayRef.bookNameEs.trim(), ignoreCase = true) ||
-                    favBook.equals(todayRef.bookNameEn.trim(), ignoreCase = true)
-
-            matchesBook && it.chapter == dailyVerse.chapter && it.verse == dailyVerse.verse
-        }
+        val isCurrentVotdFav = viewModel.isFavorite(dailyVerse, uiState.favoriteKeys)
 
         Card(
             modifier = Modifier

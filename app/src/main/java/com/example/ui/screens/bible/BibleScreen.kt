@@ -1,17 +1,25 @@
 package com.example.ui.screens.bible
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,12 +45,19 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerticalSplit
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material3.DropdownMenu
@@ -62,23 +77,23 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -183,6 +198,34 @@ fun BibleScreen(
 
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+
+    var selectedVerses by remember { mutableStateOf(emptySet<Int>()) }
+    var selectedIsRightPane by remember { mutableStateOf(false) }
+
+    LaunchedEffect(
+        uiState.currentBook,
+        uiState.currentChapter,
+        uiState.activeVersion,
+        uiState.parallelVersion,
+        uiState.isParallelMode
+    ) {
+        selectedVerses = emptySet()
+        selectedIsRightPane = false
+    }
+
+    LaunchedEffect(rightBookTitle, rightChapter, uiState.isParallelLinked) {
+        if (selectedIsRightPane) {
+            selectedVerses = emptySet()
+            selectedIsRightPane = false
+        }
+    }
+
+    BackHandler(enabled = selectedVerses.isNotEmpty()) {
+        selectedVerses = emptySet()
+        selectedIsRightPane = false
+    }
 
     var isTopBarsVisible by remember { mutableStateOf(true) }
     val chosenFontFamily = resolveBibleFont(uiState.userPreferences.fontFamily)
@@ -259,6 +302,52 @@ fun BibleScreen(
                             rightListState.animateScrollToItem(targetIndex)
                         }
                     },
+                    selectedVerses = selectedVerses,
+                    selectedIsRightPane = selectedIsRightPane,
+                    onLeftVerseClick = { verseNum ->
+                        if (!selectedIsRightPane) {
+                            selectedVerses = if (verseNum in selectedVerses) {
+                                selectedVerses - verseNum
+                            } else {
+                                selectedVerses + verseNum
+                            }
+                        } else {
+                            selectedIsRightPane = false
+                            selectedVerses = setOf(verseNum)
+                        }
+                    },
+                    onLeftVerseLongClick = { verseNum ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (!selectedIsRightPane) {
+                            selectedVerses = selectedVerses + verseNum
+                        } else {
+                            selectedIsRightPane = false
+                            selectedVerses = setOf(verseNum)
+                        }
+                    },
+                    onRightVerseClick = { verseNum ->
+                        if (selectedIsRightPane) {
+                            val updated = if (verseNum in selectedVerses) {
+                                selectedVerses - verseNum
+                            } else {
+                                selectedVerses + verseNum
+                            }
+                            selectedVerses = updated
+                            if (updated.isEmpty()) selectedIsRightPane = false
+                        } else {
+                            selectedIsRightPane = true
+                            selectedVerses = setOf(verseNum)
+                        }
+                    },
+                    onRightVerseLongClick = { verseNum ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (selectedIsRightPane) {
+                            selectedVerses = selectedVerses + verseNum
+                        } else {
+                            selectedIsRightPane = true
+                            selectedVerses = setOf(verseNum)
+                        }
+                    },
                     fontFamily = chosenFontFamily,
                     fontSize = baseFontSizeSp,
                     lineHeight = lineHeightSp,
@@ -271,6 +360,20 @@ fun BibleScreen(
                 SingleReaderView(
                     uiState = uiState,
                     viewModel = viewModel,
+                    selectedVerses = if (selectedIsRightPane) emptySet() else selectedVerses,
+                    onVerseClick = { verseNum ->
+                        selectedIsRightPane = false
+                        selectedVerses = if (verseNum in selectedVerses) {
+                            selectedVerses - verseNum
+                        } else {
+                            selectedVerses + verseNum
+                        }
+                    },
+                    onVerseLongClick = { verseNum ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedIsRightPane = false
+                        selectedVerses = selectedVerses + verseNum
+                    },
                     fontFamily = chosenFontFamily,
                     fontSize = baseFontSizeSp,
                     lineHeight = lineHeightSp,
@@ -303,6 +406,111 @@ fun BibleScreen(
                 .navigationBarsPadding()
                 .padding(bottom = ttsBottomPadding)
         )
+
+        val activeBookRaw = if (selectedIsRightPane) {
+            if (uiState.isParallelLinked) uiState.currentBook else rightBookTitle
+        } else {
+            uiState.currentBook
+        }
+        val activeChapterNum = if (selectedIsRightPane) {
+            if (uiState.isParallelLinked) uiState.currentChapter else rightChapter
+        } else {
+            uiState.currentChapter
+        }
+        val activeVersionTag = if (selectedIsRightPane) uiState.parallelVersion else uiState.activeVersion
+        val activeVerseList = if (selectedIsRightPane) uiState.parallelVerses else uiState.verses
+
+        val selectedVerseObjects = remember(selectedVerses, activeVerseList) {
+            if (selectedVerses.isEmpty()) {
+                emptyList()
+            } else {
+                activeVerseList.filter { it.verse in selectedVerses }.sortedBy { it.verse }
+            }
+        }
+
+        val allSelectedAreFavorites = remember(selectedVerseObjects, uiState.favoriteKeys) {
+            selectedVerseObjects.isNotEmpty() &&
+                selectedVerseObjects.all { viewModel.isFavorite(it, uiState.favoriteKeys) }
+        }
+
+        val selectionPillBottomPadding by animateDpAsState(
+            targetValue = when {
+                uiState.isTtsVisible && uiState.isBottomBarVisible -> 196.dp
+                uiState.isTtsVisible -> 112.dp
+                uiState.isBottomBarVisible -> 96.dp
+                else -> 16.dp
+            },
+            label = "selectionPillBottomPadding"
+        )
+
+        AnimatedVisibility(
+            visible = selectedVerseObjects.isNotEmpty(),
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = selectionPillBottomPadding, start = 16.dp, end = 16.dp)
+        ) {
+            ContextualSelectionPill(
+                allSelectedAreFavorites = allSelectedAreFavorites,
+                interfaceLanguage = lang,
+                onToggleFavorites = {
+                    if (allSelectedAreFavorites) {
+                        viewModel.removeFavorites(selectedVerseObjects)
+                    } else {
+                        viewModel.addFavorites(selectedVerseObjects)
+                    }
+                },
+                onCopy = {
+                    val formattedPassage = buildFormattedPassageText(
+                        verses = selectedVerseObjects,
+                        fallbackBookName = activeBookRaw,
+                        fallbackChapter = activeChapterNum,
+                        versionTag = activeVersionTag
+                    )
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText(
+                        StringsLocale.get("copy_action", lang),
+                        formattedPassage
+                    )
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(
+                        context,
+                        StringsLocale.get("copied_clipboard", lang),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    selectedVerses = emptySet()
+                    selectedIsRightPane = false
+                },
+                onShare = {
+                    val formattedPassage = buildFormattedPassageText(
+                        verses = selectedVerseObjects,
+                        fallbackBookName = activeBookRaw,
+                        fallbackChapter = activeChapterNum,
+                        versionTag = activeVersionTag
+                    )
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, formattedPassage)
+                    }
+                    try {
+                        context.startActivity(
+                            Intent.createChooser(
+                                sendIntent,
+                                StringsLocale.get("share_verse", lang)
+                            )
+                        )
+                    } catch (_: Exception) { }
+                    selectedVerses = emptySet()
+                    selectedIsRightPane = false
+                },
+                onClose = {
+                    selectedVerses = emptySet()
+                    selectedIsRightPane = false
+                }
+            )
+        }
 
         if (uiState.isPassagePickerVisible) {
             PassageSelectorDialog(
@@ -631,6 +839,9 @@ private fun ReaderTopControls(
 private fun SingleReaderView(
     uiState: BibleUiState,
     viewModel: BibleViewModel,
+    selectedVerses: Set<Int>,
+    onVerseClick: (Int) -> Unit,
+    onVerseLongClick: (Int) -> Unit,
     fontFamily: FontFamily,
     fontSize: TextUnit,
     lineHeight: TextUnit,
@@ -639,6 +850,7 @@ private fun SingleReaderView(
 ) {
     val appColors = AppTheme.colors
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val isSelectionMode = selectedVerses.isNotEmpty()
 
     LazyColumn(
         state = listState,
@@ -685,6 +897,8 @@ private fun SingleReaderView(
                 hasCommentary = hasCommentary,
                 hasCrossReference = hasCrossReference,
                 isHighlighted = uiState.highlightedVerse == verse.verse,
+                isSelected = verse.verse in selectedVerses,
+                isSelectionMode = isSelectionMode,
                 fontFamily = fontFamily,
                 fontSize = fontSize,
                 lineHeight = lineHeight,
@@ -692,7 +906,8 @@ private fun SingleReaderView(
                 onCrossRefClick = { viewModel.openCrossReferences(verse) },
                 onWordClick = { word -> viewModel.lookupWord(word, verse) },
                 onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
-                onFavoriteToggle = { viewModel.toggleFavorite(verse) }
+                onVerseClick = { onVerseClick(verse.verse) },
+                onVerseLongClick = { onVerseLongClick(verse.verse) }
             )
         }
 
@@ -728,6 +943,12 @@ private fun ParallelReaderView(
     rightChapter: Int,
     rightVerse: Int,
     onUpdateRightPassage: (String, Int, Int) -> Unit,
+    selectedVerses: Set<Int>,
+    selectedIsRightPane: Boolean,
+    onLeftVerseClick: (Int) -> Unit,
+    onLeftVerseLongClick: (Int) -> Unit,
+    onRightVerseClick: (Int) -> Unit,
+    onRightVerseLongClick: (Int) -> Unit,
     fontFamily: FontFamily,
     fontSize: TextUnit,
     lineHeight: TextUnit,
@@ -737,6 +958,7 @@ private fun ParallelReaderView(
     val downloadedVersions = uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
     val isLinked = uiState.isParallelLinked
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val isSelectionMode = selectedVerses.isNotEmpty()
 
     var isLeftVersionMenuOpen by remember { mutableStateOf(false) }
     var isRightVersionMenuOpen by remember { mutableStateOf(false) }
@@ -902,6 +1124,8 @@ private fun ParallelReaderView(
                         hasCommentary = hasCommentary,
                         hasCrossReference = hasCrossReference,
                         isHighlighted = uiState.highlightedVerse == verse.verse,
+                        isSelected = !selectedIsRightPane && verse.verse in selectedVerses,
+                        isSelectionMode = isSelectionMode,
                         fontFamily = fontFamily,
                         fontSize = fontSize,
                         lineHeight = lineHeight,
@@ -909,7 +1133,8 @@ private fun ParallelReaderView(
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
                         onWordClick = { word -> viewModel.lookupWord(word, verse) },
                         onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
-                        onFavoriteToggle = { viewModel.toggleFavorite(verse) }
+                        onVerseClick = { onLeftVerseClick(verse.verse) },
+                        onVerseLongClick = { onLeftVerseLongClick(verse.verse) }
                     )
                 }
 
@@ -1123,6 +1348,8 @@ private fun ParallelReaderView(
                         hasCommentary = hasCommentary,
                         hasCrossReference = hasCrossReference,
                         isHighlighted = rightVerse == verse.verse,
+                        isSelected = selectedIsRightPane && verse.verse in selectedVerses,
+                        isSelectionMode = isSelectionMode,
                         fontFamily = fontFamily,
                         fontSize = fontSize,
                         lineHeight = lineHeight,
@@ -1130,7 +1357,8 @@ private fun ParallelReaderView(
                         onCrossRefClick = { viewModel.openCrossReferences(verse) },
                         onWordClick = { word -> viewModel.lookupWord(word, verse) },
                         onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
-                        onFavoriteToggle = { /* Sin acción en columna paralela */ }
+                        onVerseClick = { onRightVerseClick(verse.verse) },
+                        onVerseLongClick = { onRightVerseLongClick(verse.verse) }
                     )
                 }
 
@@ -1297,6 +1525,8 @@ private fun VerseRowItem(
     hasCommentary: Boolean,
     hasCrossReference: Boolean,
     isHighlighted: Boolean,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
     fontFamily: FontFamily,
     fontSize: TextUnit,
     lineHeight: TextUnit,
@@ -1304,11 +1534,11 @@ private fun VerseRowItem(
     onCrossRefClick: () -> Unit,
     onWordClick: (String) -> Unit,
     onNoteClick: (marker: String) -> Unit,
-    onFavoriteToggle: () -> Unit
+    onVerseClick: () -> Unit,
+    onVerseLongClick: () -> Unit
 ) {
     val appColors = AppTheme.colors
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
+    val selectionBgColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
 
     val rawCleanText = remember(verse.text) {
         verse.text
@@ -1318,20 +1548,13 @@ private fun VerseRowItem(
             .trim()
     }
 
-    val copyVerseToClipboard = remember(verse.bookName, verse.chapter, verse.verse, rawCleanText, context, clipboardManager) {
-        {
-            val formattedText = "${verse.bookName} ${verse.chapter}:${verse.verse}\n$rawCleanText"
-            clipboardManager.setText(AnnotatedString(formattedText))
-            Toast.makeText(
-                context,
-                "Copiado: ${verse.bookName} ${verse.chapter}:${verse.verse}",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
+    val currentIsSelectionMode by rememberUpdatedState(isSelectionMode)
+    val currentOnVerseClick by rememberUpdatedState(onVerseClick)
+    val currentOnVerseLongClick by rememberUpdatedState(onVerseLongClick)
     val currentOnCommentaryClick by rememberUpdatedState(onCommentaryClick)
     val currentOnCrossRefClick by rememberUpdatedState(onCrossRefClick)
+    val currentOnWordClick by rememberUpdatedState(onWordClick)
+    val currentOnNoteClick by rememberUpdatedState(onNoteClick)
 
     val annotatedString = remember(
         verse.verse,
@@ -1438,7 +1661,11 @@ private fun VerseRowItem(
                         isCommentary = true,
                         appColors = appColors,
                         fontFamily = fontFamily,
-                        onClick = { currentOnCommentaryClick("COM") },
+                        onClick = {
+                            if (currentIsSelectionMode) currentOnVerseClick()
+                            else currentOnCommentaryClick("COM")
+                        },
+                        onLongClick = { currentOnVerseLongClick() },
                         modifier = Modifier.testTag("badge_com_${verse.verse}")
                     )
                     StudyBadgePill(
@@ -1446,7 +1673,11 @@ private fun VerseRowItem(
                         isCommentary = false,
                         appColors = appColors,
                         fontFamily = fontFamily,
-                        onClick = { currentOnCrossRefClick() },
+                        onClick = {
+                            if (currentIsSelectionMode) currentOnVerseClick()
+                            else currentOnCrossRefClick()
+                        },
+                        onLongClick = { currentOnVerseLongClick() },
                         modifier = Modifier.testTag("badge_ref_${verse.verse}")
                     )
                 }
@@ -1467,7 +1698,11 @@ private fun VerseRowItem(
                         isCommentary = true,
                         appColors = appColors,
                         fontFamily = fontFamily,
-                        onClick = { currentOnCommentaryClick("COM") },
+                        onClick = {
+                            if (currentIsSelectionMode) currentOnVerseClick()
+                            else currentOnCommentaryClick("COM")
+                        },
+                        onLongClick = { currentOnVerseLongClick() },
                         modifier = Modifier.testTag("badge_com_${verse.verse}")
                     )
                 }
@@ -1488,7 +1723,11 @@ private fun VerseRowItem(
                         isCommentary = false,
                         appColors = appColors,
                         fontFamily = fontFamily,
-                        onClick = { currentOnCrossRefClick() },
+                        onClick = {
+                            if (currentIsSelectionMode) currentOnVerseClick()
+                            else currentOnCrossRefClick()
+                        },
+                        onLongClick = { currentOnVerseLongClick() },
                         modifier = Modifier.testTag("badge_ref_${verse.verse}")
                     )
                 }
@@ -1503,14 +1742,23 @@ private fun VerseRowItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isHighlighted) appColors.surfaceVariant
-                else androidx.compose.ui.graphics.Color.Transparent
+                when {
+                    isSelected -> selectionBgColor
+                    isHighlighted -> appColors.surfaceVariant
+                    else -> Color.Transparent
+                }
             )
             .combinedClickable(
-                onClick = { },
-                onLongClick = { copyVerseToClipboard() }
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {
+                    if (currentIsSelectionMode) {
+                        currentOnVerseClick()
+                    }
+                },
+                onLongClick = { currentOnVerseLongClick() }
             )
-            .padding(vertical = 4.dp, horizontal = 2.dp)
+            .padding(vertical = 4.dp, horizontal = 4.dp)
             .testTag("verse_item_${verse.verse}")
     ) {
         if (!verse.sectionTitle.isNullOrBlank()) {
@@ -1537,8 +1785,13 @@ private fun VerseRowItem(
                 .pointerInput(annotatedString) {
                     val hitBoxExpandPx = 20.dp.toPx()
                     detectTapGestures(
-                        onLongPress = { copyVerseToClipboard() },
+                        onLongPress = { currentOnVerseLongClick() },
                         onTap = { pos ->
+                            if (currentIsSelectionMode) {
+                                currentOnVerseClick()
+                                return@detectTapGestures
+                            }
+
                             layoutResult?.let { layout ->
                                 // 1. Hit-box ampliada (mínimo 40x40 dp) para notas de versión [n]
                                 val noteAnnotations = annotatedString.getStringAnnotations("NOTE", 0, annotatedString.length)
@@ -1567,7 +1820,7 @@ private fun VerseRowItem(
                                 }
 
                                 if (bestNote != null) {
-                                    onNoteClick(bestNote)
+                                    currentOnNoteClick(bestNote)
                                     return@detectTapGestures
                                 }
 
@@ -1576,26 +1829,19 @@ private fun VerseRowItem(
                                 // 2. Fallback para etiquetas individuales si el toque cae en el margen del Placeholder
                                 val comAnnotation = annotatedString.getStringAnnotations("COM", offset, offset).firstOrNull()
                                 if (comAnnotation != null) {
-                                    onCommentaryClick("COM")
+                                    currentOnCommentaryClick("COM")
                                     return@detectTapGestures
                                 }
                                 val refAnnotation = annotatedString.getStringAnnotations("REF", offset, offset).firstOrNull()
                                 if (refAnnotation != null) {
-                                    onCrossRefClick()
+                                    currentOnCrossRefClick()
                                     return@detectTapGestures
                                 }
 
-                                // 3. Número de versículo (favoritos)
-                                val verseNumAnnotation = annotatedString.getStringAnnotations("VERSE_NUM", offset, offset).firstOrNull()
-                                if (verseNumAnnotation != null) {
-                                    onFavoriteToggle()
-                                    return@detectTapGestures
-                                }
-
-                                // 4. Búsqueda de palabra en diccionario
+                                // 3. Búsqueda de palabra en diccionario
                                 val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
                                 if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
-                                    onWordClick(wordAnnotation.item)
+                                    currentOnWordClick(wordAnnotation.item)
                                     return@detectTapGestures
                                 }
                             }
@@ -1606,6 +1852,7 @@ private fun VerseRowItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StudyBadgePill(
     label: String,
@@ -1613,6 +1860,7 @@ private fun StudyBadgePill(
     appColors: AppColors,
     fontFamily: FontFamily,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val containerColor = if (isCommentary) appColors.comBadgeBg else appColors.refBadgeBg
@@ -1625,7 +1873,10 @@ private fun StudyBadgePill(
         border = BorderStroke(0.6.dp, borderColor),
         modifier = modifier
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -1643,5 +1894,182 @@ private fun StudyBadgePill(
                 softWrap = false
             )
         }
+    }
+}
+
+@Composable
+private fun ContextualSelectionPill(
+    allSelectedAreFavorites: Boolean,
+    interfaceLanguage: String,
+    onToggleFavorites: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val favLabel = StringsLocale.get("favorite_action", interfaceLanguage)
+    val copyLabel = StringsLocale.get("copy_action", interfaceLanguage)
+    val shareLabel = StringsLocale.get("share_action", interfaceLanguage)
+
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 8.dp,
+        tonalElevation = 0.dp,
+        modifier = modifier.testTag("contextual_selection_pill")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            SelectionPillActionButton(
+                icon = if (allSelectedAreFavorites) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                label = favLabel,
+                iconTint = if (allSelectedAreFavorites) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                labelColor = if (allSelectedAreFavorites) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                onClick = onToggleFavorites,
+                modifier = Modifier.testTag("pill_action_favorite")
+            )
+
+            SelectionPillActionButton(
+                icon = Icons.Default.ContentCopy,
+                label = copyLabel,
+                iconTint = MaterialTheme.colorScheme.onSurface,
+                labelColor = MaterialTheme.colorScheme.onSurface,
+                onClick = onCopy,
+                modifier = Modifier.testTag("pill_action_copy")
+            )
+
+            SelectionPillActionButton(
+                icon = Icons.Default.Share,
+                label = shareLabel,
+                iconTint = MaterialTheme.colorScheme.onSurface,
+                labelColor = MaterialTheme.colorScheme.onSurface,
+                onClick = onShare,
+                modifier = Modifier.testTag("pill_action_share")
+            )
+
+            VerticalDivider(
+                modifier = Modifier
+                    .padding(horizontal = 2.dp)
+                    .height(28.dp),
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .size(36.dp)
+                    .testTag("pill_action_close")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = StringsLocale.get("cancel", interfaceLanguage),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectionPillActionButton(
+    icon: ImageVector,
+    label: String,
+    iconTint: Color,
+    labelColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = iconTint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = labelColor,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+private fun formatVerseRanges(sortedVerses: List<Int>): String {
+    if (sortedVerses.isEmpty()) return ""
+    val ranges = mutableListOf<String>()
+    var start = sortedVerses.first()
+    var end = start
+    for (i in 1 until sortedVerses.size) {
+        val current = sortedVerses[i]
+        if (current == end + 1) {
+            end = current
+        } else {
+            ranges.add(if (start == end) "$start" else "$start-$end")
+            start = current
+            end = current
+        }
+    }
+    ranges.add(if (start == end) "$start" else "$start-$end")
+    return ranges.joinToString(", ")
+}
+
+private fun buildFormattedPassageText(
+    verses: List<BibleVerse>,
+    fallbackBookName: String,
+    fallbackChapter: Int,
+    versionTag: String
+): String {
+    if (verses.isEmpty()) return ""
+    val sorted = verses.sortedBy { it.verse }
+    val first = sorted.first()
+    val rawBook = first.bookName.ifBlank { fallbackBookName }
+    val chapterNum = if (first.chapter > 0) first.chapter else fallbackChapter
+    val effectiveVersion = BibleBooksData.normalizeVersionId(
+        first.version.ifBlank { versionTag }
+    ).ifBlank { versionTag }
+    val isEnglish = BibleBooksData.isEnglishVersion(effectiveVersion)
+    val localizedBook = BibleBooksData.getLocalizedBookName(
+        bookName = rawBook,
+        isEnglish = isEnglish,
+        bookNumber = first.bookNumber
+    )
+    val rangeLabel = formatVerseRanges(sorted.map { it.verse }.distinct())
+    val header = "$localizedBook $chapterNum:$rangeLabel ($effectiveVersion)"
+
+    return if (sorted.size == 1) {
+        val cleanText = BibleBooksData.cleanVerseTextForFavorites(first.text)
+        "$header\n$cleanText"
+    } else {
+        val body = sorted.joinToString("\n") { verse ->
+            val cleanText = BibleBooksData.cleanVerseTextForFavorites(verse.text)
+            "${verse.verse} $cleanText"
+        }
+        "$header\n$body"
     }
 }

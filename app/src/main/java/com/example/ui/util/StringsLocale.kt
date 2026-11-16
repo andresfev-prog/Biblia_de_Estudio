@@ -30,6 +30,9 @@ object StringsLocale {
             "offline_ready" -> if (isEn) "Offline mode ready" else "Modo sin conexión listo"
             "copied_clipboard" -> if (isEn) "Copied to clipboard" else "Copiado al portapapeles"
             "share_verse" -> if (isEn) "Share verse" else "Compartir versículo"
+            "favorite_action" -> if (isEn) "Favorite" else "Favorito"
+            "copy_action" -> if (isEn) "Copy" else "Copiar"
+            "share_action" -> if (isEn) "Share" else "Compartir"
 
             // Bible Screen
             "version" -> if (isEn) "Version" else "Versión"

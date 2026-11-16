@@ -35,6 +35,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import com.example.data.util.ModuleDownloader
@@ -107,6 +109,7 @@ data class BibleUiState(
     val userPreferences: UserPreference = UserPreference(),
     val readingProgress: ReadingProgress? = null,
     val favorites: List<FavoriteVerse> = emptyList(),
+    val favoriteKeys: Set<String> = emptySet(),
     val notes: List<UserNote> = emptyList(),
     val isNotesSheetOpen: Boolean = false,
     val editingNote: UserNote? = null,
@@ -126,6 +129,7 @@ class BibleViewModel(
 ) : AndroidViewModel(application), TextToSpeech.OnInitListener {
 
     private val downloader = ModuleDownloader(application)
+    private val favoriteMutex = Mutex()
 
 
     private val _uiState = MutableStateFlow(BibleUiState())
@@ -225,7 +229,11 @@ class BibleViewModel(
 
         viewModelScope.launch {
             repository.getAllFavorites().collect { favs ->
-                _uiState.value = _uiState.value.copy(favorites = favs)
+                val keys = favs.map { repository.buildFavoriteKey(it) }.toSet()
+                _uiState.value = _uiState.value.copy(
+                    favorites = favs,
+                    favoriteKeys = keys
+                )
             }
         }
 
@@ -788,33 +796,85 @@ class BibleViewModel(
     }
 
     // --- Favoritos ---
+    fun isFavorite(verse: BibleVerse, keys: Set<String> = _uiState.value.favoriteKeys): Boolean {
+        return repository.buildFavoriteKey(verse) in keys
+    }
+
     fun toggleFavorite(verse: BibleVerse) {
         viewModelScope.launch {
-            val cleanBook = verse.bookName.trim()
-            val isFav = _uiState.value.favorites.any {
-                it.bookName.trim().equals(cleanBook, ignoreCase = true) &&
-                        it.chapter == verse.chapter &&
-                        it.verse == verse.verse
+            val nowAdded = favoriteMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    repository.toggleFavorite(verse)
+                }
             }
-
-            val cleanVerse = verse.copy(bookName = cleanBook)
-            repository.toggleFavorite(cleanVerse, isFav)
 
             val lang = _uiState.value.userPreferences.interfaceLanguage
             val isEn = lang.contains("English", ignoreCase = true)
             _uiState.value = _uiState.value.copy(
-                toastMessage = if (isFav) {
-                    if (isEn) "Removed from favorites" else "Eliminado de favoritos"
-                } else {
+                toastMessage = if (nowAdded) {
                     if (isEn) "Saved to favorites" else "Guardado en favoritos"
+                } else {
+                    if (isEn) "Removed from favorites" else "Eliminado de favoritos"
                 }
             )
         }
     }
 
+    fun addFavorites(verses: List<BibleVerse>) {
+        if (verses.isEmpty()) return
+        viewModelScope.launch {
+            val addedCount = favoriteMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    repository.addFavorites(verses)
+                }
+            }
+            if (addedCount > 0) {
+                val lang = _uiState.value.userPreferences.interfaceLanguage
+                val isEn = lang.contains("English", ignoreCase = true)
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = if (isEn) {
+                        "Saved to favorites"
+                    } else if (addedCount > 1) {
+                        "Guardados en favoritos"
+                    } else {
+                        "Guardado en favoritos"
+                    }
+                )
+            }
+        }
+    }
+
+    fun removeFavorites(verses: List<BibleVerse>) {
+        if (verses.isEmpty()) return
+        viewModelScope.launch {
+            val removedCount = favoriteMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    repository.removeFavorites(verses)
+                }
+            }
+            if (removedCount > 0) {
+                val lang = _uiState.value.userPreferences.interfaceLanguage
+                val isEn = lang.contains("English", ignoreCase = true)
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = if (isEn) {
+                        "Removed from favorites"
+                    } else if (removedCount > 1) {
+                        "Eliminados de favoritos"
+                    } else {
+                        "Eliminado de favoritos"
+                    }
+                )
+            }
+        }
+    }
+
     fun removeFavorite(fav: FavoriteVerse) {
         viewModelScope.launch {
-            repository.removeFavorite(fav.bookName, fav.chapter, fav.verse)
+            favoriteMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    repository.removeFavorite(fav)
+                }
+            }
             val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
             _uiState.value = _uiState.value.copy(
                 toastMessage = if (isEn) "Removed from favorites" else "Eliminado de favoritos"

@@ -687,21 +687,106 @@ class BibleRepository(
 
     fun getAllFavorites(): Flow<List<FavoriteVerse>> = dao.getAllFavorites()
 
-    fun isFavorite(bookName: String, chapter: Int, verse: Int): Flow<Boolean> = dao.isFavorite(bookName, chapter, verse)
+    fun buildFavoriteKey(verse: BibleVerse): String =
+        BibleBooksData.buildFavoriteKey(
+            bookName = verse.bookName,
+            chapter = verse.chapter,
+            verse = verse.verse,
+            version = verse.version,
+            text = verse.text,
+            bookNumber = verse.bookNumber
+        )
 
-    suspend fun toggleFavorite(verse: BibleVerse, isFav: Boolean) {
-        if (isFav) {
-            dao.deleteFavorite(verse.bookName, verse.chapter, verse.verse)
-        } else {
-            dao.insertFavorite(
-                FavoriteVerse(
-                    version = verse.version,
+    fun buildFavoriteKey(favorite: FavoriteVerse): String =
+        BibleBooksData.buildFavoriteKey(
+            bookName = favorite.bookName,
+            chapter = favorite.chapter,
+            verse = favorite.verse,
+            version = favorite.version,
+            text = favorite.text
+        )
+
+    fun isFavorite(verse: BibleVerse): Flow<Boolean> =
+        dao.getAllFavorites().map { list ->
+            val targetKey = buildFavoriteKey(verse)
+            list.any { buildFavoriteKey(it) == targetKey }
+        }
+
+    fun isFavorite(bookName: String, chapter: Int, verse: Int): Flow<Boolean> =
+        dao.getAllFavorites().map { list ->
+            val targetBookId = BibleBooksData.resolveCanonicalBookId(bookName)
+            list.any {
+                val favBookId = BibleBooksData.resolveCanonicalBookId(it.bookName)
+                val sameBook = if (targetBookId != null && favBookId != null) {
+                    targetBookId == favBookId
+                } else {
+                    it.bookName.trim().equals(bookName.trim(), ignoreCase = true)
+                }
+                sameBook && it.chapter == chapter && it.verse == verse
+            }
+        }
+
+    suspend fun addFavorites(verses: List<BibleVerse>): Int {
+        if (verses.isEmpty()) return 0
+        val existingKeys = dao.getAllFavoritesOnce().map { buildFavoriteKey(it) }.toMutableSet()
+        val baseTime = System.currentTimeMillis()
+        val toInsert = mutableListOf<FavoriteVerse>()
+
+        verses.forEachIndexed { index, verse ->
+            val key = buildFavoriteKey(verse)
+            if (existingKeys.add(key)) {
+                val isEngVersion = BibleBooksData.isEnglishVersion(verse.version)
+                val canonicalBook = BibleBooksData.getLocalizedBookName(
                     bookName = verse.bookName,
-                    chapter = verse.chapter,
-                    verse = verse.verse,
-                    text = verse.text
+                    isEnglish = isEngVersion,
+                    bookNumber = verse.bookNumber
+                ).trim()
+                val normalizedVersion = BibleBooksData.normalizeVersionId(verse.version)
+                    .ifBlank { verse.version.trim() }
+                toInsert.add(
+                    FavoriteVerse(
+                        version = normalizedVersion,
+                        bookName = canonicalBook,
+                        chapter = verse.chapter,
+                        verse = verse.verse,
+                        text = BibleBooksData.cleanVerseTextForFavorites(verse.text),
+                        timestamp = baseTime + index
+                    )
                 )
-            )
+            }
+        }
+
+        if (toInsert.isNotEmpty()) {
+            dao.insertFavorites(toInsert)
+        }
+        return toInsert.size
+    }
+
+    suspend fun removeFavorites(verses: List<BibleVerse>): Int {
+        if (verses.isEmpty()) return 0
+        val keysToRemove = verses.map { buildFavoriteKey(it) }.toSet()
+        val matchingIds = dao.getAllFavoritesOnce()
+            .filter { buildFavoriteKey(it) in keysToRemove }
+            .map { it.id }
+
+        if (matchingIds.isNotEmpty()) {
+            dao.deleteFavoritesByIds(matchingIds)
+        }
+        return matchingIds.size
+    }
+
+    suspend fun toggleFavorite(verse: BibleVerse): Boolean {
+        val targetKey = buildFavoriteKey(verse)
+        val matchingIds = dao.getAllFavoritesOnce()
+            .filter { buildFavoriteKey(it) == targetKey }
+            .map { it.id }
+
+        return if (matchingIds.isNotEmpty()) {
+            dao.deleteFavoritesByIds(matchingIds)
+            false
+        } else {
+            addFavorites(listOf(verse))
+            true
         }
     }
 
@@ -1598,8 +1683,36 @@ class BibleRepository(
         return dao.getCrossReferencesForVerse(book, chapter, verse)
     }
 
+    suspend fun removeFavorite(fav: FavoriteVerse) {
+        val key = buildFavoriteKey(fav)
+        val matchingIds = dao.getAllFavoritesOnce()
+            .filter { it.id == fav.id || buildFavoriteKey(it) == key }
+            .map { it.id }
+        if (matchingIds.isNotEmpty()) {
+            dao.deleteFavoritesByIds(matchingIds)
+        } else if (fav.id > 0L) {
+            dao.deleteFavoriteById(fav.id)
+        }
+    }
+
     suspend fun removeFavorite(bookName: String, chapter: Int, verse: Int) {
-        dao.deleteFavorite(bookName, chapter, verse)
+        val targetBookId = BibleBooksData.resolveCanonicalBookId(bookName)
+        val matchingIds = dao.getAllFavoritesOnce()
+            .filter {
+                val favBookId = BibleBooksData.resolveCanonicalBookId(it.bookName)
+                val sameBook = if (targetBookId != null && favBookId != null) {
+                    targetBookId == favBookId
+                } else {
+                    it.bookName.trim().equals(bookName.trim(), ignoreCase = true)
+                }
+                sameBook && it.chapter == chapter && it.verse == verse
+            }
+            .map { it.id }
+        if (matchingIds.isNotEmpty()) {
+            dao.deleteFavoritesByIds(matchingIds)
+        } else {
+            dao.deleteFavorite(bookName, chapter, verse)
+        }
     }
 
     fun getAllNotes(): Flow<List<UserNote>> = dao.getAllNotes()

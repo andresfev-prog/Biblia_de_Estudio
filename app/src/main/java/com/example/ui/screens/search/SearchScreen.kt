@@ -31,8 +31,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleVerse
+import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
 
@@ -418,12 +421,16 @@ fun SearchScreen(
                     ) {
                         items(
                             items = uiState.searchResults,
-                            key = { verse -> "${verse.bookName}_${verse.chapter}_${verse.verse}" }
+                            key = { verse -> "${verse.version}_${verse.bookNumber}_${verse.chapter}_${verse.verse}" }
                         ) { verse ->
+                            val isFav = viewModel.isFavorite(verse, uiState.favoriteKeys)
                             SearchResultItem(
                                 verse = verse,
                                 searchQuery = uiState.searchQuery,
                                 exactWord = uiState.searchExactWord,
+                                isFavorite = isFav,
+                                favoriteLabel = StringsLocale.get("favorite_action", uiState.userPreferences.interfaceLanguage),
+                                onToggleFavorite = { viewModel.toggleFavorite(verse) },
                                 onClick = {
                                     onNavigateToVerse(verse.bookName, verse.chapter, verse.verse)
                                 }
@@ -507,6 +514,9 @@ private fun SearchResultItem(
     verse: BibleVerse,
     searchQuery: String,
     exactWord: Boolean,
+    isFavorite: Boolean,
+    favoriteLabel: String,
+    onToggleFavorite: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -530,12 +540,41 @@ private fun SearchResultItem(
             .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "${verse.bookName} ${verse.chapter}:${verse.verse}",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${verse.bookName} ${verse.chapter}:${verse.verse}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .testTag("search_favorite_${verse.bookNumber}_${verse.chapter}_${verse.verse}")
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = favoriteLabel,
+                        tint = if (isFavorite) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(4.dp))
 

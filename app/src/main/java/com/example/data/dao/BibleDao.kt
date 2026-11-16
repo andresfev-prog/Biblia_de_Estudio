@@ -60,11 +60,23 @@ interface BibleDao {
     @Query("SELECT * FROM favorite_verses ORDER BY timestamp DESC")
     fun getAllFavorites(): Flow<List<FavoriteVerse>>
 
+    @Query("SELECT * FROM favorite_verses")
+    suspend fun getAllFavoritesOnce(): List<FavoriteVerse>
+
     @Query("SELECT EXISTS(SELECT 1 FROM favorite_verses WHERE bookName = :bookName AND chapter = :chapter AND verse = :verse)")
     fun isFavorite(bookName: String, chapter: Int, verse: Int): Flow<Boolean>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavorite(favorite: FavoriteVerse)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFavorites(favorites: List<FavoriteVerse>)
+
+    @Query("DELETE FROM favorite_verses WHERE id = :id")
+    suspend fun deleteFavoriteById(id: Long)
+
+    @Query("DELETE FROM favorite_verses WHERE id IN (:ids)")
+    suspend fun deleteFavoritesByIds(ids: List<Long>)
 
     @Query("DELETE FROM favorite_verses WHERE bookName = :bookName AND chapter = :chapter AND verse = :verse")
     suspend fun deleteFavorite(bookName: String, chapter: Int, verse: Int)

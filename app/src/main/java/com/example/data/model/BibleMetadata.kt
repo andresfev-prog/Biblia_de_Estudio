@@ -93,12 +93,60 @@ object BibleBooksData {
         BookInfo(66, "Apocalipsis", "Apoc", "NT", "Profecía", 22, "Revelation")
     )
 
+    private val bookAliases: Map<String, Int> = mapOf(
+        "cantar de los cantares" to 22,
+        "song of songs" to 22,
+        "canticles" to 22,
+        "hechos de los apostoles" to 44,
+        "acts of the apostles" to 44,
+        "apocalipsis (de juan)" to 66,
+        "revelation of john" to 66,
+        "salmo" to 19,
+        "psalm" to 19
+    )
+
+    private val myBibleBookNumberToCanonical: Map<Int, Int> = mapOf(
+        10 to 1, 20 to 2, 30 to 3, 40 to 4, 50 to 5,
+        60 to 6, 70 to 7, 80 to 8, 90 to 9, 100 to 10,
+        110 to 11, 120 to 12, 130 to 13, 140 to 14, 150 to 15,
+        160 to 16, 190 to 17, 220 to 18, 230 to 19, 240 to 20,
+        250 to 21, 260 to 22, 290 to 23, 300 to 24, 310 to 25,
+        330 to 26, 340 to 27, 350 to 28, 360 to 29, 370 to 30,
+        380 to 31, 390 to 32, 400 to 33, 410 to 34, 420 to 35,
+        430 to 36, 440 to 37, 450 to 38, 460 to 39, 470 to 40,
+        480 to 41, 490 to 42, 500 to 43, 510 to 44, 520 to 45,
+        530 to 46, 540 to 47, 550 to 48, 560 to 49, 570 to 50,
+        580 to 51, 590 to 52, 600 to 53, 610 to 54, 620 to 55,
+        630 to 56, 640 to 57, 650 to 58, 660 to 59, 670 to 60,
+        680 to 61, 690 to 62, 700 to 63, 710 to 64, 720 to 65,
+        730 to 66
+    )
+
+    private fun normalizeToken(raw: String): String {
+        return java.text.Normalizer.normalize(raw.trim(), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+            .lowercase()
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     fun getBookByName(name: String): BookInfo? {
         val clean = name.trim()
-        return books.firstOrNull {
+        val exact = books.firstOrNull {
             it.name.equals(clean, ignoreCase = true) ||
             it.englishName.equals(clean, ignoreCase = true) ||
             it.abbreviation.equals(clean, ignoreCase = true)
+        }
+        if (exact != null) return exact
+
+        val normalized = normalizeToken(clean)
+        bookAliases[normalized]?.let { bookId ->
+            return getBookByNumber(bookId)
+        }
+        return books.firstOrNull {
+            normalizeToken(it.name) == normalized ||
+            normalizeToken(it.englishName) == normalized ||
+            normalizeToken(it.abbreviation) == normalized
         }
     }
 
@@ -106,14 +154,54 @@ object BibleBooksData {
         return books.firstOrNull { it.number == number }
     }
 
+    fun resolveCanonicalBookId(bookName: String, bookNumber: Int = 0): Int? {
+        getBookByName(bookName)?.let { return it.number }
+        if (bookNumber in 1..66) return bookNumber
+        return myBibleBookNumberToCanonical[bookNumber]
+    }
+
     fun getLocalizedBookName(bookNumber: Int, isEnglish: Boolean): String {
         val book = getBookByNumber(bookNumber) ?: return "Libro $bookNumber"
         return if (isEnglish) book.englishName else book.name
     }
 
-    fun getLocalizedBookName(bookName: String, isEnglish: Boolean): String {
-        val book = getBookByName(bookName) ?: return bookName
+    fun getLocalizedBookName(bookName: String, isEnglish: Boolean, bookNumber: Int = 0): String {
+        val canonicalId = resolveCanonicalBookId(bookName, bookNumber)
+        val book = canonicalId?.let { getBookByNumber(it) } ?: getBookByName(bookName) ?: return bookName
         return if (isEnglish) book.englishName else book.name
+    }
+
+    fun normalizeVersionId(version: String): String {
+        val clean = version.trim().replace(Regex("\\s+"), "").uppercase()
+        return if (clean == "RV1960") "RVR1960" else clean
+    }
+
+    fun cleanVerseTextForFavorites(rawText: String): String {
+        return rawText
+            .replace(Regex("<S>[^<]*</S>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<f>[^<]*</f>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<[^>]*>"), "")
+            .replace(Regex("(?<=\\p{L})\\d+"), "")
+            .replace(Regex("\\{\\d+\\}"), "")
+            .replace(Regex("\\[\\d+\\]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
+    fun buildFavoriteKey(
+        bookName: String,
+        chapter: Int,
+        verse: Int,
+        version: String,
+        text: String = "",
+        bookNumber: Int = 0
+    ): String {
+        val bookKey = resolveCanonicalBookId(bookName, bookNumber)?.let { "B$it" }
+            ?: normalizeToken(bookName)
+        val versionKey = normalizeVersionId(version).ifBlank {
+            normalizeToken(cleanVerseTextForFavorites(text))
+        }
+        return "$bookKey|$chapter|$verse|$versionKey"
     }
 
     fun isEnglishVersion(version: String): Boolean {
