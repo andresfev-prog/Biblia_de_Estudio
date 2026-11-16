@@ -190,7 +190,7 @@ fun CommentaryBottomSheet(
                     colors = CardDefaults.cardColors(
                         containerColor = appColors.surfaceVariant
                     ),
-                    border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                    border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     SelectionContainer {
@@ -225,7 +225,7 @@ fun CommentaryBottomSheet(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = appColors.surfaceVariant),
-                            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                            border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Column(
@@ -249,7 +249,7 @@ fun CommentaryBottomSheet(
                                         .clickable { selectedCommentary = com }
                                         .testTag("commentary_card_$index"),
                                     colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-                                    border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else BorderStroke(1.dp, appColors.divider.copy(alpha = 0.5f)),
+                                    border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else BorderStroke(1.dp, appColors.divider.copy(alpha = 0.5f)),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                                     shape = RoundedCornerShape(14.dp)
                                 ) {
@@ -303,7 +303,7 @@ fun CommentaryBottomSheet(
                         colors = CardDefaults.cardColors(
                             containerColor = appColors.cardBg
                         ),
-                        border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                        border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {

@@ -112,7 +112,11 @@ class MainActivity : ComponentActivity() {
             }
 
             // Root dynamic theme switcher
-            BibleStudyTheme(themeMode = uiState.userPreferences.themeMode) {
+            BibleStudyTheme(
+                themeMode = uiState.userPreferences.themeMode,
+                selectedLightTheme = uiState.userPreferences.selectedLightTheme,
+                selectedDarkTheme = uiState.userPreferences.selectedDarkTheme
+            ) {
                 val appColors = AppTheme.colors
                 val layoutDirection = LocalLayoutDirection.current
                 val isBottomBarVisible = uiState.isBottomBarVisible || uiState.currentDestination != AppDestination.BIBLE
@@ -245,11 +249,11 @@ fun BottomNavBar(
                     spotColor = Color.Black.copy(alpha = if (appColors.isDark) 0.35f else 0.08f)
                 ),
             shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.background,
+            color = appColors.surface,
             tonalElevation = 0.dp,
             border = BorderStroke(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                color = appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.7f)
             )
         ) {
             Row(

@@ -81,7 +81,7 @@ fun EditProfileDialog(
                 .clip(RoundedCornerShape(24.dp))
                 .testTag("edit_profile_dialog"),
             color = appColors.surface,
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
             tonalElevation = 8.dp
         ) {
             Column(

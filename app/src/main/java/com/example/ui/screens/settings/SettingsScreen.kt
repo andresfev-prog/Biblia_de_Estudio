@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
@@ -68,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.screens.favorites.FavoritesDialog
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
@@ -81,6 +83,8 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
     var languageMenuOpen by remember { mutableStateOf(false) }
     var fontMenuOpen by remember { mutableStateOf(false) }
+    var lightThemeMenuOpen by remember { mutableStateOf(false) }
+    var darkThemeMenuOpen by remember { mutableStateOf(false) }
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
 
@@ -168,12 +172,12 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(if (appColors.isDark) appColors.accent else appColors.titleColor),
+                        .background(appColors.pillBg),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = initials,
-                        color = if (appColors.isDark) appColors.background else appColors.surface,
+                        color = appColors.pillText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -378,10 +382,13 @@ fun SettingsScreen(
                             expanded = languageMenuOpen,
                             onDismissRequest = { languageMenuOpen = false },
                             shape = RoundedCornerShape(16.dp),
-                            containerColor = MaterialTheme.colorScheme.background,
+                            containerColor = appColors.surface,
                             tonalElevation = 0.dp,
                             shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            border = BorderStroke(
+                                1.dp,
+                                appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                            )
                         ) {
                             languages.forEach { languageName ->
                                 DropdownMenuItem(
@@ -450,37 +457,157 @@ fun SettingsScreen(
                     val themes = listOf(
                         Triple("LIGHT", StringsLocale.get("theme_light", lang), Icons.Filled.LightMode),
                         Triple("DARK", StringsLocale.get("theme_dark", lang), Icons.Filled.DarkMode),
-                        Triple("AUTOMATIC", StringsLocale.get("theme_auto", lang), Icons.Filled.SettingsBrightness)
+                        Triple("AUTO", StringsLocale.get("theme_auto", lang), Icons.Filled.SettingsBrightness)
                     )
 
                     themes.forEach { (modeKey, modeName, icon) ->
-                        val isSelected = uiState.userPreferences.themeMode == modeKey
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(50))
-                                .background(if (isSelected) appColors.pillBg else appColors.surfaceVariant)
-                                .clickable { viewModel.updateThemeMode(modeKey) }
-                                .padding(vertical = 12.dp)
-                                .testTag("theme_button_$modeKey"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) appColors.pillText else appColors.textSecondary,
-                                    modifier = Modifier.size(20.dp)
+                        val isSelected = if (modeKey == "AUTO") {
+                            uiState.userPreferences.themeMode.equals("AUTO", ignoreCase = true) ||
+                                uiState.userPreferences.themeMode.equals("AUTOMATIC", ignoreCase = true)
+                        } else {
+                            uiState.userPreferences.themeMode.equals(modeKey, ignoreCase = true)
+                        }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(50))
+                                    .background(if (isSelected) appColors.pillBg else appColors.surfaceVariant)
+                                    .clickable {
+                                        when (modeKey) {
+                                            "LIGHT" -> {
+                                                viewModel.updateThemeMode("LIGHT")
+                                                lightThemeMenuOpen = true
+                                            }
+                                            "DARK" -> {
+                                                viewModel.updateThemeMode("DARK")
+                                                darkThemeMenuOpen = true
+                                            }
+                                            else -> {
+                                                viewModel.updateThemeMode("AUTO")
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 12.dp)
+                                    .testTag("theme_button_$modeKey"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) appColors.pillText else appColors.textSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = modeName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) appColors.pillText else appColors.textPrimary,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+
+                            if (modeKey == "LIGHT") {
+                                val lightOptions = listOf(
+                                    AppThemeIds.CRISP_LIGHT to StringsLocale.get("theme_crisp_light", lang),
+                                    AppThemeIds.WARM_PARCHMENT to StringsLocale.get("theme_warm_parchment", lang),
+                                    AppThemeIds.SERENE_OLIVE to StringsLocale.get("theme_serene_olive", lang)
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = modeName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) appColors.pillText else appColors.textPrimary,
-                                    maxLines = 1,
-                                    softWrap = false
+                                DropdownMenu(
+                                    expanded = lightThemeMenuOpen,
+                                    onDismissRequest = { lightThemeMenuOpen = false },
+                                    shape = RoundedCornerShape(16.dp),
+                                    containerColor = appColors.surface,
+                                    tonalElevation = 0.dp,
+                                    shadowElevation = 8.dp,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                                    )
+                                ) {
+                                    lightOptions.forEach { (themeKey, themeLabel) ->
+                                        val isOptionSelected = uiState.userPreferences.selectedLightTheme == themeKey
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = themeLabel,
+                                                    fontWeight = if (isOptionSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isOptionSelected) appColors.accent else appColors.textPrimary,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            },
+                                            trailingIcon = if (isOptionSelected) {
+                                                {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Check,
+                                                        contentDescription = null,
+                                                        tint = appColors.accent,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            } else null,
+                                            onClick = {
+                                                viewModel.updateSelectedLightTheme(themeKey, activateMode = true)
+                                                lightThemeMenuOpen = false
+                                            },
+                                            modifier = Modifier.testTag("theme_option_$themeKey")
+                                        )
+                                    }
+                                }
+                            } else if (modeKey == "DARK") {
+                                val darkOptions = listOf(
+                                    AppThemeIds.MIDNIGHT_BLUE to StringsLocale.get("theme_midnight_blue", lang),
+                                    AppThemeIds.DEEP_DARK to StringsLocale.get("theme_deep_dark", lang),
+                                    AppThemeIds.OBSIDIAN_ONYX to StringsLocale.get("theme_obsidian_onyx", lang)
                                 )
+                                DropdownMenu(
+                                    expanded = darkThemeMenuOpen,
+                                    onDismissRequest = { darkThemeMenuOpen = false },
+                                    shape = RoundedCornerShape(16.dp),
+                                    containerColor = appColors.surface,
+                                    tonalElevation = 0.dp,
+                                    shadowElevation = 8.dp,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                                    )
+                                ) {
+                                    darkOptions.forEach { (themeKey, themeLabel) ->
+                                        val isOptionSelected = uiState.userPreferences.selectedDarkTheme == themeKey
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = themeLabel,
+                                                    fontWeight = if (isOptionSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isOptionSelected) appColors.accent else appColors.textPrimary,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            },
+                                            trailingIcon = if (isOptionSelected) {
+                                                {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Check,
+                                                        contentDescription = null,
+                                                        tint = appColors.accent,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            } else null,
+                                            onClick = {
+                                                viewModel.updateSelectedDarkTheme(themeKey, activateMode = true)
+                                                darkThemeMenuOpen = false
+                                            },
+                                            modifier = Modifier.testTag("theme_option_$themeKey")
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -563,10 +690,13 @@ fun SettingsScreen(
                             expanded = fontMenuOpen,
                             onDismissRequest = { fontMenuOpen = false },
                             shape = RoundedCornerShape(16.dp),
-                            containerColor = MaterialTheme.colorScheme.background,
+                            containerColor = appColors.surface,
                             tonalElevation = 0.dp,
                             shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            border = BorderStroke(
+                                1.dp,
+                                appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                            )
                         ) {
                             availableFonts.forEach { font ->
                                 DropdownMenuItem(

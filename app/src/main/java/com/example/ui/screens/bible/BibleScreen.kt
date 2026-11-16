@@ -489,10 +489,10 @@ private fun ReaderTopControls(
                         expanded = versionMenuExpanded,
                         onDismissRequest = { versionMenuExpanded = false },
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = MaterialTheme.colorScheme.background,
+                        containerColor = appColors.surface,
                         tonalElevation = 0.dp,
                         shadowElevation = 8.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                        border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
                     ) {
                         if (availableVersions.isEmpty()) {
                             DropdownMenuItem(
@@ -550,10 +550,10 @@ private fun ReaderTopControls(
                     expanded = overflowMenuExpanded,
                     onDismissRequest = { overflowMenuExpanded = false },
                     shape = RoundedCornerShape(16.dp),
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = appColors.surface,
                     tonalElevation = 0.dp,
                     shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                    border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
                 ) {
                     DropdownMenuItem(
                         leadingIcon = {
@@ -833,10 +833,10 @@ private fun ParallelReaderView(
                         expanded = isLeftVersionMenuOpen,
                         onDismissRequest = { isLeftVersionMenuOpen = false },
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = MaterialTheme.colorScheme.background,
+                        containerColor = appColors.surface,
                         tonalElevation = 0.dp,
                         shadowElevation = 8.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                        border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -1034,10 +1034,10 @@ private fun ParallelReaderView(
                         expanded = isRightVersionMenuOpen,
                         onDismissRequest = { isRightVersionMenuOpen = false },
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = MaterialTheme.colorScheme.background,
+                        containerColor = appColors.surface,
                         tonalElevation = 0.dp,
                         shadowElevation = 8.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                        border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
                     ) {
                         if (downloadedVersions.isEmpty()) {
                             listOf("RVR1960" to "Reina-Valera 1960 (RVR1960)", "KJV" to "King James Version (KJV)").forEach { (tag, label) ->
@@ -1419,7 +1419,7 @@ private fun VerseRowItem(
         }
     }
 
-    val inlineContent = remember(appColors.isDark, fontFamily, verse.verse) {
+    val inlineContent = remember(appColors, fontFamily, verse.verse) {
         mapOf(
             "study_badges_both" to InlineTextContent(
                 Placeholder(
@@ -1436,7 +1436,7 @@ private fun VerseRowItem(
                     StudyBadgePill(
                         label = "COM",
                         isCommentary = true,
-                        isDark = appColors.isDark,
+                        appColors = appColors,
                         fontFamily = fontFamily,
                         onClick = { currentOnCommentaryClick("COM") },
                         modifier = Modifier.testTag("badge_com_${verse.verse}")
@@ -1444,7 +1444,7 @@ private fun VerseRowItem(
                     StudyBadgePill(
                         label = "REF",
                         isCommentary = false,
-                        isDark = appColors.isDark,
+                        appColors = appColors,
                         fontFamily = fontFamily,
                         onClick = { currentOnCrossRefClick() },
                         modifier = Modifier.testTag("badge_ref_${verse.verse}")
@@ -1465,7 +1465,7 @@ private fun VerseRowItem(
                     StudyBadgePill(
                         label = "COM",
                         isCommentary = true,
-                        isDark = appColors.isDark,
+                        appColors = appColors,
                         fontFamily = fontFamily,
                         onClick = { currentOnCommentaryClick("COM") },
                         modifier = Modifier.testTag("badge_com_${verse.verse}")
@@ -1486,7 +1486,7 @@ private fun VerseRowItem(
                     StudyBadgePill(
                         label = "REF",
                         isCommentary = false,
-                        isDark = appColors.isDark,
+                        appColors = appColors,
                         fontFamily = fontFamily,
                         onClick = { currentOnCrossRefClick() },
                         modifier = Modifier.testTag("badge_ref_${verse.verse}")
@@ -1610,32 +1610,14 @@ private fun VerseRowItem(
 private fun StudyBadgePill(
     label: String,
     isCommentary: Boolean,
-    isDark: Boolean,
+    appColors: AppColors,
     fontFamily: FontFamily,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val containerColor = if (isCommentary) {
-        if (isDark) androidx.compose.ui.graphics.Color(0xFF0284C7).copy(alpha = 0.22f)
-        else androidx.compose.ui.graphics.Color(0xFFE0F2FE)
-    } else {
-        if (isDark) androidx.compose.ui.graphics.Color(0xFF047857).copy(alpha = 0.22f)
-        else androidx.compose.ui.graphics.Color(0xFFD1FAE5)
-    }
-    val borderColor = if (isCommentary) {
-        if (isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
-        else androidx.compose.ui.graphics.Color(0xFF0284C7)
-    } else {
-        if (isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
-        else androidx.compose.ui.graphics.Color(0xFF059669)
-    }
-    val textColor = if (isCommentary) {
-        if (isDark) androidx.compose.ui.graphics.Color(0xFF38BDF8)
-        else androidx.compose.ui.graphics.Color(0xFF0369A1)
-    } else {
-        if (isDark) androidx.compose.ui.graphics.Color(0xFF34D399)
-        else androidx.compose.ui.graphics.Color(0xFF047857)
-    }
+    val containerColor = if (isCommentary) appColors.comBadgeBg else appColors.refBadgeBg
+    val borderColor = if (isCommentary) appColors.comBadgeBorder else appColors.refBadgeBorder
+    val textColor = if (isCommentary) appColors.comBadgeText else appColors.refBadgeText
 
     Surface(
         shape = CircleShape,

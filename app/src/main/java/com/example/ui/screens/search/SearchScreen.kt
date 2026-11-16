@@ -191,10 +191,10 @@ fun SearchScreen(
                     expanded = isVersionMenuOpen,
                     onDismissRequest = { isVersionMenuOpen = false },
                     shape = RoundedCornerShape(16.dp),
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
                     shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f))
                 ) {
                     availableVersions.forEach { version ->
                         DropdownMenuItem(
@@ -522,7 +522,8 @@ private fun SearchResultItem(
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -557,7 +558,7 @@ private fun buildHighlightedVerseText(
     fullText: String,
     query: String,
     exactWord: Boolean,
-    highlightColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color(0xFF0284C7)
+    highlightColor: androidx.compose.ui.graphics.Color
 ): AnnotatedString {
     val cleanQuery = query.trim()
     if (cleanQuery.isBlank()) return AnnotatedString(fullText)
@@ -588,7 +589,8 @@ private fun buildHighlightedVerseText(
                 pushStyle(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
-                        color = highlightColor
+                        color = highlightColor,
+                        background = highlightColor.copy(alpha = 0.14f)
                     )
                 )
                 append(fullText.substring(start, end))

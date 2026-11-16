@@ -237,7 +237,7 @@ fun DictionaryBottomSheet(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = appColors.surfaceVariant),
-                            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                            border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Column(
@@ -274,7 +274,7 @@ fun DictionaryBottomSheet(
                                         .clickable { selectedMatch = match }
                                         .testTag("dict_match_${match.module.versionTag}"),
                                     colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-                                    border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else BorderStroke(1.dp, appColors.divider.copy(alpha = 0.5f)),
+                                    border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else BorderStroke(1.dp, appColors.divider.copy(alpha = 0.5f)),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                                     shape = RoundedCornerShape(14.dp)
                                 ) {
@@ -337,7 +337,7 @@ fun DictionaryBottomSheet(
                             .fillMaxWidth()
                             .testTag("dictionary_entry_card"),
                         colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-                        border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                        border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -359,14 +359,14 @@ fun DictionaryBottomSheet(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (appColors.isDark) appColors.accent.copy(alpha = 0.25f) else appColors.accent)
+                                            .background(if (appColors.isDark) appColors.primaryContainer else appColors.pillBg)
                                             .padding(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
                                         Text(
                                             text = entryItem.strongCode,
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (appColors.isDark) appColors.accent else androidx.compose.ui.graphics.Color.White,
+                                            color = if (appColors.isDark) appColors.onPrimaryContainer else appColors.pillText,
                                             maxLines = 1,
                                             softWrap = false
                                         )

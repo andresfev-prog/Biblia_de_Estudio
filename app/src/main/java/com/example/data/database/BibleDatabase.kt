@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.dao.BibleDao
 import com.example.data.model.BibleModule
@@ -31,7 +32,7 @@ import kotlinx.coroutines.launch
         com.example.data.model.CrossReference::class,
         com.example.data.model.UserNote::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class BibleDatabase : RoomDatabase() {
@@ -42,6 +43,17 @@ abstract class BibleDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: BibleDatabase? = null
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE user_preferences ADD COLUMN selectedLightTheme TEXT NOT NULL DEFAULT 'CRISP_LIGHT'"
+                )
+                db.execSQL(
+                    "ALTER TABLE user_preferences ADD COLUMN selectedDarkTheme TEXT NOT NULL DEFAULT 'MIDNIGHT_BLUE'"
+                )
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope): BibleDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -49,6 +61,7 @@ abstract class BibleDatabase : RoomDatabase() {
                     BibleDatabase::class.java,
                     "bible_study.db"
                 )
+                    .addMigrations(MIGRATION_8_9)
                     .addCallback(BibleDatabaseCallback(context.applicationContext, scope))
                     .fallbackToDestructiveMigration(true)
                     .build()

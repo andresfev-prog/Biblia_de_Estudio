@@ -77,7 +77,7 @@ fun FavoritesDialog(
                 .clip(RoundedCornerShape(24.dp))
                 .testTag("favorites_dialog"),
             color = appColors.surface,
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null
+            border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null
         ) {
             Column(
                 modifier = Modifier
@@ -213,7 +213,7 @@ private fun FavoriteCardItem(
             .testTag("favorite_item_${fav.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-        border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+        border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

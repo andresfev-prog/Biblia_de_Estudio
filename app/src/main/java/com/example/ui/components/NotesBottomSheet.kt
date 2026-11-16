@@ -213,7 +213,7 @@ private fun NotesListView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón "Nueva nota" limpio con contraste absoluto (Color.White)
+        // Botón "Nueva nota" con contraste garantizado en los 6 temas
         Button(
             onClick = onNewNote,
             modifier = Modifier
@@ -222,15 +222,15 @@ private fun NotesListView(
                 .testTag("new_note_button"),
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = appColors.accent,
-                contentColor = Color.White
+                containerColor = appColors.pillBg,
+                contentColor = appColors.pillText
             )
         ) {
             Text(
                 text = StringsLocale.get("new_note", interfaceLanguage).replace("+", "").trim(),
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White
+                color = appColors.pillText
             )
         }
 
@@ -287,7 +287,7 @@ private fun NotesListView(
                         colors = CardDefaults.cardColors(
                             containerColor = appColors.cardBg
                         ),
-                        border = if (appColors.isDark) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+                        border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column(
@@ -303,13 +303,13 @@ private fun NotesListView(
                                 if (note.biblicalReference.isNotBlank()) {
                                     Surface(
                                         shape = CircleShape,
-                                        color = if (appColors.isDark) Color(0xFF0F2744) else Color(0xFFE8EEF5)
+                                        color = appColors.primaryContainer
                                     ) {
                                         Text(
                                             text = note.biblicalReference,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = appColors.accent,
+                                            color = appColors.onPrimaryContainer,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                                             maxLines = 1
                                         )

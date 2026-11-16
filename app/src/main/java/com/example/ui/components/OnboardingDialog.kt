@@ -66,7 +66,7 @@ fun OnboardingDialog(
                 .testTag("onboarding_dialog"),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = if (appColors.isDark) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(

@@ -50,7 +50,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -163,10 +162,10 @@ fun ModulesScreen(
                     expanded = languageMenuOpen,
                     onDismissRequest = { languageMenuOpen = false },
                     shape = RoundedCornerShape(16.dp),
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = appColors.surface,
                     tonalElevation = 0.dp,
                     shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                    border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
                 ) {
                     languages.forEach { languageItem ->
                         val isSelected = currentDisplayLang == languageItem
@@ -192,7 +191,7 @@ fun ModulesScreen(
             // Filtro conmutador "Solo descargados"
             Surface(
                 shape = CircleShape,
-                color = if (onlyDownloaded) appColors.accent else (if (appColors.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
+                color = if (onlyDownloaded) appColors.pillBg else appColors.surfaceVariant,
                 modifier = Modifier
                     .clip(CircleShape)
                     .clickable { onlyDownloaded = !onlyDownloaded }
@@ -204,7 +203,7 @@ fun ModulesScreen(
                     Icon(
                         imageVector = Icons.Filled.CloudDone,
                         contentDescription = null,
-                        tint = if (onlyDownloaded) Color.White else appColors.textSecondary,
+                        tint = if (onlyDownloaded) appColors.pillText else appColors.textSecondary,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -212,7 +211,7 @@ fun ModulesScreen(
                         text = if (isEn) "Downloaded" else "Descargados",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (onlyDownloaded) Color.White else appColors.textPrimary,
+                        color = if (onlyDownloaded) appColors.pillText else appColors.textPrimary,
                         fontSize = 12.sp,
                         maxLines = 1,
                         softWrap = false
@@ -233,7 +232,9 @@ fun ModulesScreen(
         PrimaryTabRow(
             selectedTabIndex = uiState.moduleSelectedTab,
             modifier = Modifier.fillMaxWidth(),
-            containerColor = appColors.surface
+            containerColor = appColors.background,
+            contentColor = appColors.accent,
+            divider = { HorizontalDivider(color = appColors.divider) }
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -363,7 +364,7 @@ private fun LabeledDivider(
     modifier: Modifier = Modifier
 ) {
     val appColors = AppTheme.colors
-    val dividerColor = if (appColors.isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1)
+    val dividerColor = appColors.border
 
     Row(
         modifier = modifier
@@ -445,14 +446,14 @@ private fun ModuleItemCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .background(if (appColors.isDark) Color(0xFF0F2744) else Color(0xFFE8EEF5)),
+                    .background(appColors.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = module.versionTag,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = appColors.accent,
+                    color = appColors.onPrimaryContainer,
                     fontSize = 10.sp,
                     maxLines = 1,
                     softWrap = false
@@ -467,7 +468,11 @@ private fun ModuleItemCard(
             .testTag("module_card_${module.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-        border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else appColors.divider.copy(alpha = 0.5f)),
+        border = BorderStroke(
+            1.dp,
+            if (appColors.isDark || appColors.background != appColors.cardBg) appColors.border
+            else appColors.divider.copy(alpha = 0.5f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         // Fila principal: Centra verticalmente la columna de textos y el botón de acción
@@ -546,7 +551,7 @@ private fun ModuleItemCard(
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp)),
                             color = appColors.accent,
-                            trackColor = if (appColors.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            trackColor = appColors.surfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))

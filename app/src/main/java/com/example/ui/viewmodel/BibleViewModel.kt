@@ -251,11 +251,24 @@ class BibleViewModel(
         viewModelScope.launch {
             repository.getUserPreferences().collect { pref ->
                 if (pref != null) {
-                    val normalized = if (pref.fontFamily.equals("Google Sans", ignoreCase = true)) {
-                        pref.copy(fontFamily = "Google Sans Flex")
+                    val normalizedFont = if (pref.fontFamily.equals("Google Sans", ignoreCase = true)) {
+                        "Google Sans Flex"
                     } else {
-                        pref
+                        pref.fontFamily
                     }
+                    val normalizedMode = if (pref.themeMode.equals("AUTOMATIC", ignoreCase = true) || pref.themeMode.isBlank()) {
+                        "AUTO"
+                    } else {
+                        pref.themeMode
+                    }
+                    val normalizedLight = pref.selectedLightTheme.ifBlank { "CRISP_LIGHT" }
+                    val normalizedDark = pref.selectedDarkTheme.ifBlank { "MIDNIGHT_BLUE" }
+                    val normalized = pref.copy(
+                        fontFamily = normalizedFont,
+                        themeMode = normalizedMode,
+                        selectedLightTheme = normalizedLight,
+                        selectedDarkTheme = normalizedDark
+                    )
                     _uiState.value = _uiState.value.copy(userPreferences = normalized)
                 }
             }
@@ -1089,11 +1102,22 @@ class BibleViewModel(
 
     // --- Preferencias ---
     fun saveUserPreferences(preference: UserPreference = _uiState.value.userPreferences) {
-        val normalized = if (preference.fontFamily.equals("Google Sans", ignoreCase = true)) {
-            preference.copy(fontFamily = "Google Sans Flex")
+        val normalizedFont = if (preference.fontFamily.equals("Google Sans", ignoreCase = true)) {
+            "Google Sans Flex"
         } else {
-            preference
+            preference.fontFamily
         }
+        val normalizedMode = if (preference.themeMode.equals("AUTOMATIC", ignoreCase = true) || preference.themeMode.isBlank()) {
+            "AUTO"
+        } else {
+            preference.themeMode
+        }
+        val normalized = preference.copy(
+            fontFamily = normalizedFont,
+            themeMode = normalizedMode,
+            selectedLightTheme = preference.selectedLightTheme.ifBlank { "CRISP_LIGHT" },
+            selectedDarkTheme = preference.selectedDarkTheme.ifBlank { "MIDNIGHT_BLUE" }
+        )
         _uiState.value = _uiState.value.copy(userPreferences = normalized)
         viewModelScope.launch {
             repository.saveUserPreferences(normalized)
@@ -1101,7 +1125,28 @@ class BibleViewModel(
     }
 
     fun updateThemeMode(mode: String) {
-        val updated = _uiState.value.userPreferences.copy(themeMode = mode)
+        val normalizedMode = if (mode.equals("AUTOMATIC", ignoreCase = true)) "AUTO" else mode.uppercase()
+        val updated = _uiState.value.userPreferences.copy(themeMode = normalizedMode)
+        _uiState.value = _uiState.value.copy(userPreferences = updated)
+        viewModelScope.launch { repository.saveUserPreferences(updated) }
+    }
+
+    fun updateSelectedLightTheme(themeKey: String, activateMode: Boolean = false) {
+        val current = _uiState.value.userPreferences
+        val updated = current.copy(
+            themeMode = if (activateMode) "LIGHT" else current.themeMode,
+            selectedLightTheme = themeKey
+        )
+        _uiState.value = _uiState.value.copy(userPreferences = updated)
+        viewModelScope.launch { repository.saveUserPreferences(updated) }
+    }
+
+    fun updateSelectedDarkTheme(themeKey: String, activateMode: Boolean = false) {
+        val current = _uiState.value.userPreferences
+        val updated = current.copy(
+            themeMode = if (activateMode) "DARK" else current.themeMode,
+            selectedDarkTheme = themeKey
+        )
         _uiState.value = _uiState.value.copy(userPreferences = updated)
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }

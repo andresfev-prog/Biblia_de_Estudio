@@ -59,7 +59,6 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
@@ -248,7 +247,7 @@ fun HomeScreen(
             colors = CardDefaults.cardColors(
                 containerColor = appColors.cardBg
             ),
-            border = if (appColors.isDark) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
@@ -273,14 +272,14 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(if (appColors.isDark) Color(0xFF0F2744) else Color(0xFFE8EEF5))
+                            .background(appColors.primaryContainer)
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = versionBadge,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = appColors.accent,
+                            color = appColors.onPrimaryContainer,
                             fontSize = 11.sp,
                             maxLines = 1,
                             softWrap = false
@@ -404,7 +403,7 @@ fun HomeScreen(
             colors = CardDefaults.cardColors(
                 containerColor = appColors.cardBg
             ),
-            border = if (appColors.isDark) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(
@@ -507,7 +506,7 @@ fun HomeScreen(
             colors = CardDefaults.cardColors(
                 containerColor = appColors.cardBg
             ),
-            border = if (appColors.isDark) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(
@@ -563,13 +562,13 @@ fun HomeScreen(
                     if (latestNote != null) {
                         Surface(
                             shape = CircleShape,
-                            color = if (appColors.isDark) Color(0xFF0F2744) else Color(0xFFE8EEF5)
+                            color = appColors.primaryContainer
                         ) {
                             Text(
                                 text = latestNote.biblicalReference,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = appColors.accent,
+                                color = appColors.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 maxLines = 1
                             )
@@ -666,14 +665,14 @@ fun HomeScreen(
                             .testTag("home_create_note_button"),
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.accent,
-                            contentColor = Color.White
+                            containerColor = appColors.pillBg,
+                            contentColor = appColors.pillText
                         )
                     ) {
                         Text(
                             text = StringsLocale.get("create_note", lang).replace("+", "").trim(),
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = appColors.pillText,
                             maxLines = 1,
                             softWrap = false
                         )

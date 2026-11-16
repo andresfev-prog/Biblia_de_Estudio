@@ -113,7 +113,7 @@ fun CrossReferenceBottomSheet(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = appColors.surfaceVariant),
-                    border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                    border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     SelectionContainer {
@@ -134,7 +134,7 @@ fun CrossReferenceBottomSheet(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = appColors.surfaceVariant),
-                        border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                        border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(
@@ -156,7 +156,7 @@ fun CrossReferenceBottomSheet(
                                 .padding(bottom = 10.dp)
                                 .testTag("cross_ref_item_$index"),
                             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-                            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+                            border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {

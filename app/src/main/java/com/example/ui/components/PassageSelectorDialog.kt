@@ -82,8 +82,8 @@ fun PassageSelectorDialog(
                 .padding(14.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .testTag("passage_selector_dialog"),
-            color = MaterialTheme.colorScheme.background,
-            border = BorderStroke(1.dp, if (appColors.isDark) appColors.border else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            color = appColors.surface,
+            border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 1f else 0.75f)),
             tonalElevation = 0.dp
         ) {
             Column(
@@ -155,7 +155,8 @@ fun PassageSelectorDialog(
                         PrimaryTabRow(
                             selectedTabIndex = testamentTab,
                             modifier = Modifier.fillMaxWidth(),
-                            containerColor = MaterialTheme.colorScheme.background
+                            containerColor = appColors.surface,
+                            contentColor = appColors.accent
                         ) {
                             Tab(
                                 selected = testamentTab == 0,
