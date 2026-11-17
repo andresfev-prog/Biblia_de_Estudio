@@ -118,6 +118,8 @@ import com.example.ui.components.DictionaryBottomSheet
 import com.example.ui.components.NotesBottomSheet
 import com.example.ui.components.PassageSelectorDialog
 import com.example.ui.components.TtsPlayerBar
+import com.example.ui.components.TutorialStep
+import com.example.ui.components.tutorialTarget
 import com.example.ui.screens.settings.resolveBibleFont
 import com.example.ui.theme.AppColors
 import com.example.ui.theme.AppIcon
@@ -250,6 +252,18 @@ fun BibleScreen(
         }
     }
 
+    // Sincronización de visibilidad y scroll para el tutorial en vivo
+    LaunchedEffect(uiState.activeTutorialStep) {
+        if (uiState.activeTutorialStep == TutorialStep.BIBLE_TOP_CONTROLS ||
+            uiState.activeTutorialStep == TutorialStep.BIBLE_VERSES_INTERACTION) {
+            isTopBarsVisible = true
+            viewModel.setBottomBarVisible(true)
+            if (uiState.activeTutorialStep == TutorialStep.BIBLE_VERSES_INTERACTION) {
+                leftListState.animateScrollToItem(0)
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -262,7 +276,9 @@ fun BibleScreen(
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                Column {
+                Column(
+                    modifier = Modifier.tutorialTarget(TutorialStep.BIBLE_TOP_CONTROLS)
+                ) {
                     ReaderTopControls(
                         currentBook = uiState.currentBook,
                         currentChapter = uiState.currentChapter,
@@ -892,23 +908,27 @@ private fun SingleReaderView(
             val hasCommentary = true // La etiqueta COM debe mantenerse siempre visible en todos los versículos
             val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
 
-            VerseRowItem(
-                verse = verse,
-                hasCommentary = hasCommentary,
-                hasCrossReference = hasCrossReference,
-                isHighlighted = uiState.highlightedVerse == verse.verse,
-                isSelected = verse.verse in selectedVerses,
-                isSelectionMode = isSelectionMode,
-                fontFamily = fontFamily,
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
-                onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                onWordClick = { word -> viewModel.lookupWord(word, verse) },
-                onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
-                onVerseClick = { onVerseClick(verse.verse) },
-                onVerseLongClick = { onVerseLongClick(verse.verse) }
-            )
+            Box(
+                modifier = if (index == 0) Modifier.tutorialTarget(TutorialStep.BIBLE_VERSES_INTERACTION) else Modifier
+            ) {
+                VerseRowItem(
+                    verse = verse,
+                    hasCommentary = hasCommentary,
+                    hasCrossReference = hasCrossReference,
+                    isHighlighted = uiState.highlightedVerse == verse.verse,
+                    isSelected = verse.verse in selectedVerses,
+                    isSelectionMode = isSelectionMode,
+                    fontFamily = fontFamily,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
+                    onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
+                    onCrossRefClick = { viewModel.openCrossReferences(verse) },
+                    onWordClick = { word -> viewModel.lookupWord(word, verse) },
+                    onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
+                    onVerseClick = { onVerseClick(verse.verse) },
+                    onVerseLongClick = { onVerseLongClick(verse.verse) }
+                )
+            }
         }
 
         item {

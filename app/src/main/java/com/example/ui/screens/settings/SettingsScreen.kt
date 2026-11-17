@@ -52,7 +52,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +69,8 @@ import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.TutorialStep
+import com.example.ui.components.tutorialTarget
 import com.example.ui.screens.favorites.FavoritesDialog
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.AppThemeIds
@@ -81,6 +85,22 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+
+    // Auto-scroll para el tutorial en vivo
+    LaunchedEffect(uiState.activeTutorialStep) {
+        when (uiState.activeTutorialStep) {
+            TutorialStep.SETTINGS_FAVORITES -> {
+                scrollState.animateScrollTo(0)
+            }
+            TutorialStep.SETTINGS_THEMES -> {
+                scrollState.animateScrollTo(380)
+            }
+            TutorialStep.SETTINGS_TYPOGRAPHY -> {
+                scrollState.animateScrollTo(720)
+            }
+            else -> {}
+        }
+    }
     var languageMenuOpen by remember { mutableStateOf(false) }
     var fontMenuOpen by remember { mutableStateOf(false) }
     var lightThemeMenuOpen by remember { mutableStateOf(false) }
@@ -250,7 +270,8 @@ fun SettingsScreen(
             onClick = { viewModel.showFavoritesDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("settings_favorites_item"),
+                .testTag("settings_favorites_item")
+                .tutorialTarget(TutorialStep.SETTINGS_FAVORITES),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -424,7 +445,8 @@ fun SettingsScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("theme_selector_card"),
+                .testTag("theme_selector_card")
+                .tutorialTarget(TutorialStep.SETTINGS_THEMES),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -621,7 +643,8 @@ fun SettingsScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("typography_controls_card"),
+                .testTag("typography_controls_card")
+                .tutorialTarget(TutorialStep.SETTINGS_TYPOGRAPHY),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -794,6 +817,82 @@ fun SettingsScreen(
                             color = appColors.textPrimary,
                             fontWeight = FontWeight.Normal
                         )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 5. Botón de Acceso al Tutorial de Uso
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("settings_tutorial_card"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                            contentDescription = null,
+                            tint = appColors.accent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = StringsLocale.get("tutorial_card_title", lang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.titleColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = StringsLocale.get("tutorial_card_subtitle", lang),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = appColors.textSecondary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { viewModel.startTutorial() }
+                            .testTag("start_tutorial_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = StringsLocale.get("tutorial_card_start", lang),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }

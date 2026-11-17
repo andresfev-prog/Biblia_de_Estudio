@@ -23,6 +23,7 @@ import com.example.data.model.UserNote
 import com.example.data.model.UserPreference
 import com.example.data.repository.BibleAssetDatabaseHelper
 import com.example.data.repository.BibleRepository
+import com.example.ui.components.TutorialStep
 import com.example.ui.util.DailyVerseCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -120,7 +121,8 @@ data class BibleUiState(
     val showLogoutDialog: Boolean = false,
     val showFavoritesDialog: Boolean = false,
     val showEditProfileDialog: Boolean = false,
-    val toastMessage: String? = null
+    val toastMessage: String? = null,
+    val activeTutorialStep: TutorialStep? = null
 )
 
 class BibleViewModel(
@@ -287,6 +289,62 @@ class BibleViewModel(
 
     fun navigateTo(destination: AppDestination) {
         _uiState.value = _uiState.value.copy(currentDestination = destination)
+    }
+
+    fun startTutorial() {
+        _uiState.value = _uiState.value.copy(
+            activeTutorialStep = TutorialStep.HOME_VERSE_OF_DAY,
+            currentDestination = AppDestination.HOME,
+            isBottomBarVisible = true,
+            isPassagePickerVisible = false,
+            isNotesSheetOpen = false,
+            selectedCommentaryVerse = null,
+            selectedDictionaryWord = null,
+            selectedCrossReferenceVerse = null,
+            showFavoritesDialog = false,
+            showEditProfileDialog = false,
+            showLogoutDialog = false
+        )
+    }
+
+    fun nextTutorialStep() {
+        val current = _uiState.value.activeTutorialStep ?: return
+        val next = current.next()
+        if (next != null) {
+            _uiState.value = _uiState.value.copy(
+                activeTutorialStep = next,
+                currentDestination = next.destination,
+                isBottomBarVisible = true,
+                isPassagePickerVisible = false,
+                isNotesSheetOpen = false,
+                selectedCommentaryVerse = null,
+                selectedDictionaryWord = null,
+                selectedCrossReferenceVerse = null
+            )
+        } else {
+            finishTutorial()
+        }
+    }
+
+    fun previousTutorialStep() {
+        val current = _uiState.value.activeTutorialStep ?: return
+        val prev = current.previous()
+        if (prev != null) {
+            _uiState.value = _uiState.value.copy(
+                activeTutorialStep = prev,
+                currentDestination = prev.destination,
+                isBottomBarVisible = true,
+                isPassagePickerVisible = false,
+                isNotesSheetOpen = false,
+                selectedCommentaryVerse = null,
+                selectedDictionaryWord = null,
+                selectedCrossReferenceVerse = null
+            )
+        }
+    }
+
+    fun finishTutorial() {
+        _uiState.value = _uiState.value.copy(activeTutorialStep = null)
     }
 
     fun loadChapter(

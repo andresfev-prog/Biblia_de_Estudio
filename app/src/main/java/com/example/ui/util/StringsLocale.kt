@@ -157,6 +157,51 @@ object StringsLocale {
             "onboarding_step3_title" -> if (isEn) "Personalization" else "Personalización"
             "onboarding_step3_desc" -> if (isEn) "Customize font size and reading typography, switch between dark and light themes, and manage offline biblical versions and dictionaries." else "Ajusta la tipografía y tamaño de fuente para lectura cómoda, alterna entre modo oscuro y claro, y gestiona módulos sin conexión desde recursos."
 
+            // Interactive Spotlight Tour
+            "tutorial_skip" -> if (isEn) "Skip" else "Omitir"
+            "tutorial_previous" -> if (isEn) "Previous" else "Anterior"
+            "tutorial_next" -> if (isEn) "Next" else "Siguiente"
+            "tutorial_finish" -> if (isEn) "Finish" else "Finalizar"
+            "tutorial_card_title" -> if (isEn) "App Tutorial" else "Tutorial de uso"
+            "tutorial_card_subtitle" -> if (isEn) "Interactive tour of all features" else "Guía interactiva por todas las funciones"
+            "tutorial_card_start" -> if (isEn) "Start" else "Iniciar"
+
+            // Step 1: HOME_VERSE_OF_DAY
+            "tutorial_step1_title" -> if (isEn) "Verse of the Day" else "Versículo del día"
+            "tutorial_step1_desc" -> if (isEn) "Read a curated daily passage. Open the full chapter, save it to Favorites, copy, or share it instantly." else "Consulta cada día un pasaje seleccionado. Puedes abrir el capítulo completo, guardarlo en Favoritos, copiarlo o compartirlo al instante."
+
+            // Step 2: HOME_CONTINUE_NOTES
+            "tutorial_step2_title" -> if (isEn) "Recent Reading & Notes" else "Lectura reciente y Notas"
+            "tutorial_step2_desc" -> if (isEn) "Resume reading right where you left off and access your personal Bible study notes." else "Retoma tu lectura exactamente en el último capítulo abierto y accede a tus notas personales de estudio bíblico."
+
+            // Step 3: BIBLE_TOP_CONTROLS
+            "tutorial_step3_title" -> if (isEn) "Navigation & Versions" else "Navegación y Versiones"
+            "tutorial_step3_desc" -> if (isEn) "Quickly switch books, chapters, or Bible translations, and use the top menu for parallel reading or text-to-speech." else "Cambia rápidamente de libro, capítulo o traducción bíblica, y abre el menú superior para activar la lectura en paralelo o en voz alta."
+
+            // Step 4: BIBLE_VERSES_INTERACTION
+            "tutorial_step4_title" -> if (isEn) "Study & Multi-Select" else "Estudio y Multiselección"
+            "tutorial_step4_desc" -> if (isEn) "Tap COM or REF badges for commentaries and cross-references. Long-press any verse to multi-select, favorite, copy, or share." else "Toca las etiquetas COM o REF para ver comentarios y referencias. Mantén presionado un versículo para seleccionar varios, guardarlos en Favoritos, copiarlos o compartirlos."
+
+            // Step 5: MODULES_TABS_FILTERS
+            "tutorial_step5_title" -> if (isEn) "Offline Modules" else "Módulos Offline"
+            "tutorial_step5_desc" -> if (isEn) "Download and manage Bible versions, commentaries, and dictionaries filtered by language for offline study." else "Descarga y administra versiones bíblicas, comentarios y diccionarios filtrando por idioma para estudiar sin conexión a internet."
+
+            // Step 6: SEARCH_BAR_FILTERS
+            "tutorial_step6_title" -> if (isEn) "Fast Bible Search" else "Búsqueda Rápida"
+            "tutorial_step6_desc" -> if (isEn) "Search words or phrases across the Bible, filter by Old or New Testament, and save results directly to Favorites with the heart icon." else "Busca palabras o frases en toda la Biblia, filtra por Antiguo o Nuevo Testamento y guarda resultados directo en Favoritos con el ícono de corazón."
+
+            // Step 7: SETTINGS_FAVORITES
+            "tutorial_step7_title" -> if (isEn) "Your Favorites" else "Tus Favoritos"
+            "tutorial_step7_desc" -> if (isEn) "Find all the verses you have favorited from Home, Reader, or Search organized in one place." else "Encuentra organizados en un solo lugar todos los versículos que has marcado como favoritos desde Inicio, Lectura o Búsqueda."
+
+            // Step 8: SETTINGS_THEMES
+            "tutorial_step8_title" -> if (isEn) "Theme Customization" else "Personalización de Temas"
+            "tutorial_step8_desc" -> if (isEn) "Tap Light or Dark to open a menu with 3 visual styles each. Automatic mode switches between your chosen styles based on the time of day." else "Toca Claro u Oscuro para desplegar y elegir entre 3 estilos visuales cada uno. El modo Automático alternará entre los estilos que hayas elegido según la hora del día."
+
+            // Step 9: SETTINGS_TYPOGRAPHY
+            "tutorial_step9_title" -> if (isEn) "Typography & Reading" else "Tipografía y Lectura"
+            "tutorial_step9_desc" -> if (isEn) "Choose your preferred font family and adjust the Bible text size with real-time feedback in the reader preview." else "Elige tu fuente preferida y ajusta el tamaño del texto bíblico comprobando el resultado al instante en la vista previa."
+
             else -> key
         }
     }

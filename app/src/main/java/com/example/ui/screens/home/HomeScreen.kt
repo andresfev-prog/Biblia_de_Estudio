@@ -69,6 +69,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleBooksData
 import com.example.data.model.BibleVerse
 import com.example.ui.components.NotesBottomSheet
+import com.example.ui.components.TutorialStep
+import com.example.ui.components.tutorialTarget
 import com.example.ui.theme.AppIcon
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
@@ -96,6 +98,19 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
+
+    // Auto-scroll para el tutorial en vivo
+    LaunchedEffect(uiState.activeTutorialStep) {
+        when (uiState.activeTutorialStep) {
+            TutorialStep.HOME_VERSE_OF_DAY -> {
+                scrollState.animateScrollTo(0)
+            }
+            TutorialStep.HOME_CONTINUE_NOTES -> {
+                scrollState.animateScrollTo(360)
+            }
+            else -> {}
+        }
+    }
 
     // Dynamic greeting based on time of day
     val greeting = remember(lang) {
@@ -235,7 +250,8 @@ fun HomeScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("verse_of_the_day_card"),
+                .testTag("verse_of_the_day_card")
+                .tutorialTarget(TutorialStep.HOME_VERSE_OF_DAY),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
                 containerColor = appColors.cardBg
@@ -377,8 +393,14 @@ fun HomeScreen(
         }
         Spacer(modifier = Modifier.height(14.dp))
 
-        // "Continúa donde quedaste" Card
-        val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
+        // Bloque unificado: Lectura reciente y Notas
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tutorialTarget(TutorialStep.HOME_CONTINUE_NOTES)
+        ) {
+            // "Continúa donde quedaste" Card
+            val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
         val lastChapter = uiState.readingProgress?.chapter ?: 1
         val lastVersion = uiState.readingProgress?.version ?: "RVR 1960"
 
@@ -672,6 +694,7 @@ fun HomeScreen(
                     }
                 }
             }
+        }
         }
 
         // Notes Sheet on Home

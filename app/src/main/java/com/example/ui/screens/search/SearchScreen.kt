@@ -69,6 +69,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleVerse
+import com.example.ui.components.TutorialStep
+import com.example.ui.components.tutorialTarget
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
@@ -100,10 +102,15 @@ fun SearchScreen(
             .fillMaxSize()
             .padding(top = 8.dp)
     ) {
-        // =========================================================================
-        // 1. BARRA SUPERIOR: CAMPO DE BÚSQUEDA + SELECTOR DE VERSIÓN
-        // =========================================================================
-        Row(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tutorialTarget(TutorialStep.SEARCH_BAR_FILTERS)
+        ) {
+            // =========================================================================
+            // 1. BARRA SUPERIOR: CAMPO DE BÚSQUEDA + SELECTOR DE VERSIÓN
+            // =========================================================================
+            Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp),
@@ -279,6 +286,7 @@ fun SearchScreen(
                 ),
                 modifier = Modifier.height(32.dp)
             )
+        }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

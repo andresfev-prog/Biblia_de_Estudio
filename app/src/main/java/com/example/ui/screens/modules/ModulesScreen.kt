@@ -56,6 +56,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleModule
+import com.example.ui.components.TutorialStep
+import com.example.ui.components.tutorialTarget
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.ModuleDeleteRed
 import com.example.ui.theme.ModuleInstalledGreen
@@ -111,8 +113,13 @@ fun ModulesScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Fila de Filtros: Idioma y Solo Descargados
-        Row(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tutorialTarget(TutorialStep.MODULES_TABS_FILTERS)
+        ) {
+            // Fila de Filtros: Idioma y Solo Descargados
+            Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -253,6 +260,7 @@ fun ModulesScreen(
                     modifier = Modifier.testTag("module_tab_$index")
                 )
             }
+        }
         }
 
         Spacer(modifier = Modifier.height(14.dp))

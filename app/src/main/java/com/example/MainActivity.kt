@@ -43,9 +43,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.geometry.Rect
 import com.example.data.database.BibleDatabase
 import com.example.data.repository.BibleRepository
+import com.example.ui.components.LocalTutorialTargetRegistry
 import com.example.ui.components.OnboardingDialog
+import com.example.ui.components.TutorialOverlay
+import com.example.ui.components.TutorialStep
 import com.example.ui.screens.bible.BibleScreen
 import com.example.ui.screens.home.HomeScreen
 import com.example.ui.screens.modules.ModulesScreen
@@ -125,90 +131,110 @@ class MainActivity : ComponentActivity() {
                     label = "snackbarBottomPadding"
                 )
 
-                if (uiState.currentDestination != AppDestination.HOME) {
+                val tutorialTargets = remember { mutableStateMapOf<TutorialStep, Rect>() }
+
+                if (uiState.activeTutorialStep != null) {
+                    BackHandler {
+                        viewModel.finishTutorial()
+                    }
+                } else if (uiState.currentDestination != AppDestination.HOME) {
                     BackHandler {
                         viewModel.navigateTo(AppDestination.HOME)
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(appColors.background)
-                ) {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        containerColor = Color.Transparent,
-                        snackbarHost = {
-                            SnackbarHost(
-                                hostState = snackbarHostState,
-                                modifier = Modifier.padding(bottom = snackbarBottomPadding)
-                            )
-                        }
-                    ) { innerPadding ->
-                        val edgeToEdgeContentModifier = Modifier.padding(
-                            start = innerPadding.calculateStartPadding(layoutDirection),
-                            top = innerPadding.calculateTopPadding(),
-                            end = innerPadding.calculateEndPadding(layoutDirection)
-                        )
-                        when (uiState.currentDestination) {
-                            AppDestination.HOME -> {
-                                HomeScreen(
-                                    uiState = uiState,
-                                    viewModel = viewModel,
-                                    modifier = edgeToEdgeContentModifier
-                                )
-                            }
-                            AppDestination.BIBLE -> {
-                                BibleScreen(
-                                    uiState = uiState,
-                                    viewModel = viewModel,
-                                    modifier = edgeToEdgeContentModifier
-                                )
-                            }
-                            AppDestination.MODULES -> {
-                                ModulesScreen(
-                                    uiState = uiState,
-                                    viewModel = viewModel,
-                                    modifier = edgeToEdgeContentModifier
-                                )
-                            }
-                            AppDestination.SEARCH -> {
-                                SearchScreen(
-                                    uiState = uiState,
-                                    viewModel = viewModel,
-                                    modifier = edgeToEdgeContentModifier
-                                )
-                            }
-                            AppDestination.SETTINGS -> {
-                                SettingsScreen(
-                                    uiState = uiState,
-                                    viewModel = viewModel,
-                                    modifier = edgeToEdgeContentModifier
-                                )
-                            }
-                        }
-                    }
-
-                    // Contenedor 100% transparente que aloja la barra flotante sin recortes rectangulares
+                CompositionLocalProvider(LocalTutorialTargetRegistry provides tutorialTargets) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(Color.Transparent)
+                            .fillMaxSize()
+                            .background(appColors.background)
                     ) {
-                        AnimatedVisibility(
-                            visible = isBottomBarVisible,
-                            enter = slideInVertically(initialOffsetY = { it }),
-                            exit = slideOutVertically(targetOffsetY = { it })
-                        ) {
-                            BottomNavBar(
-                                currentDestination = uiState.currentDestination,
-                                interfaceLanguage = lang,
-                                onDestinationSelected = { dest ->
-                                    viewModel.navigateTo(dest)
-                                    viewModel.setBottomBarVisible(true)
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            containerColor = Color.Transparent,
+                            snackbarHost = {
+                                SnackbarHost(
+                                    hostState = snackbarHostState,
+                                    modifier = Modifier.padding(bottom = snackbarBottomPadding)
+                                )
+                            }
+                        ) { innerPadding ->
+                            val edgeToEdgeContentModifier = Modifier.padding(
+                                start = innerPadding.calculateStartPadding(layoutDirection),
+                                top = innerPadding.calculateTopPadding(),
+                                end = innerPadding.calculateEndPadding(layoutDirection)
+                            )
+                            when (uiState.currentDestination) {
+                                AppDestination.HOME -> {
+                                    HomeScreen(
+                                        uiState = uiState,
+                                        viewModel = viewModel,
+                                        modifier = edgeToEdgeContentModifier
+                                    )
                                 }
+                                AppDestination.BIBLE -> {
+                                    BibleScreen(
+                                        uiState = uiState,
+                                        viewModel = viewModel,
+                                        modifier = edgeToEdgeContentModifier
+                                    )
+                                }
+                                AppDestination.MODULES -> {
+                                    ModulesScreen(
+                                        uiState = uiState,
+                                        viewModel = viewModel,
+                                        modifier = edgeToEdgeContentModifier
+                                    )
+                                }
+                                AppDestination.SEARCH -> {
+                                    SearchScreen(
+                                        uiState = uiState,
+                                        viewModel = viewModel,
+                                        modifier = edgeToEdgeContentModifier
+                                    )
+                                }
+                                AppDestination.SETTINGS -> {
+                                    SettingsScreen(
+                                        uiState = uiState,
+                                        viewModel = viewModel,
+                                        modifier = edgeToEdgeContentModifier
+                                    )
+                                }
+                            }
+                        }
+
+                        // Contenedor 100% transparente que aloja la barra flotante sin recortes rectangulares
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .background(Color.Transparent)
+                        ) {
+                            AnimatedVisibility(
+                                visible = isBottomBarVisible,
+                                enter = slideInVertically(initialOffsetY = { it }),
+                                exit = slideOutVertically(targetOffsetY = { it })
+                            ) {
+                                BottomNavBar(
+                                    currentDestination = uiState.currentDestination,
+                                    interfaceLanguage = lang,
+                                    onDestinationSelected = { dest ->
+                                        viewModel.navigateTo(dest)
+                                        viewModel.setBottomBarVisible(true)
+                                    }
+                                )
+                            }
+                        }
+
+                        // Overlay del Tour Interactivo Spotlight por encima del contenido y de la barra flotante
+                        uiState.activeTutorialStep?.let { step ->
+                            TutorialOverlay(
+                                activeStep = step,
+                                targets = tutorialTargets,
+                                interfaceLanguage = lang,
+                                onNext = { viewModel.nextTutorialStep() },
+                                onPrevious = { viewModel.previousTutorialStep() },
+                                onSkip = { viewModel.finishTutorial() }
                             )
                         }
                     }
