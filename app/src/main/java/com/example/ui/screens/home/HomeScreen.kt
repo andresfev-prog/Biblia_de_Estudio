@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -552,7 +553,10 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
@@ -591,18 +595,27 @@ fun HomeScreen(
                         }
                     }
 
-                    if (latestNote != null) {
+                    if (latestNote != null && latestNote.biblicalReference.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val badgeLabel = remember(latestNote.biblicalReference) {
+                            latestNote.biblicalReference.lineSequence()
+                                .firstOrNull { it.isNotBlank() }
+                                ?.trim()
+                                .orEmpty()
+                        }
                         Surface(
                             shape = CircleShape,
-                            color = appColors.primaryContainer
+                            color = appColors.primaryContainer,
+                            modifier = Modifier.widthIn(max = 150.dp)
                         ) {
                             Text(
-                                text = latestNote.biblicalReference,
+                                text = badgeLabel,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = appColors.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -644,7 +657,7 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = latestNote.content.ifBlank { "Sin texto adicional." },
+                            text = latestNote.content.ifBlank { StringsLocale.get("no_additional_content", lang) },
                             style = MaterialTheme.typography.bodySmall,
                             color = appColors.textSecondary,
                             maxLines = 2,
@@ -719,6 +732,7 @@ fun HomeScreen(
             NotesBottomSheet(
                 notes = uiState.notes,
                 editingNote = uiState.editingNote,
+                selectedVerses = uiState.selectedVerses,
                 interfaceLanguage = lang,
                 onSaveNote = { title, content, ref, id ->
                     viewModel.saveNote(title, content, ref, id)

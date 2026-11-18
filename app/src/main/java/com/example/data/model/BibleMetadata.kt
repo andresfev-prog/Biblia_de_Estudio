@@ -204,6 +204,73 @@ object BibleBooksData {
         return "$bookKey|$chapter|$verse|$versionKey"
     }
 
+    fun formatVerseRanges(sortedVerses: List<Int>): String {
+        if (sortedVerses.isEmpty()) return ""
+        val ranges = mutableListOf<String>()
+        var start = sortedVerses.first()
+        var end = start
+        for (i in 1 until sortedVerses.size) {
+            val current = sortedVerses[i]
+            if (current == end + 1) {
+                end = current
+            } else {
+                ranges.add(if (start == end) "$start" else "$start-$end")
+                start = current
+                end = current
+            }
+        }
+        ranges.add(if (start == end) "$start" else "$start-$end")
+        return ranges.joinToString(", ")
+    }
+
+    fun buildFormattedPassageText(
+        verses: List<BibleVerse>,
+        fallbackBookName: String = "",
+        fallbackChapter: Int = 1,
+        versionTag: String = ""
+    ): String {
+        if (verses.isEmpty()) return ""
+        val sorted = verses.sortedBy { it.verse }
+        val first = sorted.first()
+        val rawBook = first.bookName.ifBlank { fallbackBookName }
+        val chapterNum = if (first.chapter > 0) first.chapter else fallbackChapter
+        val effectiveVersion = normalizeVersionId(
+            first.version.ifBlank { versionTag }
+        ).ifBlank { versionTag }
+        val isEnglish = isEnglishVersion(effectiveVersion)
+        val localizedBook = getLocalizedBookName(
+            bookName = rawBook,
+            isEnglish = isEnglish,
+            bookNumber = first.bookNumber
+        )
+        val rangeLabel = formatVerseRanges(sorted.map { it.verse }.distinct())
+        val header = buildString {
+            append(localizedBook)
+            if (chapterNum > 0 && rangeLabel.isNotBlank()) {
+                append(" ")
+                append(chapterNum)
+                append(":")
+                append(rangeLabel)
+            }
+            if (effectiveVersion.isNotBlank()) {
+                append(" (")
+                append(effectiveVersion)
+                append(")")
+            }
+        }
+
+        return if (sorted.size == 1) {
+            val cleanText = cleanVerseTextForFavorites(first.text)
+            "$header\n$cleanText".trim()
+        } else {
+            val body = sorted.joinToString("\n") { verse ->
+                val cleanText = cleanVerseTextForFavorites(verse.text)
+                "${verse.verse} $cleanText"
+            }
+            "$header\n$body".trim()
+        }
+    }
+
     fun isEnglishVersion(version: String): Boolean {
         val v = version.uppercase().trim()
         return v.contains("KJV") || v.contains("AMP") || v.contains("ESV") ||

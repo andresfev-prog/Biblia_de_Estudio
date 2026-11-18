@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,19 +15,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,27 +47,33 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import com.example.ui.theme.AppIcon
-import com.example.ui.theme.AppIcons
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.BibleBooksData
+import com.example.data.model.BibleVerse
 import com.example.data.model.UserNote
+import com.example.ui.theme.AppIcon
+import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.StringsLocale
 import java.text.SimpleDateFormat
@@ -72,6 +86,7 @@ fun NotesBottomSheet(
     notes: List<UserNote>,
     editingNote: UserNote?,
     interfaceLanguage: String,
+    selectedVerses: List<BibleVerse> = emptyList(),
     onSaveNote: (title: String, content: String, reference: String, noteId: Long) -> Unit,
     onDeleteNote: (id: Long) -> Unit,
     onSelectNoteToEdit: (UserNote?) -> Unit,
@@ -83,6 +98,7 @@ fun NotesBottomSheet(
 ) {
     val appColors = AppTheme.colors
     var isEditingMode by remember { mutableStateOf(editingNote != null) }
+    var editorSessionKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(editingNote) {
         if (editingNote != null) {
@@ -104,6 +120,8 @@ fun NotesBottomSheet(
             if (editing) {
                 NoteEditorView(
                     note = editingNote,
+                    sessionKey = editorSessionKey,
+                    selectedVerses = selectedVerses,
                     interfaceLanguage = interfaceLanguage,
                     onSave = { title, content, ref, id ->
                         onSaveNote(title, content, ref, id)
@@ -125,10 +143,12 @@ fun NotesBottomSheet(
                     notes = notes,
                     interfaceLanguage = interfaceLanguage,
                     onNewNote = {
+                        editorSessionKey++
                         onSelectNoteToEdit(null)
                         isEditingMode = true
                     },
                     onOpenNote = { note ->
+                        editorSessionKey++
                         onSelectNoteToEdit(note)
                         isEditingMode = true
                     },
@@ -205,7 +225,7 @@ private fun NotesListView(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = "Cerrar",
+                    contentDescription = StringsLocale.get("cancel", interfaceLanguage),
                     tint = appColors.textSecondary
                 )
             }
@@ -266,7 +286,7 @@ private fun NotesListView(
                         text = StringsLocale.get("no_notes_sheet", interfaceLanguage),
                         style = MaterialTheme.typography.bodyMedium,
                         color = appColors.textSecondary,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -274,7 +294,7 @@ private fun NotesListView(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(380.dp),
+                    .heightIn(min = 180.dp, max = 460.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(notes, key = { it.id }) { note ->
@@ -287,7 +307,7 @@ private fun NotesListView(
                         colors = CardDefaults.cardColors(
                             containerColor = appColors.cardBg
                         ),
-                        border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
+                        border = if (appColors.isDark || appColors.background != appColors.cardBg) BorderStroke(1.dp, appColors.border) else null,
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column(
@@ -298,26 +318,18 @@ private fun NotesListView(
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top
                             ) {
-                                if (note.biblicalReference.isNotBlank()) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = appColors.primaryContainer
-                                    ) {
-                                        Text(
-                                            text = note.biblicalReference,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = appColors.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                                            maxLines = 1
-                                        )
-                                    }
-                                } else {
-                                    Spacer(modifier = Modifier.width(1.dp))
-                                }
-
+                                Text(
+                                    text = note.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = appColors.titleColor,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = dateFormat.format(Date(note.timestamp)),
                                     style = MaterialTheme.typography.labelSmall,
@@ -326,27 +338,48 @@ private fun NotesListView(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            if (note.biblicalReference.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(appColors.primaryContainer.copy(alpha = if (appColors.isDark) 0.45f else 0.65f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = appColors.accent.copy(alpha = 0.25f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .drawBehind {
+                                            drawRect(
+                                                color = appColors.accent,
+                                                topLeft = Offset.Zero,
+                                                size = Size(3.5.dp.toPx(), size.height)
+                                            )
+                                        }
+                                        .padding(start = 13.dp, end = 10.dp, top = 8.dp, bottom = 8.dp)
+                                        .testTag("note_item_reference_${note.id}")
+                                ) {
+                                    Text(
+                                        text = note.biblicalReference,
+                                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                                        fontWeight = FontWeight.Medium,
+                                        color = appColors.onPrimaryContainer
+                                    )
+                                }
+                            }
 
-                            Text(
-                                text = note.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = note.content.ifBlank { "Sin contenido adicional." },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 18.sp
-                            )
+                            if (note.content.isNotBlank() || note.biblicalReference.isBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = note.content.ifBlank { StringsLocale.get("no_additional_content", interfaceLanguage) },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = appColors.textSecondary,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 18.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -361,23 +394,38 @@ private fun NotesListView(
 @Composable
 private fun NoteEditorView(
     note: UserNote?,
+    sessionKey: Int,
+    selectedVerses: List<BibleVerse>,
     interfaceLanguage: String,
     onSave: (title: String, content: String, reference: String, id: Long) -> Unit,
     onDelete: (id: Long) -> Unit,
     onBack: () -> Unit
 ) {
     val appColors = AppTheme.colors
-    var title by remember(note) { mutableStateOf(note?.title ?: "") }
-    var content by remember(note) { mutableStateOf(note?.content ?: "") }
-    val reference = remember(note) { note?.biblicalReference ?: "" }
+    var title by remember(note, sessionKey) { mutableStateOf(note?.title ?: "") }
+    var reference by remember(note, sessionKey) { mutableStateOf(note?.biblicalReference ?: "") }
+    var content by remember(note, sessionKey) { mutableStateOf(note?.content ?: "") }
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = appColors.accent,
+        unfocusedBorderColor = appColors.border,
+        focusedContainerColor = appColors.cardBg,
+        unfocusedContainerColor = appColors.cardBg,
+        focusedTextColor = appColors.textPrimary,
+        unfocusedTextColor = appColors.textPrimary,
+        focusedLabelColor = appColors.accent,
+        unfocusedLabelColor = appColors.textSecondary
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 8.dp)
             .testTag("note_editor_view")
     ) {
-        // Cabecera limpia: Solo flecha de regreso y título (sin badge "Juan 1:1" a la derecha)
+        // Cabecera limpia: Solo flecha de regreso y título (sin referencia automática)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -388,7 +436,7 @@ private fun NoteEditorView(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Volver",
+                    contentDescription = StringsLocale.get("tutorial_previous", interfaceLanguage),
                     tint = appColors.titleColor
                 )
             }
@@ -404,46 +452,104 @@ private fun NoteEditorView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Campo: Título de la nota
+        // Campo 1: Título
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("note_title_input"),
+            label = { Text(StringsLocale.get("note_title_label", interfaceLanguage)) },
             placeholder = { Text(StringsLocale.get("note_title_placeholder", interfaceLanguage)) },
             singleLine = true,
-            shape = CircleShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = appColors.accent,
-                unfocusedBorderColor = appColors.border,
-                focusedContainerColor = appColors.cardBg,
-                unfocusedContainerColor = appColors.cardBg,
-                focusedTextColor = appColors.textPrimary,
-                unfocusedTextColor = appColors.textPrimary
-            )
+            shape = RoundedCornerShape(14.dp),
+            colors = fieldColors
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Campo: Cuerpo de la nota ampliado (permite copiar y pegar libremente)
+        // Campo 2: Texto bíblico o referencia (opcional) — siempre inicia vacío en notas nuevas
+        OutlinedTextField(
+            value = reference,
+            onValueChange = { reference = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("note_reference_input"),
+            label = { Text(StringsLocale.get("note_reference_label", interfaceLanguage)) },
+            placeholder = { Text(StringsLocale.get("note_reference_placeholder", interfaceLanguage)) },
+            trailingIcon = if (reference.isNotEmpty()) {
+                {
+                    IconButton(onClick = { reference = "" }) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = StringsLocale.get("clear", interfaceLanguage),
+                            tint = appColors.textSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            } else null,
+            singleLine = false,
+            minLines = 2,
+            maxLines = 6,
+            shape = RoundedCornerShape(14.dp),
+            colors = fieldColors
+        )
+
+        // Chip opcional visible únicamente si hay versículos seleccionados activamente en el lector
+        if (selectedVerses.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            AssistChip(
+                onClick = {
+                    val formatted = BibleBooksData.buildFormattedPassageText(selectedVerses)
+                    if (formatted.isNotBlank()) {
+                        reference = formatted
+                    }
+                },
+                label = {
+                    Text(
+                        text = StringsLocale.get("insert_selected_verses", interfaceLanguage),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.FormatQuote,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                shape = CircleShape,
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = appColors.primaryContainer.copy(alpha = 0.75f),
+                    labelColor = appColors.onPrimaryContainer,
+                    leadingIconContentColor = appColors.onPrimaryContainer
+                ),
+                border = AssistChipDefaults.assistChipBorder(
+                    enabled = true,
+                    borderColor = appColors.accent.copy(alpha = 0.35f)
+                ),
+                modifier = Modifier.testTag("insert_selected_verses_button")
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Campo 3: Nota (apuntes y reflexiones principales)
         OutlinedTextField(
             value = content,
             onValueChange = { content = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
+                .heightIn(min = 160.dp, max = 240.dp)
                 .testTag("note_content_input"),
+            label = { Text(StringsLocale.get("note_content_label", interfaceLanguage)) },
             placeholder = { Text(StringsLocale.get("note_content_placeholder", interfaceLanguage)) },
+            singleLine = false,
+            minLines = 5,
             shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = appColors.accent,
-                unfocusedBorderColor = appColors.border,
-                focusedContainerColor = appColors.cardBg,
-                unfocusedContainerColor = appColors.cardBg,
-                focusedTextColor = appColors.textPrimary,
-                unfocusedTextColor = appColors.textPrimary
-            )
+            colors = fieldColors
         )
 
         Spacer(modifier = Modifier.height(18.dp))
@@ -456,7 +562,7 @@ private fun NoteEditorView(
         ) {
             Button(
                 onClick = {
-                    onSave(title, content, reference, note?.id ?: 0L)
+                    onSave(title, content, reference.trim(), note?.id ?: 0L)
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -469,7 +575,7 @@ private fun NoteEditorView(
                 )
             ) {
                 Text(
-                    text = "Guardar",
+                    text = StringsLocale.get("save_note", interfaceLanguage),
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
@@ -487,7 +593,7 @@ private fun NoteEditorView(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = Color(0xFFDC2626)
                     ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626))
+                    border = BorderStroke(1.dp, Color(0xFFDC2626))
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Delete,

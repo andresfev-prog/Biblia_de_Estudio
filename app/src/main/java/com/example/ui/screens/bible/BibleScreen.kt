@@ -444,6 +444,10 @@ fun BibleScreen(
             }
         }
 
+        LaunchedEffect(selectedVerseObjects) {
+            viewModel.setSelectedVerses(selectedVerseObjects)
+        }
+
         val allSelectedAreFavorites = remember(selectedVerseObjects, uiState.favoriteKeys) {
             selectedVerseObjects.isNotEmpty() &&
                 selectedVerseObjects.all { viewModel.isFavorite(it, uiState.favoriteKeys) }
@@ -479,7 +483,7 @@ fun BibleScreen(
                     }
                 },
                 onCopy = {
-                    val formattedPassage = buildFormattedPassageText(
+                    val formattedPassage = BibleBooksData.buildFormattedPassageText(
                         verses = selectedVerseObjects,
                         fallbackBookName = activeBookRaw,
                         fallbackChapter = activeChapterNum,
@@ -500,7 +504,7 @@ fun BibleScreen(
                     selectedIsRightPane = false
                 },
                 onShare = {
-                    val formattedPassage = buildFormattedPassageText(
+                    val formattedPassage = BibleBooksData.buildFormattedPassageText(
                         verses = selectedVerseObjects,
                         fallbackBookName = activeBookRaw,
                         fallbackChapter = activeChapterNum,
@@ -579,6 +583,7 @@ fun BibleScreen(
             NotesBottomSheet(
                 notes = uiState.notes,
                 editingNote = uiState.editingNote,
+                selectedVerses = uiState.selectedVerses,
                 interfaceLanguage = lang,
                 onSaveNote = { title, content, ref, id ->
                     viewModel.saveNote(title, content, ref, id)
@@ -2037,59 +2042,5 @@ private fun SelectionPillActionButton(
             maxLines = 1,
             softWrap = false
         )
-    }
-}
-
-private fun formatVerseRanges(sortedVerses: List<Int>): String {
-    if (sortedVerses.isEmpty()) return ""
-    val ranges = mutableListOf<String>()
-    var start = sortedVerses.first()
-    var end = start
-    for (i in 1 until sortedVerses.size) {
-        val current = sortedVerses[i]
-        if (current == end + 1) {
-            end = current
-        } else {
-            ranges.add(if (start == end) "$start" else "$start-$end")
-            start = current
-            end = current
-        }
-    }
-    ranges.add(if (start == end) "$start" else "$start-$end")
-    return ranges.joinToString(", ")
-}
-
-private fun buildFormattedPassageText(
-    verses: List<BibleVerse>,
-    fallbackBookName: String,
-    fallbackChapter: Int,
-    versionTag: String
-): String {
-    if (verses.isEmpty()) return ""
-    val sorted = verses.sortedBy { it.verse }
-    val first = sorted.first()
-    val rawBook = first.bookName.ifBlank { fallbackBookName }
-    val chapterNum = if (first.chapter > 0) first.chapter else fallbackChapter
-    val effectiveVersion = BibleBooksData.normalizeVersionId(
-        first.version.ifBlank { versionTag }
-    ).ifBlank { versionTag }
-    val isEnglish = BibleBooksData.isEnglishVersion(effectiveVersion)
-    val localizedBook = BibleBooksData.getLocalizedBookName(
-        bookName = rawBook,
-        isEnglish = isEnglish,
-        bookNumber = first.bookNumber
-    )
-    val rangeLabel = formatVerseRanges(sorted.map { it.verse }.distinct())
-    val header = "$localizedBook $chapterNum:$rangeLabel ($effectiveVersion)"
-
-    return if (sorted.size == 1) {
-        val cleanText = BibleBooksData.cleanVerseTextForFavorites(first.text)
-        "$header\n$cleanText"
-    } else {
-        val body = sorted.joinToString("\n") { verse ->
-            val cleanText = BibleBooksData.cleanVerseTextForFavorites(verse.text)
-            "${verse.verse} $cleanText"
-        }
-        "$header\n$body"
     }
 }

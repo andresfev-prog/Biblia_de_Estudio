@@ -66,6 +66,7 @@ data class BibleUiState(
     val isParallelLinked: Boolean = true,
     val verses: List<BibleVerse> = emptyList(),
     val parallelVerses: List<BibleVerse> = emptyList(),
+    val selectedVerses: List<BibleVerse> = emptyList(),
     val highlightedVerse: Int? = null,
     // Comentarios
     val versesWithComments: Set<Int> = emptySet(),
@@ -316,14 +317,24 @@ class BibleViewModel(
         loadChapter("Juan", 1, "RVR1960", "KJV")
     }
 
+    fun setSelectedVerses(verses: List<BibleVerse>) {
+        if (_uiState.value.selectedVerses != verses) {
+            _uiState.value = _uiState.value.copy(selectedVerses = verses)
+        }
+    }
+
     fun navigateTo(destination: AppDestination) {
-        _uiState.value = _uiState.value.copy(currentDestination = destination)
+        _uiState.value = _uiState.value.copy(
+            currentDestination = destination,
+            selectedVerses = if (destination == AppDestination.BIBLE) _uiState.value.selectedVerses else emptyList()
+        )
     }
 
     fun startTutorial() {
         _uiState.value = _uiState.value.copy(
             activeTutorialStep = TutorialStep.HOME_VERSE_OF_DAY,
             currentDestination = AppDestination.HOME,
+            selectedVerses = emptyList(),
             isBottomBarVisible = true,
             isPassagePickerVisible = false,
             isNotesSheetOpen = false,
@@ -342,6 +353,7 @@ class BibleViewModel(
             _uiState.value = _uiState.value.copy(
                 activeTutorialStep = next,
                 currentDestination = next.destination,
+                selectedVerses = emptyList(),
                 isBottomBarVisible = true,
                 isPassagePickerVisible = false,
                 isNotesSheetOpen = false,
@@ -361,6 +373,7 @@ class BibleViewModel(
             _uiState.value = _uiState.value.copy(
                 activeTutorialStep = prev,
                 currentDestination = prev.destination,
+                selectedVerses = emptyList(),
                 isBottomBarVisible = true,
                 isPassagePickerVisible = false,
                 isNotesSheetOpen = false,
@@ -382,7 +395,7 @@ class BibleViewModel(
         parallelVersion: String = _uiState.value.parallelVersion
     ) {
         hasSpokenChapterIntro = false
-        _uiState.value = _uiState.value.copy(ttsVerseIndex = 0)
+        _uiState.value = _uiState.value.copy(ttsVerseIndex = 0, selectedVerses = emptyList())
 
         // 1. Cargar versículos del panel principal
         viewModelScope.launch {
@@ -1547,7 +1560,6 @@ class BibleViewModel(
 
     fun saveNote(title: String, content: String, reference: String, noteId: Long = 0) {
         val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
-        val defaultRef = "${_uiState.value.currentBook} ${_uiState.value.currentChapter}:${_uiState.value.highlightedVerse ?: _uiState.value.currentVerse}"
         val uid = _uiState.value.googleUid
         viewModelScope.launch {
             val savedNote = withContext(Dispatchers.IO) {
@@ -1556,9 +1568,9 @@ class BibleViewModel(
                 } else null
                 val note = UserNote(
                     id = noteId,
-                    title = title.ifBlank { if (isEn) "Study Note" else "Nota de Estudio" },
+                    title = title.trim().ifBlank { if (isEn) "Study Note" else "Nota de Estudio" },
                     content = content,
-                    biblicalReference = reference.ifBlank { defaultRef },
+                    biblicalReference = reference.trim(),
                     timestamp = System.currentTimeMillis(),
                     cloudId = existingCloudId ?: UUID.randomUUID().toString()
                 )

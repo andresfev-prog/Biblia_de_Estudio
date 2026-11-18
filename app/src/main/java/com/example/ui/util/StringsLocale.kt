@@ -145,8 +145,14 @@ object StringsLocale {
             "btn_new_note" -> if (isEn) "+ New note" else "+ Nueva nota"
             "create_note" -> if (isEn) "+ Create note" else "+ Crear nota"
             "edit_note" -> if (isEn) "Edit note" else "Editar nota"
+            "note_title_label" -> if (isEn) "Title" else "Título"
             "note_title_placeholder" -> if (isEn) "Title (e.g., Reflection, Promise...)" else "Título (ej. Reflexión, Promesa...)"
+            "note_reference_label" -> if (isEn) "Biblical text or reference (optional)" else "Texto bíblico o referencia (opcional)"
+            "note_reference_placeholder" -> if (isEn) "e.g., Exodus 1:5 or paste copied verses..." else "Ej. Éxodo 1:5 o pega versículos copiados..."
+            "note_content_label" -> if (isEn) "Note" else "Nota"
             "note_content_placeholder" -> if (isEn) "Write your thoughts and biblical reflection here..." else "Escribe tus reflexiones y notas bíblicas aquí..."
+            "insert_selected_verses" -> if (isEn) "Insert selected verses" else "Insertar versículos seleccionados"
+            "no_additional_content" -> if (isEn) "No additional content." else "Sin contenido adicional."
             "paste_verse" -> if (isEn) "Paste verse" else "Pegar versículo"
             "paste_commentary" -> if (isEn) "Paste commentary" else "Pegar comentario"
             "paste_definition" -> if (isEn) "Paste definition" else "Pegar definición"
@@ -182,7 +188,7 @@ object StringsLocale {
 
             // Step 2: HOME_CONTINUE_NOTES
             "tutorial_step2_title" -> if (isEn) "Recent Reading & Notes" else "Lectura reciente y Notas"
-            "tutorial_step2_desc" -> if (isEn) "Resume reading right where you left off and access your personal Bible study notes." else "Retoma tu lectura exactamente en el último capítulo abierto y accede a tus notas personales de estudio bíblico."
+            "tutorial_step2_desc" -> if (isEn) "Create your notes with three fields: Title, Biblical text or reference (optional), and Note. No verse is attached automatically: you can leave the second field blank, type just the reference (e.g., Exodus 1:5), or paste full verses you have copied." else "Crea tus notas con tres campos: Título, Texto bíblico o referencia (opcional) y Nota. Ningún versículo se añade automáticamente: puedes dejar el segundo campo en blanco, escribir solo la cita (ej. Éxodo 1:5) o pegar los versículos completos que hayas copiado."
 
             // Step 3: BIBLE_TOP_CONTROLS
             "tutorial_step3_title" -> if (isEn) "Navigation & Versions" else "Navegación y Versiones"
@@ -202,7 +208,7 @@ object StringsLocale {
 
             // Step 7: SETTINGS_PROFILE
             "tutorial_step7_title" -> if (isEn) "Profile & Cloud Backup" else "Tu Perfil y Respaldo"
-            "tutorial_step7_desc" -> if (isEn) "Customize your name or sign in with Google to back up your notes and favorites in the cloud and keep them across any device." else "Personaliza tu nombre o inicia sesión con Google para respaldar tus notas y favoritos en la nube y conservarlos en cualquier dispositivo."
+            "tutorial_step7_desc" -> if (isEn) "Link your Google account to back up your notes and favorites in the cloud and restore them if you switch phones, lose your device, or reinstall the app. If you prefer not to use Google, enter a local name just for the home greeting, keeping in mind that without a linked account you will have no backup if you uninstall the app or lose your device." else "Vincula tu cuenta de Google para respaldar tus notas y favoritos en la nube y recuperarlos si cambias de teléfono, lo pierdes o reinstalas la app. Si prefieres no usar Google, escribe un nombre local solo para el saludo inicial, pero ten en cuenta que sin cuenta vinculada no tendrás copia de seguridad si desinstalas la app o pierdes el dispositivo."
 
             // Step 8: SETTINGS_FAVORITES
             "tutorial_step8_title" -> if (isEn) "Your Favorites" else "Tus Favoritos"

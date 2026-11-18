@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -241,7 +244,7 @@ fun TutorialOverlay(
                 // Ubica el globo debajo del recorte
                 val rawTopDp = with(density) { (targetRect.bottom + marginPx).toDp() } + 14.dp
                 val minTop = statusBarInset + 8.dp
-                val maxTop = (screenHeightDp - navBarInset - 240.dp).coerceAtLeast(minTop)
+                val maxTop = (screenHeightDp - navBarInset - 310.dp).coerceAtLeast(minTop)
                 val topPadding = rawTopDp.coerceIn(minTop, maxTop)
 
                 cardAlignment = Alignment.TopCenter
@@ -251,7 +254,7 @@ fun TutorialOverlay(
                 // Ubica el globo encima del recorte
                 val rawBottomDp = with(density) { (screenHeightPx - targetRect.top + marginPx).toDp() } + 14.dp
                 val minBottom = navBarInset + 8.dp
-                val maxBottom = (screenHeightDp - statusBarInset - 240.dp).coerceAtLeast(minBottom)
+                val maxBottom = (screenHeightDp - statusBarInset - 310.dp).coerceAtLeast(minBottom)
                 val bottomPadding = rawBottomDp.coerceIn(minBottom, maxBottom)
 
                 cardAlignment = Alignment.BottomCenter
@@ -262,6 +265,8 @@ fun TutorialOverlay(
             cardAlignment = Alignment.Center
             cardModifier = Modifier.padding(horizontal = 16.dp)
         }
+
+        val maxTooltipHeight = (screenHeightDp - statusBarInset - navBarInset - 24.dp).coerceAtLeast(220.dp)
 
         Box(
             modifier = Modifier
@@ -282,11 +287,13 @@ fun TutorialOverlay(
                     tonalElevation = 2.dp,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = maxTooltipHeight)
                         .testTag("tutorial_tooltip_card")
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                             .padding(20.dp)
                     ) {
                         // Encabezado con píldora indicadora y botón Omitir
@@ -336,7 +343,7 @@ fun TutorialOverlay(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Descripción clara (13.5.sp, máx 3-4 líneas)
+                        // Descripción clara y legible adaptada al contenido de cada paso
                         Text(
                             text = StringsLocale.get(step.descKey, interfaceLanguage),
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp, lineHeight = 19.sp),
