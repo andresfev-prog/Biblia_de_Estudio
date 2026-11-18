@@ -8,11 +8,8 @@ import androidx.room.PrimaryKey
 data class UserPreference(
     @PrimaryKey
     val id: Int = 1,
-    val userName: String = "Andrés Felipe",
-    val email: String = "andresfev@gmail.com",
-    val location: String = "Cali, Colombia",
-    val usernameHandle: String = "andresfev",
-    val password: String = "123456",
+    val userName: String = "",
+    val email: String = "",
     val interfaceLanguage: String = "Español",
     val themeMode: String = "AUTO", // "LIGHT", "DARK", "AUTO"
     @ColumnInfo(defaultValue = "'CRISP_LIGHT'")

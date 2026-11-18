@@ -152,27 +152,44 @@ fun HomeScreen(
             .testTag("home_screen")
     ) {
         // Greeting Header
+        val effectiveDisplayName = remember(uiState.googleDisplayName, uiState.userPreferences.userName) {
+            uiState.googleDisplayName.trim().ifBlank {
+                uiState.userPreferences.userName.trim()
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
         ) {
-            Text(
-                text = "$greeting,",
-                style = MaterialTheme.typography.titleLarge,
-                color = appColors.textSecondary,
-                maxLines = 1,
-                softWrap = false
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = uiState.userPreferences.userName,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = appColors.titleColor,
-                maxLines = 1,
-                softWrap = false
-            )
+            if (effectiveDisplayName.isNotBlank()) {
+                Text(
+                    text = "$greeting,",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = appColors.textSecondary,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = effectiveDisplayName,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = appColors.titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = appColors.titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = StringsLocale.get("home_subtitle", lang),

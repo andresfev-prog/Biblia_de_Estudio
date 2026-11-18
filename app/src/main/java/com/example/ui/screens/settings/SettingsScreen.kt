@@ -24,35 +24,32 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SettingsBrightness
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,13 +59,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.repository.SyncStatus
 import com.example.ui.components.TutorialStep
 import com.example.ui.components.tutorialTarget
 import com.example.ui.screens.favorites.FavoritesDialog
@@ -84,19 +85,23 @@ fun SettingsScreen(
     viewModel: BibleViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
 
     // Auto-scroll para el tutorial en vivo
     LaunchedEffect(uiState.activeTutorialStep) {
         when (uiState.activeTutorialStep) {
-            TutorialStep.SETTINGS_FAVORITES -> {
+            TutorialStep.SETTINGS_PROFILE -> {
                 scrollState.animateScrollTo(0)
             }
+            TutorialStep.SETTINGS_FAVORITES -> {
+                scrollState.animateScrollTo(180)
+            }
             TutorialStep.SETTINGS_THEMES -> {
-                scrollState.animateScrollTo(380)
+                scrollState.animateScrollTo(420)
             }
             TutorialStep.SETTINGS_TYPOGRAPHY -> {
-                scrollState.animateScrollTo(720)
+                scrollState.animateScrollTo(740)
             }
             else -> {}
         }
@@ -127,15 +132,22 @@ fun SettingsScreen(
 
     val currentLanguageDisplay = if (isEn) "English" else "Español"
 
-    // Dynamic initials from user name
-    val initials = remember(uiState.userPreferences.userName) {
-        val parts = uiState.userPreferences.userName.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }
-        if (parts.size >= 2) {
-            "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
-        } else if (parts.isNotEmpty()) {
-            parts[0].take(2).uppercase()
+    val isGoogleLinked = uiState.googleUid != null
+    val activeProfileName = remember(uiState.googleDisplayName, uiState.userPreferences.userName, isGoogleLinked) {
+        if (isGoogleLinked) {
+            uiState.googleDisplayName.trim().ifBlank { uiState.userPreferences.userName.trim() }
         } else {
-            "AF"
+            uiState.userPreferences.userName.trim()
+        }
+    }
+
+    // Dynamic initials from active profile name (empty if Guest)
+    val initials = remember(activeProfileName) {
+        val parts = activeProfileName.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        when {
+            parts.size >= 2 -> "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+            parts.isNotEmpty() -> parts[0].take(2).uppercase()
+            else -> ""
         }
     }
 
@@ -170,12 +182,13 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 1. User Profile Card (Interactive, opens Edit Profile dialog)
+        // 1. User Profile & Cloud Backup Card (Linked / Local / Guest)
         Card(
             onClick = { viewModel.showEditProfileDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("user_profile_card"),
+                .testTag("user_profile_card")
+                .tutorialTarget(TutorialStep.SETTINGS_PROFILE),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -187,64 +200,146 @@ fun SettingsScreen(
                     .padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar with dynamic Initials
+                // Avatar con iniciales dinámicas o ícono de invitado
                 Box(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(appColors.pillBg),
+                        .background(if (initials.isNotBlank()) appColors.pillBg else appColors.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = initials,
-                        color = appColors.pillText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
+                    if (initials.isNotBlank()) {
+                        Text(
+                            text = initials,
+                            color = appColors.pillText,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = appColors.accent,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = uiState.userPreferences.userName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.titleColor,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Text(
-                        text = "@${uiState.userPreferences.usernameHandle}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = appColors.textSecondary,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.LocationOn,
-                            contentDescription = null,
-                            tint = appColors.accent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = uiState.userPreferences.location,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = appColors.accent,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                    when {
+                        isGoogleLinked -> {
+                            Text(
+                                text = activeProfileName.ifBlank { uiState.googleEmail },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.titleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (uiState.googleEmail.isNotBlank()) {
+                                Text(
+                                    text = uiState.googleEmail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = appColors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val syncedGreen = if (appColors.isDark) Color(0xFF34D399) else Color(0xFF16A34A)
+                            val (statusColor, statusLabel) = when (uiState.syncStatus) {
+                                SyncStatus.SYNCING -> appColors.accent to StringsLocale.get("profile_cloud_syncing", lang)
+                                SyncStatus.ERROR -> MaterialTheme.colorScheme.error to StringsLocale.get("profile_cloud_error", lang)
+                                SyncStatus.SYNCED, SyncStatus.IDLE -> syncedGreen to StringsLocale.get("profile_cloud_active", lang)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                when (uiState.syncStatus) {
+                                    SyncStatus.SYNCING -> CircularProgressIndicator(
+                                        modifier = Modifier.size(13.dp),
+                                        strokeWidth = 1.8.dp,
+                                        color = statusColor
+                                    )
+                                    SyncStatus.ERROR -> Icon(
+                                        imageVector = Icons.Outlined.CloudOff,
+                                        contentDescription = null,
+                                        tint = statusColor,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    SyncStatus.SYNCED, SyncStatus.IDLE -> Icon(
+                                        imageVector = Icons.Filled.CloudDone,
+                                        contentDescription = null,
+                                        tint = statusColor,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = statusLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = statusColor,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        activeProfileName.isNotBlank() -> {
+                            Text(
+                                text = activeProfileName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.titleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CloudOff,
+                                    contentDescription = null,
+                                    tint = appColors.textSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = StringsLocale.get("profile_local_subtitle", lang),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = appColors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        else -> {
+                            Text(
+                                text = StringsLocale.get("profile_guest_name", lang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.titleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = StringsLocale.get("profile_guest_subtitle", lang),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = appColors.textSecondary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
 
-                // Edit Profile Icon Button
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Profile & Backup Icon Button
                 IconButton(
                     onClick = { viewModel.showEditProfileDialog(true) },
                     modifier = Modifier
@@ -255,7 +350,7 @@ fun SettingsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Edit,
-                        contentDescription = StringsLocale.get("edit_profile", lang),
+                        contentDescription = StringsLocale.get("profile_backup_title", lang),
                         tint = appColors.accent,
                         modifier = Modifier.size(20.dp)
                     )
@@ -898,40 +993,6 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // =========================================================================
-        // BOTÓN CERRAR SESIÓN (Sin botones redundantes intermedios)
-        // =========================================================================
-        OutlinedButton(
-            onClick = {
-                viewModel.showLogoutDialog(true)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .testTag("logout_button"),
-            shape = CircleShape,
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.error
-            ),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Logout,
-                contentDescription = StringsLocale.get("logout", lang),
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = StringsLocale.get("logout", lang),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false
-            )
-        }
-
         // Favorites Dialog
         if (uiState.showFavoritesDialog) {
             FavoritesDialog(
@@ -941,77 +1002,15 @@ fun SettingsScreen(
             )
         }
 
-        // Logout Confirmation Dialog
-        if (uiState.showLogoutDialog) {
-            AlertDialog(
-                onDismissRequest = { viewModel.showLogoutDialog(false) },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Filled.ExitToApp,
-                        contentDescription = null,
-                        tint = appColors.accent
-                    )
-                },
-                title = {
-                    Text(
-                        text = StringsLocale.get("logout_confirm_title", lang),
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.titleColor,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                },
-                text = {
-                    Text(
-                        text = StringsLocale.get("logout_confirm_desc", lang),
-                        color = appColors.textPrimary
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { viewModel.confirmLogout() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.pillBg,
-                            contentColor = appColors.pillText
-                        ),
-                        shape = CircleShape,
-                        modifier = Modifier.testTag("confirm_logout_button")
-                    ) {
-                        Text(
-                            text = StringsLocale.get("logout", lang),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = { viewModel.showLogoutDialog(false) },
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, appColors.border),
-                        modifier = Modifier.testTag("cancel_logout_button")
-                    ) {
-                        Text(
-                            text = StringsLocale.get("cancel", lang),
-                            color = appColors.textPrimary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                },
-                containerColor = appColors.surface
-            )
-        }
-
-        // Edit Profile Modal Dialog
+        // Profile & Cloud Backup Modal Dialog
         if (uiState.showEditProfileDialog) {
-            EditProfileDialog(
-                userPreference = uiState.userPreferences,
+            ProfileBackupDialog(
+                uiState = uiState,
                 interfaceLanguage = lang,
-                onSave = { fullName, location, username, password ->
-                    viewModel.updateUserProfile(fullName, location, username, password)
-                },
+                onSaveLocalName = { name -> viewModel.updateLocalProfileName(name) },
+                onContinueWithGoogle = { viewModel.signInWithGoogle(context) },
+                onSyncNow = { viewModel.syncNow() },
+                onUnlinkAccount = { viewModel.unlinkGoogleAccount(context) },
                 onDismiss = { viewModel.showEditProfileDialog(false) }
             )
         }

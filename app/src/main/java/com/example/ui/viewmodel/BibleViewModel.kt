@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
@@ -23,6 +24,9 @@ import com.example.data.model.UserNote
 import com.example.data.model.UserPreference
 import com.example.data.repository.BibleAssetDatabaseHelper
 import com.example.data.repository.BibleRepository
+import com.example.data.repository.CloudSyncRepository
+import com.example.data.repository.SyncStatus
+import com.example.data.repository.UserCancelledSignInException
 import com.example.ui.components.TutorialStep
 import com.example.ui.util.DailyVerseCatalog
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +44,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.UUID
 import com.example.data.util.ModuleDownloader
 
 enum class AppDestination {
@@ -118,20 +123,27 @@ data class BibleUiState(
     val lastConsultedDictionary: DictionaryEntry? = null,
     // UI general
     val isBottomBarVisible: Boolean = true,
-    val showLogoutDialog: Boolean = false,
     val showFavoritesDialog: Boolean = false,
     val showEditProfileDialog: Boolean = false,
     val toastMessage: String? = null,
-    val activeTutorialStep: TutorialStep? = null
+    val activeTutorialStep: TutorialStep? = null,
+    // Perfil de Google y respaldo en la nube
+    val googleUid: String? = null,
+    val googleDisplayName: String = "",
+    val googleEmail: String = "",
+    val syncStatus: SyncStatus = SyncStatus.IDLE,
+    val isGoogleAuthInProgress: Boolean = false
 )
 
 class BibleViewModel(
     application: Application,
-    private val repository: BibleRepository
+    private val repository: BibleRepository,
+    private val cloudSyncRepository: CloudSyncRepository = CloudSyncRepository()
 ) : AndroidViewModel(application), TextToSpeech.OnInitListener {
 
     private val downloader = ModuleDownloader(application)
     private val favoriteMutex = Mutex()
+    private val syncMutex = Mutex()
 
 
     private val _uiState = MutableStateFlow(BibleUiState())
@@ -284,6 +296,23 @@ class BibleViewModel(
             }
         }
 
+        viewModelScope.launch {
+            cloudSyncRepository.syncStatus.collect { status ->
+                _uiState.value = _uiState.value.copy(syncStatus = status)
+            }
+        }
+
+        cloudSyncRepository.getCurrentUser()?.let { cloudUser ->
+            _uiState.value = _uiState.value.copy(
+                googleUid = cloudUser.uid,
+                googleDisplayName = cloudUser.displayName,
+                googleEmail = cloudUser.email
+            )
+            viewModelScope.launch {
+                syncWithCloudInternal(uid = cloudUser.uid, isUserInitiated = false, showToast = false)
+            }
+        }
+
         loadChapter("Juan", 1, "RVR1960", "KJV")
     }
 
@@ -302,8 +331,7 @@ class BibleViewModel(
             selectedDictionaryWord = null,
             selectedCrossReferenceVerse = null,
             showFavoritesDialog = false,
-            showEditProfileDialog = false,
-            showLogoutDialog = false
+            showEditProfileDialog = false
         )
     }
 
@@ -860,9 +888,21 @@ class BibleViewModel(
 
     fun toggleFavorite(verse: BibleVerse) {
         viewModelScope.launch {
-            val nowAdded = favoriteMutex.withLock {
+            val (addedFavorite, removedKey) = favoriteMutex.withLock {
                 withContext(Dispatchers.IO) {
-                    repository.toggleFavorite(verse)
+                    repository.toggleFavoriteReturningChange(verse)
+                }
+            }
+            val nowAdded = addedFavorite != null
+
+            val uid = _uiState.value.googleUid
+            if (uid != null) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    if (addedFavorite != null) {
+                        cloudSyncRepository.pushFavorite(uid, addedFavorite, repository.buildFavoriteKey(addedFavorite))
+                    } else if (removedKey != null) {
+                        cloudSyncRepository.deleteFavorite(uid, removedKey)
+                    }
                 }
             }
 
@@ -881,12 +921,21 @@ class BibleViewModel(
     fun addFavorites(verses: List<BibleVerse>) {
         if (verses.isEmpty()) return
         viewModelScope.launch {
-            val addedCount = favoriteMutex.withLock {
+            val inserted = favoriteMutex.withLock {
                 withContext(Dispatchers.IO) {
-                    repository.addFavorites(verses)
+                    repository.addFavoritesReturningInserted(verses)
                 }
             }
+            val addedCount = inserted.size
             if (addedCount > 0) {
+                val uid = _uiState.value.googleUid
+                if (uid != null) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val payload = inserted.map { fav -> repository.buildFavoriteKey(fav) to fav }
+                        cloudSyncRepository.pushFavorites(uid, payload)
+                    }
+                }
+
                 val lang = _uiState.value.userPreferences.interfaceLanguage
                 val isEn = lang.contains("English", ignoreCase = true)
                 _uiState.value = _uiState.value.copy(
@@ -905,12 +954,20 @@ class BibleViewModel(
     fun removeFavorites(verses: List<BibleVerse>) {
         if (verses.isEmpty()) return
         viewModelScope.launch {
-            val removedCount = favoriteMutex.withLock {
+            val removedKeys = favoriteMutex.withLock {
                 withContext(Dispatchers.IO) {
-                    repository.removeFavorites(verses)
+                    repository.removeFavoritesReturningKeys(verses)
                 }
             }
+            val removedCount = removedKeys.size
             if (removedCount > 0) {
+                val uid = _uiState.value.googleUid
+                if (uid != null) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        cloudSyncRepository.deleteFavorites(uid, removedKeys)
+                    }
+                }
+
                 val lang = _uiState.value.userPreferences.interfaceLanguage
                 val isEn = lang.contains("English", ignoreCase = true)
                 _uiState.value = _uiState.value.copy(
@@ -928,11 +985,19 @@ class BibleViewModel(
 
     fun removeFavorite(fav: FavoriteVerse) {
         viewModelScope.launch {
+            val favKey = repository.buildFavoriteKey(fav)
             favoriteMutex.withLock {
                 withContext(Dispatchers.IO) {
                     repository.removeFavorite(fav)
                 }
             }
+            val uid = _uiState.value.googleUid
+            if (uid != null) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    cloudSyncRepository.deleteFavorite(uid, favKey)
+                }
+            }
+
             val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
             _uiState.value = _uiState.value.copy(
                 toastMessage = if (isEn) "Removed from favorites" else "Eliminado de favoritos"
@@ -1294,30 +1359,159 @@ class BibleViewModel(
         _uiState.value = _uiState.value.copy(showEditProfileDialog = show)
     }
 
-    fun updateUserProfile(fullName: String, location: String, username: String, password: String) {
+    fun updateLocalProfileName(name: String) {
         val current = _uiState.value.userPreferences
-        val updated = current.copy(
-            userName = fullName.trim(),
-            location = location.trim(),
-            usernameHandle = username.trim().removePrefix("@"),
-            password = password
-        )
+        val updated = current.copy(userName = name.trim())
+        val isEn = current.interfaceLanguage.contains("English", ignoreCase = true)
         _uiState.value = _uiState.value.copy(
             userPreferences = updated,
-            showEditProfileDialog = false
+            showEditProfileDialog = false,
+            toastMessage = if (isEn) "Profile updated" else "Perfil actualizado"
         )
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }
 
-    fun showLogoutDialog(show: Boolean) {
-        _uiState.value = _uiState.value.copy(showLogoutDialog = show)
+    fun signInWithGoogle(activityContext: Context) {
+        if (_uiState.value.isGoogleAuthInProgress) return
+        _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = true)
+
+        viewModelScope.launch {
+            val signInResult = cloudSyncRepository.signInWithGoogle(activityContext)
+            val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+
+            signInResult.fold(
+                onSuccess = { cloudUser ->
+                    _uiState.value = _uiState.value.copy(
+                        googleUid = cloudUser.uid,
+                        googleDisplayName = cloudUser.displayName,
+                        googleEmail = cloudUser.email,
+                        isGoogleAuthInProgress = false
+                    )
+                    val mergeResult = syncWithCloudInternal(
+                        uid = cloudUser.uid,
+                        isUserInitiated = true,
+                        showToast = false
+                    )
+                    val syncedOk = mergeResult.isSuccess
+                    _uiState.value = _uiState.value.copy(
+                        toastMessage = if (syncedOk) {
+                            if (isEn) "Google account linked & backup synced" else "Cuenta de Google vinculada y respaldo sincronizado"
+                        } else {
+                            if (isEn) "Google account linked" else "Cuenta de Google vinculada"
+                        }
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = false)
+                    if (error !is UserCancelledSignInException) {
+                        val detail = error.localizedMessage?.takeIf { it.isNotBlank() }
+                        val msg = if (isEn) {
+                            if (detail != null) "Could not sign in with Google: $detail" else "Could not sign in with Google"
+                        } else {
+                            if (detail != null) "No se pudo iniciar sesión con Google: $detail" else "No se pudo iniciar sesión con Google"
+                        }
+                        _uiState.value = _uiState.value.copy(toastMessage = msg)
+                    }
+                }
+            )
+        }
     }
 
-    fun confirmLogout() {
+    fun syncNow() {
+        val uid = _uiState.value.googleUid ?: return
+        viewModelScope.launch {
+            syncWithCloudInternal(uid = uid, isUserInitiated = true, showToast = true)
+        }
+    }
+
+    fun unlinkGoogleAccount(context: Context) {
         val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
-        _uiState.value = _uiState.value.copy(
-            showLogoutDialog = false,
-            toastMessage = if (isEn) "Logged out successfully" else "Sesión cerrada correctamente"
+        viewModelScope.launch {
+            cloudSyncRepository.unlinkAccount(context)
+            _uiState.value = _uiState.value.copy(
+                googleUid = null,
+                googleDisplayName = "",
+                googleEmail = "",
+                syncStatus = SyncStatus.IDLE,
+                isGoogleAuthInProgress = false,
+                toastMessage = if (isEn) {
+                    "Account unlinked. Your local notes and favorites are preserved."
+                } else {
+                    "Cuenta desvinculada. Tus notas y favoritos locales se conservan."
+                }
+            )
+        }
+    }
+
+    private suspend fun syncWithCloudInternal(
+        uid: String,
+        isUserInitiated: Boolean,
+        showToast: Boolean
+    ): Result<Unit> = syncMutex.withLock {
+        val localFavorites = favoriteMutex.withLock {
+            withContext(Dispatchers.IO) { repository.getAllFavoritesOnce() }
+        }
+        val localNotes = withContext(Dispatchers.IO) { repository.getAllNotesOnce() }
+
+        val mergeResult = withContext(Dispatchers.IO) {
+            cloudSyncRepository.syncAndMerge(
+                uid = uid,
+                localFavorites = localFavorites,
+                localNotes = localNotes,
+                isUserInitiated = isUserInitiated
+            )
+        }
+
+        val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+
+        return mergeResult.fold(
+            onSuccess = { delta ->
+                if (delta.favoritesToInsert.isNotEmpty()) {
+                    favoriteMutex.withLock {
+                        withContext(Dispatchers.IO) {
+                            val currentKeys = repository.getAllFavoritesOnce()
+                                .map { repository.buildFavoriteKey(it) }
+                                .toSet()
+                            val missing = delta.favoritesToInsert.filter { fav ->
+                                repository.buildFavoriteKey(fav) !in currentKeys
+                            }
+                            if (missing.isNotEmpty()) {
+                                repository.insertFavorites(missing)
+                            }
+                        }
+                    }
+                }
+                if (delta.notesToUpsert.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        val existingNotes = repository.getAllNotesOnce()
+                        val existingCloudIds = existingNotes.map { it.cloudId }.toSet()
+                        val toUpsert = delta.notesToUpsert.filter { note ->
+                            note.id > 0L || note.cloudId !in existingCloudIds
+                        }
+                        if (toUpsert.isNotEmpty()) {
+                            repository.insertNotes(toUpsert)
+                        }
+                    }
+                }
+                if (showToast) {
+                    _uiState.value = _uiState.value.copy(
+                        toastMessage = if (isEn) "Cloud backup synced" else "Respaldo sincronizado"
+                    )
+                }
+                Result.success(Unit)
+            },
+            onFailure = { error ->
+                if (showToast) {
+                    _uiState.value = _uiState.value.copy(
+                        toastMessage = if (isEn) {
+                            "Could not sync right now. Check your connection."
+                        } else {
+                            "No se pudo sincronizar ahora. Verifica tu conexión."
+                        }
+                    )
+                }
+                Result.failure(error)
+            }
         )
     }
 
@@ -1354,30 +1548,58 @@ class BibleViewModel(
     fun saveNote(title: String, content: String, reference: String, noteId: Long = 0) {
         val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
         val defaultRef = "${_uiState.value.currentBook} ${_uiState.value.currentChapter}:${_uiState.value.highlightedVerse ?: _uiState.value.currentVerse}"
-        val note = UserNote(
-            id = noteId,
-            title = title.ifBlank { if (isEn) "Study Note" else "Nota de Estudio" },
-            content = content,
-            biblicalReference = reference.ifBlank { defaultRef },
-            timestamp = System.currentTimeMillis()
-        )
+        val uid = _uiState.value.googleUid
         viewModelScope.launch {
-            repository.saveNote(note)
+            val savedNote = withContext(Dispatchers.IO) {
+                val existingCloudId = if (noteId > 0L) {
+                    repository.getNoteByIdOnce(noteId)?.cloudId?.takeIf { it.isNotBlank() }
+                } else null
+                val note = UserNote(
+                    id = noteId,
+                    title = title.ifBlank { if (isEn) "Study Note" else "Nota de Estudio" },
+                    content = content,
+                    biblicalReference = reference.ifBlank { defaultRef },
+                    timestamp = System.currentTimeMillis(),
+                    cloudId = existingCloudId ?: UUID.randomUUID().toString()
+                )
+                val insertedId = repository.saveNote(note)
+                note.copy(id = if (noteId > 0L) noteId else insertedId)
+            }
+
             _uiState.value = _uiState.value.copy(
                 editingNote = null,
                 toastMessage = if (isEn) "Note saved successfully" else "Nota guardada correctamente"
             )
+
+            if (uid != null) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    cloudSyncRepository.pushNote(uid, savedNote)
+                }
+            }
         }
     }
 
     fun deleteNote(id: Long) {
         val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+        val uid = _uiState.value.googleUid
         viewModelScope.launch {
-            repository.deleteNote(id)
+            val existing = withContext(Dispatchers.IO) {
+                val target = repository.getNoteByIdOnce(id)
+                repository.deleteNote(id)
+                target
+            }
+
             _uiState.value = _uiState.value.copy(
                 editingNote = null,
                 toastMessage = if (isEn) "Note deleted" else "Nota eliminada"
             )
+
+            if (uid != null && existing != null) {
+                val cloudId = existing.cloudId.ifBlank { "legacy_${existing.id}_${existing.timestamp}" }
+                viewModelScope.launch(Dispatchers.IO) {
+                    cloudSyncRepository.deleteNote(uid, cloudId)
+                }
+            }
         }
     }
 

@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.geometry.Rect
 import com.example.data.database.BibleDatabase
 import com.example.data.repository.BibleRepository
+import com.example.data.repository.CloudSyncRepository
 import com.example.ui.components.LocalTutorialTargetRegistry
 import com.example.ui.components.OnboardingDialog
 import com.example.ui.components.TutorialOverlay
@@ -101,7 +102,8 @@ class MainActivity : ComponentActivity() {
         val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob())
         val database = BibleDatabase.getDatabase(applicationContext, applicationScope)
         val repository = BibleRepository(this, database.bibleDao())
-        val factory = BibleViewModelFactory(application, repository)
+        val cloudSyncRepository = CloudSyncRepository()
+        val factory = BibleViewModelFactory(application, repository, cloudSyncRepository)
         viewModel = ViewModelProvider(this, factory)[BibleViewModel::class.java]
 
         setContent {

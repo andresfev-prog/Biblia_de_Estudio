@@ -60,7 +60,7 @@ import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.AppDestination
 
 /**
- * 9 Pasos secuenciales del Tour Interactivo en Vivo.
+ * 10 Pasos secuenciales del Tour Interactivo en Vivo.
  */
 enum class TutorialStep(
     val stepNumber: Int,
@@ -104,23 +104,29 @@ enum class TutorialStep(
         titleKey = "tutorial_step6_title",
         descKey = "tutorial_step6_desc"
     ),
-    SETTINGS_FAVORITES(
+    SETTINGS_PROFILE(
         stepNumber = 7,
         destination = AppDestination.SETTINGS,
         titleKey = "tutorial_step7_title",
         descKey = "tutorial_step7_desc"
     ),
-    SETTINGS_THEMES(
+    SETTINGS_FAVORITES(
         stepNumber = 8,
         destination = AppDestination.SETTINGS,
         titleKey = "tutorial_step8_title",
         descKey = "tutorial_step8_desc"
     ),
-    SETTINGS_TYPOGRAPHY(
+    SETTINGS_THEMES(
         stepNumber = 9,
         destination = AppDestination.SETTINGS,
         titleKey = "tutorial_step9_title",
         descKey = "tutorial_step9_desc"
+    ),
+    SETTINGS_TYPOGRAPHY(
+        stepNumber = 10,
+        destination = AppDestination.SETTINGS,
+        titleKey = "tutorial_step10_title",
+        descKey = "tutorial_step10_desc"
     );
 
     fun next(): TutorialStep? = entries.getOrNull(ordinal + 1)
@@ -295,7 +301,7 @@ fun TutorialOverlay(
                                 modifier = Modifier.clip(CircleShape)
                             ) {
                                 Text(
-                                    text = "${step.stepNumber} / 9",
+                                    text = "${step.stepNumber} / ${TutorialStep.entries.size}",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -377,7 +383,7 @@ fun TutorialOverlay(
                                 modifier = Modifier.testTag("tutorial_next_button")
                             ) {
                                 Text(
-                                    text = if (step.stepNumber == 9) {
+                                    text = if (step.stepNumber == TutorialStep.entries.size) {
                                         StringsLocale.get("tutorial_finish", interfaceLanguage)
                                     } else {
                                         StringsLocale.get("tutorial_next", interfaceLanguage)

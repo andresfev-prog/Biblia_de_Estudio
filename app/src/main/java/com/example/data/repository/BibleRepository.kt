@@ -726,8 +726,20 @@ class BibleRepository(
             }
         }
 
+    suspend fun getAllFavoritesOnce(): List<FavoriteVerse> = dao.getAllFavoritesOnce()
+
+    suspend fun insertFavorites(favorites: List<FavoriteVerse>) {
+        if (favorites.isNotEmpty()) {
+            dao.insertFavorites(favorites)
+        }
+    }
+
     suspend fun addFavorites(verses: List<BibleVerse>): Int {
-        if (verses.isEmpty()) return 0
+        return addFavoritesReturningInserted(verses).size
+    }
+
+    suspend fun addFavoritesReturningInserted(verses: List<BibleVerse>): List<FavoriteVerse> {
+        if (verses.isEmpty()) return emptyList()
         val existingKeys = dao.getAllFavoritesOnce().map { buildFavoriteKey(it) }.toMutableSet()
         val baseTime = System.currentTimeMillis()
         val toInsert = mutableListOf<FavoriteVerse>()
@@ -759,23 +771,31 @@ class BibleRepository(
         if (toInsert.isNotEmpty()) {
             dao.insertFavorites(toInsert)
         }
-        return toInsert.size
+        return toInsert
     }
 
     suspend fun removeFavorites(verses: List<BibleVerse>): Int {
-        if (verses.isEmpty()) return 0
-        val keysToRemove = verses.map { buildFavoriteKey(it) }.toSet()
-        val matchingIds = dao.getAllFavoritesOnce()
-            .filter { buildFavoriteKey(it) in keysToRemove }
-            .map { it.id }
+        return removeFavoritesReturningKeys(verses).size
+    }
 
-        if (matchingIds.isNotEmpty()) {
-            dao.deleteFavoritesByIds(matchingIds)
+    suspend fun removeFavoritesReturningKeys(verses: List<BibleVerse>): List<String> {
+        if (verses.isEmpty()) return emptyList()
+        val keysToRemove = verses.map { buildFavoriteKey(it) }.toSet()
+        val matching = dao.getAllFavoritesOnce()
+            .filter { buildFavoriteKey(it) in keysToRemove }
+
+        if (matching.isNotEmpty()) {
+            dao.deleteFavoritesByIds(matching.map { it.id })
         }
-        return matchingIds.size
+        return matching.map { buildFavoriteKey(it) }.distinct()
     }
 
     suspend fun toggleFavorite(verse: BibleVerse): Boolean {
+        val (added, _) = toggleFavoriteReturningChange(verse)
+        return added != null
+    }
+
+    suspend fun toggleFavoriteReturningChange(verse: BibleVerse): Pair<FavoriteVerse?, String?> {
         val targetKey = buildFavoriteKey(verse)
         val matchingIds = dao.getAllFavoritesOnce()
             .filter { buildFavoriteKey(it) == targetKey }
@@ -783,10 +803,10 @@ class BibleRepository(
 
         return if (matchingIds.isNotEmpty()) {
             dao.deleteFavoritesByIds(matchingIds)
-            false
+            null to targetKey
         } else {
-            addFavorites(listOf(verse))
-            true
+            val inserted = addFavoritesReturningInserted(listOf(verse)).firstOrNull()
+            inserted to null
         }
     }
 
@@ -1717,13 +1737,25 @@ class BibleRepository(
 
     fun getAllNotes(): Flow<List<UserNote>> = dao.getAllNotes()
 
+    suspend fun getAllNotesOnce(): List<UserNote> = dao.getAllNotesOnce()
+
+    suspend fun getNoteByIdOnce(id: Long): UserNote? = dao.getNoteByIdOnce(id)
+
     suspend fun saveNote(note: UserNote): Long {
         return dao.insertNote(note)
+    }
+
+    suspend fun insertNotes(notes: List<UserNote>) {
+        if (notes.isNotEmpty()) {
+            dao.insertNotes(notes)
+        }
     }
 
     suspend fun deleteNote(id: Long) {
         dao.deleteNoteById(id)
     }
+
+    suspend fun getUserPreferencesOnce(): UserPreference? = dao.getUserPreferencesOnce()
 
     suspend fun setFirstLaunchCompleted(currentPref: UserPreference) {
         dao.saveUserPreferences(currentPref.copy(isFirstLaunch = false))

@@ -105,6 +105,9 @@ interface BibleDao {
     @Query("SELECT * FROM user_preferences WHERE id = 1 LIMIT 1")
     fun getUserPreferences(): Flow<UserPreference?>
 
+    @Query("SELECT * FROM user_preferences WHERE id = 1 LIMIT 1")
+    suspend fun getUserPreferencesOnce(): UserPreference?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveUserPreferences(preference: UserPreference)
 
@@ -136,11 +139,20 @@ interface BibleDao {
     @Query("SELECT * FROM user_notes ORDER BY timestamp DESC")
     fun getAllNotes(): Flow<List<com.example.data.model.UserNote>>
 
+    @Query("SELECT * FROM user_notes ORDER BY timestamp DESC")
+    suspend fun getAllNotesOnce(): List<com.example.data.model.UserNote>
+
     @Query("SELECT * FROM user_notes WHERE id = :id LIMIT 1")
     fun getNoteById(id: Long): Flow<com.example.data.model.UserNote?>
 
+    @Query("SELECT * FROM user_notes WHERE id = :id LIMIT 1")
+    suspend fun getNoteByIdOnce(id: Long): com.example.data.model.UserNote?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNote(note: com.example.data.model.UserNote): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNotes(notes: List<com.example.data.model.UserNote>)
 
     @Query("DELETE FROM user_notes WHERE id = :id")
     suspend fun deleteNoteById(id: Long)

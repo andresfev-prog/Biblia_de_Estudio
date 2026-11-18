@@ -87,14 +87,27 @@ object StringsLocale {
             // Settings Screen
             "settings_title" -> if (isEn) "Settings" else "Ajustes"
             "settings_subtitle" -> if (isEn) "Customize your Bible study experience" else "Personaliza tu experiencia de estudio de la Palabra"
-            "edit_profile" -> if (isEn) "Edit Profile" else "Editar Perfil"
-            "edit_profile_desc" -> if (isEn) "Update your personal details" else "Actualiza tus datos personales"
-            "full_name" -> if (isEn) "Full Name" else "Nombre Completo"
-            "location_city" -> if (isEn) "Location / City" else "Ubicación / Ciudad"
-            "username" -> if (isEn) "Username" else "Nombre de usuario"
-            "password" -> if (isEn) "Password" else "Contraseña"
-            "save_changes" -> if (isEn) "Save Changes" else "Guardar Cambios"
-            "profile_updated" -> if (isEn) "Profile updated successfully" else "Perfil actualizado correctamente"
+            "profile_backup_title" -> if (isEn) "Profile & Backup" else "Perfil y Respaldo"
+            "profile_backup_desc" -> if (isEn) "Local profile or Google cloud backup" else "Perfil local o respaldo en la nube"
+            "profile_guest_name" -> if (isEn) "Guest" else "Invitado"
+            "profile_guest_subtitle" -> if (isEn) "Tap to set up your profile or back up" else "Toca para configurar tu perfil o respaldar"
+            "profile_local_subtitle" -> if (isEn) "Local mode • No cloud backup" else "Modo local • Sin respaldo en la nube"
+            "profile_cloud_active" -> if (isEn) "Cloud backup active" else "Respaldo activo en la nube"
+            "profile_cloud_syncing" -> if (isEn) "Syncing backup..." else "Sincronizando respaldo..."
+            "profile_cloud_error" -> if (isEn) "Sync pending • Tap Sync now" else "Respaldo pendiente • Toca Sincronizar"
+            "profile_name_label" -> if (isEn) "Name (optional)" else "Nombre (opcional)"
+            "profile_name_placeholder" -> if (isEn) "Your name for the greeting" else "Tu nombre para el saludo"
+            "profile_cloud_section" -> if (isEn) "Cloud backup" else "Respaldo en la nube"
+            "continue_with_google" -> if (isEn) "Continue with Google" else "Continuar con Google"
+            "signing_in_google" -> if (isEn) "Connecting with Google..." else "Conectando con Google..."
+            "profile_backup_synced_detail" -> if (isEn) "Backup active • Notes and favorites synced" else "Respaldo activo • Notas y favoritos sincronizados"
+            "profile_backup_syncing_detail" -> if (isEn) "Syncing notes and favorites..." else "Sincronizando notas y favoritos..."
+            "profile_backup_error_detail" -> if (isEn) "Sync error • Tap Sync now to retry" else "Error al sincronizar • Toca Sincronizar ahora"
+            "sync_now" -> if (isEn) "Sync now" else "Sincronizar ahora"
+            "syncing_now" -> if (isEn) "Syncing..." else "Sincronizando..."
+            "unlink_account" -> if (isEn) "Unlink account" else "Desvincular cuenta"
+            "profile_privacy_notice" -> if (isEn) "Your privacy is protected: we only back up your notes and favorite verses. You can use the app 100% offline without signing in." else "Tu privacidad está protegida: solo respaldamos tus notas y versículos favoritos. Puedes usar la app 100% sin conexión sin iniciar sesión."
+            "save" -> if (isEn) "Save" else "Guardar"
             "favorites_option" -> if (isEn) "Favorites" else "Favoritos"
             "favorites_subtitle" -> if (isEn) "View and manage your saved verses" else "Ver y gestionar tus versículos guardados"
             "interface_language" -> if (isEn) "Interface Language" else "Idioma de la Interfaz"
@@ -113,9 +126,6 @@ object StringsLocale {
             "font_size" -> if (isEn) "Font Size" else "Tamaño de Fuente"
             "font_range" -> if (isEn) "Range 8 - 20 pt" else "Rango 8 - 20 pt"
             "reader_preview" -> if (isEn) "Reader preview:" else "Vista previa en lector:"
-            "logout" -> if (isEn) "Log Out" else "Cerrar Sesión"
-            "logout_confirm_title" -> if (isEn) "Log Out" else "Cerrar Sesión"
-            "logout_confirm_desc" -> if (isEn) "Are you sure you want to log out of Bible App? Your saved notes and modules will remain on this device." else "¿Estás seguro de que deseas cerrar tu sesión en App Bíblica? Tus notas y módulos guardados localmente permanecerán en el dispositivo."
             "cancel" -> if (isEn) "Cancel" else "Cancelar"
 
             // Favorites Screen
@@ -190,17 +200,21 @@ object StringsLocale {
             "tutorial_step6_title" -> if (isEn) "Fast Bible Search" else "Búsqueda Rápida"
             "tutorial_step6_desc" -> if (isEn) "Search words or phrases across the Bible, filter by Old or New Testament, and save results directly to Favorites with the heart icon." else "Busca palabras o frases en toda la Biblia, filtra por Antiguo o Nuevo Testamento y guarda resultados directo en Favoritos con el ícono de corazón."
 
-            // Step 7: SETTINGS_FAVORITES
-            "tutorial_step7_title" -> if (isEn) "Your Favorites" else "Tus Favoritos"
-            "tutorial_step7_desc" -> if (isEn) "Find all the verses you have favorited from Home, Reader, or Search organized in one place." else "Encuentra organizados en un solo lugar todos los versículos que has marcado como favoritos desde Inicio, Lectura o Búsqueda."
+            // Step 7: SETTINGS_PROFILE
+            "tutorial_step7_title" -> if (isEn) "Profile & Cloud Backup" else "Tu Perfil y Respaldo"
+            "tutorial_step7_desc" -> if (isEn) "Customize your name or sign in with Google to back up your notes and favorites in the cloud and keep them across any device." else "Personaliza tu nombre o inicia sesión con Google para respaldar tus notas y favoritos en la nube y conservarlos en cualquier dispositivo."
 
-            // Step 8: SETTINGS_THEMES
-            "tutorial_step8_title" -> if (isEn) "Theme Customization" else "Personalización de Temas"
-            "tutorial_step8_desc" -> if (isEn) "Tap Light or Dark to open a menu with 3 visual styles each. Automatic mode switches between your chosen styles based on the time of day." else "Toca Claro u Oscuro para desplegar y elegir entre 3 estilos visuales cada uno. El modo Automático alternará entre los estilos que hayas elegido según la hora del día."
+            // Step 8: SETTINGS_FAVORITES
+            "tutorial_step8_title" -> if (isEn) "Your Favorites" else "Tus Favoritos"
+            "tutorial_step8_desc" -> if (isEn) "Find all the verses you have favorited from Home, Reader, or Search organized in one place." else "Encuentra organizados en un solo lugar todos los versículos que has marcado como favoritos desde Inicio, Lectura o Búsqueda."
 
-            // Step 9: SETTINGS_TYPOGRAPHY
-            "tutorial_step9_title" -> if (isEn) "Typography & Reading" else "Tipografía y Lectura"
-            "tutorial_step9_desc" -> if (isEn) "Choose your preferred font family and adjust the Bible text size with real-time feedback in the reader preview." else "Elige tu fuente preferida y ajusta el tamaño del texto bíblico comprobando el resultado al instante en la vista previa."
+            // Step 9: SETTINGS_THEMES
+            "tutorial_step9_title" -> if (isEn) "Theme Customization" else "Personalización de Temas"
+            "tutorial_step9_desc" -> if (isEn) "Tap Light or Dark to open a menu with 3 visual styles each. Automatic mode switches between your chosen styles based on the time of day." else "Toca Claro u Oscuro para desplegar y elegir entre 3 estilos visuales cada uno. El modo Automático alternará entre los estilos que hayas elegido según la hora del día."
+
+            // Step 10: SETTINGS_TYPOGRAPHY
+            "tutorial_step10_title" -> if (isEn) "Typography & Reading" else "Tipografía y Lectura"
+            "tutorial_step10_desc" -> if (isEn) "Choose your preferred font family and adjust the Bible text size with real-time feedback in the reader preview." else "Elige tu fuente preferida y ajusta el tamaño del texto bíblico comprobando el resultado al instante en la vista previa."
 
             else -> key
         }
