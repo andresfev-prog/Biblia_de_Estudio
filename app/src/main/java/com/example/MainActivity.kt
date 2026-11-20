@@ -1,7 +1,11 @@
 package com.example
 
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.view.View
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,11 +40,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
@@ -62,6 +70,8 @@ import com.example.ui.theme.AppIcon
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
 import com.example.ui.theme.BibleStudyTheme
+import com.example.ui.theme.ThemePreferenceCache
+import com.example.ui.theme.resolveAppColors
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.AppDestination
 import com.example.ui.viewmodel.BibleViewModel
@@ -95,9 +105,52 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var viewModel: BibleViewModel
 
+    private fun applyWindowThemeAndEdgeToEdge(
+        backgroundArgb: Int,
+        isDarkEffective: Boolean,
+        insetsView: View = window.decorView
+    ) {
+        window.setBackgroundDrawable(ColorDrawable(backgroundArgb))
+        enableEdgeToEdge(
+            statusBarStyle = if (isDarkEffective) {
+                SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            } else {
+                SystemBarStyle.light(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT
+                )
+            },
+            navigationBarStyle = if (isDarkEffective) {
+                SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            } else {
+                SystemBarStyle.light(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT
+                )
+            }
+        )
+        val insetsController: WindowInsetsControllerCompat = WindowCompat.getInsetsController(window, insetsView)
+        insetsController.isAppearanceLightStatusBars = !isDarkEffective
+        insetsController.isAppearanceLightNavigationBars = !isDarkEffective
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // Lectura síncrona antes del primer fotograma para evitar destellos de tema claro/oscuro
+        val themeCache = ThemePreferenceCache(this)
+        val (initialMode, initialLightTheme, initialDarkTheme) = themeCache.loadInitialTheme()
+        val systemInDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val initialColors = resolveAppColors(
+            themeMode = initialMode,
+            selectedLightTheme = initialLightTheme,
+            selectedDarkTheme = initialDarkTheme,
+            systemInDarkTheme = systemInDark
+        )
+        applyWindowThemeAndEdgeToEdge(
+            backgroundArgb = initialColors.background.toArgb(),
+            isDarkEffective = initialColors.isDark
+        )
 
         val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob())
         val database = BibleDatabase.getDatabase(applicationContext, applicationScope)
@@ -126,6 +179,16 @@ class MainActivity : ComponentActivity() {
                 selectedDarkTheme = uiState.userPreferences.selectedDarkTheme
             ) {
                 val appColors = AppTheme.colors
+                val isDarkEffective = appColors.isDark
+                val view = LocalView.current
+                LaunchedEffect(appColors.themeId, isDarkEffective) {
+                    applyWindowThemeAndEdgeToEdge(
+                        backgroundArgb = appColors.background.toArgb(),
+                        isDarkEffective = isDarkEffective,
+                        insetsView = view
+                    )
+                }
+
                 val layoutDirection = LocalLayoutDirection.current
                 val isBottomBarVisible = uiState.isBottomBarVisible || uiState.currentDestination != AppDestination.BIBLE
                 val snackbarBottomPadding by animateDpAsState(

@@ -28,6 +28,7 @@ import com.example.data.repository.CloudSyncRepository
 import com.example.data.repository.SyncStatus
 import com.example.data.repository.UserCancelledSignInException
 import com.example.ui.components.TutorialStep
+import com.example.ui.theme.ThemePreferenceCache
 import com.example.ui.util.DailyVerseCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -145,10 +146,27 @@ class BibleViewModel(
     private val downloader = ModuleDownloader(application)
     private val favoriteMutex = Mutex()
     private val syncMutex = Mutex()
+    private val themeCache = ThemePreferenceCache(application)
+    private val initialTheme = themeCache.loadInitialTheme()
 
-
-    private val _uiState = MutableStateFlow(BibleUiState())
+    private val _uiState = MutableStateFlow(
+        BibleUiState(
+            userPreferences = UserPreference(
+                themeMode = initialTheme.first,
+                selectedLightTheme = initialTheme.second,
+                selectedDarkTheme = initialTheme.third
+            )
+        )
+    )
     val uiState: StateFlow<BibleUiState> = _uiState.asStateFlow()
+
+    private fun syncThemeCache(pref: UserPreference) {
+        themeCache.saveTheme(
+            themeMode = pref.themeMode,
+            selectedLightTheme = pref.selectedLightTheme,
+            selectedDarkTheme = pref.selectedDarkTheme
+        )
+    }
 
     private val assetHelper = BibleAssetDatabaseHelper(application)
 
@@ -282,16 +300,17 @@ class BibleViewModel(
                     val normalizedMode = if (pref.themeMode.equals("AUTOMATIC", ignoreCase = true) || pref.themeMode.isBlank()) {
                         "AUTO"
                     } else {
-                        pref.themeMode
+                        pref.themeMode.trim().uppercase()
                     }
-                    val normalizedLight = pref.selectedLightTheme.ifBlank { "CRISP_LIGHT" }
-                    val normalizedDark = pref.selectedDarkTheme.ifBlank { "MIDNIGHT_BLUE" }
+                    val normalizedLight = pref.selectedLightTheme.trim().ifBlank { "CRISP_LIGHT" }
+                    val normalizedDark = pref.selectedDarkTheme.trim().ifBlank { "MIDNIGHT_BLUE" }
                     val normalized = pref.copy(
                         fontFamily = normalizedFont,
                         themeMode = normalizedMode,
                         selectedLightTheme = normalizedLight,
                         selectedDarkTheme = normalizedDark
                     )
+                    syncThemeCache(normalized)
                     _uiState.value = _uiState.value.copy(userPreferences = normalized)
                 }
             }
@@ -1306,14 +1325,15 @@ class BibleViewModel(
         val normalizedMode = if (preference.themeMode.equals("AUTOMATIC", ignoreCase = true) || preference.themeMode.isBlank()) {
             "AUTO"
         } else {
-            preference.themeMode
+            preference.themeMode.trim().uppercase()
         }
         val normalized = preference.copy(
             fontFamily = normalizedFont,
             themeMode = normalizedMode,
-            selectedLightTheme = preference.selectedLightTheme.ifBlank { "CRISP_LIGHT" },
-            selectedDarkTheme = preference.selectedDarkTheme.ifBlank { "MIDNIGHT_BLUE" }
+            selectedLightTheme = preference.selectedLightTheme.trim().ifBlank { "CRISP_LIGHT" },
+            selectedDarkTheme = preference.selectedDarkTheme.trim().ifBlank { "MIDNIGHT_BLUE" }
         )
+        syncThemeCache(normalized)
         _uiState.value = _uiState.value.copy(userPreferences = normalized)
         viewModelScope.launch {
             repository.saveUserPreferences(normalized)
@@ -1321,8 +1341,13 @@ class BibleViewModel(
     }
 
     fun updateThemeMode(mode: String) {
-        val normalizedMode = if (mode.equals("AUTOMATIC", ignoreCase = true)) "AUTO" else mode.uppercase()
+        val normalizedMode = if (mode.equals("AUTOMATIC", ignoreCase = true) || mode.isBlank()) {
+            "AUTO"
+        } else {
+            mode.trim().uppercase()
+        }
         val updated = _uiState.value.userPreferences.copy(themeMode = normalizedMode)
+        syncThemeCache(updated)
         _uiState.value = _uiState.value.copy(userPreferences = updated)
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }
@@ -1331,8 +1356,9 @@ class BibleViewModel(
         val current = _uiState.value.userPreferences
         val updated = current.copy(
             themeMode = if (activateMode) "LIGHT" else current.themeMode,
-            selectedLightTheme = themeKey
+            selectedLightTheme = themeKey.trim().ifBlank { "CRISP_LIGHT" }
         )
+        syncThemeCache(updated)
         _uiState.value = _uiState.value.copy(userPreferences = updated)
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }
@@ -1341,8 +1367,9 @@ class BibleViewModel(
         val current = _uiState.value.userPreferences
         val updated = current.copy(
             themeMode = if (activateMode) "DARK" else current.themeMode,
-            selectedDarkTheme = themeKey
+            selectedDarkTheme = themeKey.trim().ifBlank { "MIDNIGHT_BLUE" }
         )
+        syncThemeCache(updated)
         _uiState.value = _uiState.value.copy(userPreferences = updated)
         viewModelScope.launch { repository.saveUserPreferences(updated) }
     }

@@ -32,13 +32,20 @@ import com.example.data.repository.BibleRepository
 import com.example.data.repository.CloudSyncRepository
 import com.example.ui.components.NotesBottomSheet
 import com.example.ui.components.TutorialStep
+import com.example.ui.theme.AppThemeIds
 import com.example.ui.theme.BibleStudyTheme
+import com.example.ui.theme.DarkMidnightBg
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.ThemePreferenceCache
+import com.example.ui.theme.isDarkThemeEffective
+import com.example.ui.theme.resolveAppColors
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.AppDestination
 import com.example.ui.viewmodel.BibleViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -594,4 +601,138 @@ class CloudProfileAndTutorialUnitTest {
             capturedSave
         )
     }
+
+    @Test
+    fun `theme preference cache persists and restores theme choices across recreated instances`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val rawPrefs = context.getSharedPreferences(ThemePreferenceCache.PREFS_NAME, Context.MODE_PRIVATE)
+        rawPrefs.edit().clear().commit()
+        try {
+            val initialCache = ThemePreferenceCache(context)
+            assertEquals(
+                Triple("AUTO", AppThemeIds.CRISP_LIGHT, AppThemeIds.MIDNIGHT_BLUE),
+                initialCache.loadInitialTheme()
+            )
+
+            initialCache.saveTheme(
+                themeMode = "DARK",
+                selectedLightTheme = AppThemeIds.WARM_PARCHMENT,
+                selectedDarkTheme = AppThemeIds.MIDNIGHT_BLUE
+            )
+
+            val recreatedCache = ThemePreferenceCache(context)
+            assertEquals(
+                Triple("DARK", AppThemeIds.WARM_PARCHMENT, AppThemeIds.MIDNIGHT_BLUE),
+                recreatedCache.loadInitialTheme()
+            )
+
+            recreatedCache.saveTheme(
+                themeMode = "AUTOMATIC",
+                selectedLightTheme = AppThemeIds.SERENE_OLIVE,
+                selectedDarkTheme = AppThemeIds.OBSIDIAN_ONYX
+            )
+
+            val reloadedCache = ThemePreferenceCache(context)
+            assertEquals(
+                Triple("AUTO", AppThemeIds.SERENE_OLIVE, AppThemeIds.OBSIDIAN_ONYX),
+                reloadedCache.loadInitialTheme()
+            )
+        } finally {
+            rawPrefs.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun `bible view model initializes ui state synchronously from theme cache and keeps cache in sync`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val rawPrefs = app.getSharedPreferences(ThemePreferenceCache.PREFS_NAME, Context.MODE_PRIVATE)
+        rawPrefs.edit().clear().commit()
+        ThemePreferenceCache(app).saveTheme(
+            themeMode = "DARK",
+            selectedLightTheme = AppThemeIds.SERENE_OLIVE,
+            selectedDarkTheme = AppThemeIds.MIDNIGHT_BLUE
+        )
+
+        val db = Room.inMemoryDatabaseBuilder(app, BibleDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val (store, viewModel) = createTestViewModel(app, db)
+        try {
+            // El primer estado síncrono debe reflejar la caché sin esperar la emisión inicial de Room
+            val initialPrefs = viewModel.uiState.value.userPreferences
+            assertEquals("DARK", initialPrefs.themeMode)
+            assertEquals(AppThemeIds.SERENE_OLIVE, initialPrefs.selectedLightTheme)
+            assertEquals(AppThemeIds.MIDNIGHT_BLUE, initialPrefs.selectedDarkTheme)
+
+            viewModel.updateThemeMode("LIGHT")
+            assertEquals(
+                Triple("LIGHT", AppThemeIds.SERENE_OLIVE, AppThemeIds.MIDNIGHT_BLUE),
+                ThemePreferenceCache(app).loadInitialTheme()
+            )
+
+            viewModel.updateSelectedLightTheme(AppThemeIds.WARM_PARCHMENT, activateMode = true)
+            viewModel.updateSelectedDarkTheme(AppThemeIds.DEEP_DARK, activateMode = false)
+            assertEquals(
+                Triple("LIGHT", AppThemeIds.WARM_PARCHMENT, AppThemeIds.DEEP_DARK),
+                ThemePreferenceCache(app).loadInitialTheme()
+            )
+
+            // Cuando Room emite un cambio persistido, la caché síncrona también se actualiza
+            runBlocking {
+                db.bibleDao().saveUserPreferences(
+                    UserPreference(
+                        id = 1,
+                        themeMode = "DARK",
+                        selectedLightTheme = AppThemeIds.CRISP_LIGHT,
+                        selectedDarkTheme = AppThemeIds.OBSIDIAN_ONYX
+                    )
+                )
+            }
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (System.currentTimeMillis() < deadline) {
+                Shadows.shadowOf(Looper.getMainLooper()).idle()
+                if (viewModel.uiState.value.userPreferences.selectedDarkTheme == AppThemeIds.OBSIDIAN_ONYX) break
+                Thread.sleep(20)
+            }
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+            assertEquals("DARK", viewModel.uiState.value.userPreferences.themeMode)
+            assertEquals(
+                Triple("DARK", AppThemeIds.CRISP_LIGHT, AppThemeIds.OBSIDIAN_ONYX),
+                ThemePreferenceCache(app).loadInitialTheme()
+            )
+        } finally {
+            tearDownTestViewModelAndDb(store, viewModel, db)
+            rawPrefs.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun `resolveAppColors determines dark effective mode and midnight blue palette synchronously`() {
+        assertTrue(isDarkThemeEffective("DARK", systemInDarkTheme = false))
+        assertFalse(isDarkThemeEffective("LIGHT", systemInDarkTheme = true))
+        assertFalse(isDarkThemeEffective("AUTO", systemInDarkTheme = false))
+        assertTrue(isDarkThemeEffective("AUTOMATIC", systemInDarkTheme = true))
+
+        val darkOverrideInLightSystem = resolveAppColors(
+            themeMode = "DARK",
+            selectedLightTheme = AppThemeIds.CRISP_LIGHT,
+            selectedDarkTheme = AppThemeIds.MIDNIGHT_BLUE,
+            systemInDarkTheme = false
+        )
+        assertTrue(darkOverrideInLightSystem.isDark)
+        assertEquals(AppThemeIds.MIDNIGHT_BLUE, darkOverrideInLightSystem.themeId)
+        assertEquals(DarkMidnightBg, darkOverrideInLightSystem.background)
+
+        val autoInLightSystem = resolveAppColors(
+            themeMode = "AUTO",
+            selectedLightTheme = AppThemeIds.CRISP_LIGHT,
+            selectedDarkTheme = AppThemeIds.MIDNIGHT_BLUE,
+            systemInDarkTheme = false
+        )
+        assertFalse(autoInLightSystem.isDark)
+        assertEquals(AppThemeIds.CRISP_LIGHT, autoInLightSystem.themeId)
+        assertEquals(PureWhite, autoInLightSystem.background)
+    }
 }
+

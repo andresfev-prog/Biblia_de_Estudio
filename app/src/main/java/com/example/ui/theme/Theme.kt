@@ -337,21 +337,23 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-@Composable
-fun BibleStudyTheme(
+fun isDarkThemeEffective(
+    themeMode: String,
+    systemInDarkTheme: Boolean
+): Boolean = when (themeMode.trim().uppercase()) {
+    "LIGHT" -> false
+    "DARK" -> true
+    else -> systemInDarkTheme // Soporta "AUTO" y valor previo "AUTOMATIC"
+}
+
+fun resolveAppThemeId(
     themeMode: String = "AUTO",
     selectedLightTheme: String = AppThemeIds.CRISP_LIGHT,
     selectedDarkTheme: String = AppThemeIds.MIDNIGHT_BLUE,
-    content: @Composable () -> Unit
-) {
-    val systemInDark = isSystemInDarkTheme()
-    val useDark = when (themeMode.uppercase()) {
-        "LIGHT" -> false
-        "DARK" -> true
-        else -> systemInDark // Soporta "AUTO" y valor previo "AUTOMATIC"
-    }
-
-    val resolvedThemeId = if (useDark) {
+    systemInDarkTheme: Boolean = false
+): String {
+    val useDark = isDarkThemeEffective(themeMode, systemInDarkTheme)
+    return if (useDark) {
         when (selectedDarkTheme) {
             AppThemeIds.DEEP_DARK,
             AppThemeIds.OBSIDIAN_ONYX,
@@ -366,6 +368,43 @@ fun BibleStudyTheme(
             else -> AppThemeIds.CRISP_LIGHT
         }
     }
+}
+
+fun resolveAppColors(
+    themeMode: String = "AUTO",
+    selectedLightTheme: String = AppThemeIds.CRISP_LIGHT,
+    selectedDarkTheme: String = AppThemeIds.MIDNIGHT_BLUE,
+    systemInDarkTheme: Boolean = false
+): AppColors = when (
+    resolveAppThemeId(
+        themeMode = themeMode,
+        selectedLightTheme = selectedLightTheme,
+        selectedDarkTheme = selectedDarkTheme,
+        systemInDarkTheme = systemInDarkTheme
+    )
+) {
+    AppThemeIds.WARM_PARCHMENT -> WarmParchmentAppColors
+    AppThemeIds.SERENE_OLIVE -> SereneOliveAppColors
+    AppThemeIds.MIDNIGHT_BLUE -> MidnightBlueAppColors
+    AppThemeIds.DEEP_DARK -> DeepDarkAppColors
+    AppThemeIds.OBSIDIAN_ONYX -> ObsidianOnyxAppColors
+    else -> CrispLightAppColors
+}
+
+@Composable
+fun BibleStudyTheme(
+    themeMode: String = "AUTO",
+    selectedLightTheme: String = AppThemeIds.CRISP_LIGHT,
+    selectedDarkTheme: String = AppThemeIds.MIDNIGHT_BLUE,
+    content: @Composable () -> Unit
+) {
+    val systemInDark = isSystemInDarkTheme()
+    val resolvedThemeId = resolveAppThemeId(
+        themeMode = themeMode,
+        selectedLightTheme = selectedLightTheme,
+        selectedDarkTheme = selectedDarkTheme,
+        systemInDarkTheme = systemInDark
+    )
 
     val appColors = when (resolvedThemeId) {
         AppThemeIds.WARM_PARCHMENT -> WarmParchmentAppColors
