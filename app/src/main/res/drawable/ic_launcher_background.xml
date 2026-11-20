@@ -1,29 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Base carmesí profundo edge-to-edge -->
-    <path
-        android:fillColor="#7A1226"
-        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
-
-    <!-- Brillo diagonal sutil sobre la mitad superior derecha de la cubierta -->
-    <path
-        android:fillAlpha="0.30"
-        android:fillColor="#8D1830"
-        android:pathData="M26,0 L108,0 L108,82 Z" />
-
-    <!-- Franja vertical del lomo izquierdo visible dentro del recorte -->
-    <path
-        android:fillColor="#630C1D"
-        android:pathData="M0,0 L26,0 L26,108 L0,108 Z" />
-
-    <!-- Pliegue / hendidura vertical del lomo -->
-    <path
-        android:fillColor="#4E0816"
-        android:pathData="M25.5,0 L27.5,0 L27.5,108 L25.5,108 Z" />
+    <!-- Cubierta editorial carmesí full-bleed simétrica con degradado lineal diagonal -->
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="0"
+                android:endY="108"
+                android:startX="108"
+                android:startY="0"
+                android:type="linear">
+                <item android:color="#9E1930" android:offset="0.0" />
+                <item android:color="#8B1528" android:offset="0.55" />
+                <item android:color="#6D0E1E" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
 </vector>
