@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.biblestudy.qxptk"
     minSdk = 24
     targetSdk = 36
-    versionCode = 11
-    versionName = "1.3.2-theme-fix"
+    versionCode = 12
+    versionName = "1.3.3-full-bleed-icon"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
