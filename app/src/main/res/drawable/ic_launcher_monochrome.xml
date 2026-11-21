@@ -5,18 +5,24 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Banda curva de páginas con listón marcapáginas calado mediante evenOdd -->
+    <!-- Pliegue vertical sutil del lomo -->
+    <path
+        android:fillAlpha="0.5"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M28.5,0 L30.0,0 L30.0,70 L28.5,70 Z" />
+
+    <!-- Bloque curvo de páginas con dos surcos horizontales-ascendentes calados mediante evenOdd -->
     <path
         android:fillColor="#FFFFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M0,67 C24,63 44,65 62,68 C80,71 96,69 108,66 L108,82.5 L0,82.5 Z M30,67.5 L39,67.5 L39,80.5 L34.5,77.2 L30,80.5 Z" />
+        android:pathData="M29.75,69.5 L67,69.5 C77.5,69.5 85.5,65.5 92.5,58.5 L108,43 L108,55.5 L92.5,71.0 C85.5,78.0 77.5,82.0 67,82.0 L29.75,82.0 C26.3,82.0 23.5,79.2 23.5,75.75 C23.5,72.3 26.3,69.5 29.75,69.5 Z M26.5,73.2 L67,73.2 C77.5,73.2 85.5,69.2 92.5,62.2 L108,46.7 L108,47.6 L92.5,63.1 C85.5,70.1 77.5,74.1 67,74.1 L26.5,74.1 Z M26.5,77.4 L67,77.4 C77.5,77.4 85.5,73.4 92.5,66.4 L108,50.9 L108,51.8 L92.5,67.3 C85.5,74.3 77.5,78.3 67,78.3 L26.5,78.3 Z" />
 
-    <!-- Cruz cristiana centrada -->
+    <!-- Cruz cristiana centrada en x = 58.5dp -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M51.75,25 L56.25,25 L56.25,57 L51.75,57 Z" />
+        android:pathData="M56.25,26.5 L60.75,26.5 L60.75,58.5 L56.25,58.5 Z" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M42.5,35 L65.5,35 L65.5,39.5 L42.5,39.5 Z" />
+        android:pathData="M46.5,36.5 L70.5,36.5 L70.5,41.0 L46.5,41.0 Z" />
 
 </vector>

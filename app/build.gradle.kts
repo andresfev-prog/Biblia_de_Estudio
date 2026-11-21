@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.biblestudy.qxptk"
     minSdk = 24
     targetSdk = 36
-    versionCode = 13
-    versionName = "1.3.4-editorial-icon"
+    versionCode = 14
+    versionName = "1.3.5-final-icon"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
