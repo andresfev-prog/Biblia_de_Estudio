@@ -29,11 +29,13 @@ import com.example.data.repository.SyncStatus
 import com.example.data.repository.UserCancelledSignInException
 import com.example.ui.components.TutorialStep
 import com.example.ui.theme.ThemePreferenceCache
+import com.example.ui.util.BibleStudyTextUtils
 import com.example.ui.util.DailyVerseCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +58,14 @@ enum class AppDestination {
     SETTINGS
 }
 
+data class MissingNoteModulePrompt(
+    val moduleId: String,
+    val moduleTag: String,
+    val moduleTitle: String,
+    val version: String,
+    val verseReference: String
+)
+
 data class BibleUiState(
     val currentDestination: AppDestination = AppDestination.HOME,
     val currentBook: String = "Juan",
@@ -67,8 +77,12 @@ data class BibleUiState(
     val isParallelLinked: Boolean = true,
     val verses: List<BibleVerse> = emptyList(),
     val parallelVerses: List<BibleVerse> = emptyList(),
+    val chapterSubheadings: Map<Int, List<String>> = emptyMap(),
+    val parallelChapterSubheadings: Map<Int, List<String>> = emptyMap(),
     val selectedVerses: List<BibleVerse> = emptyList(),
     val highlightedVerse: Int? = null,
+    val highlightToken: Long = 0L,
+    val isNavigationHighlightActive: Boolean = false,
     // Comentarios
     val versesWithComments: Set<Int> = emptySet(),
     val parallelVersesWithComments: Set<Int> = emptySet(),
@@ -88,6 +102,7 @@ data class BibleUiState(
     // Modales de estudio
     val selectedCommentaryVerse: BibleVerse? = null,
     val currentVerseCommentaries: List<Commentary> = emptyList(),
+    val missingNoteModulePrompt: MissingNoteModulePrompt? = null,
     val selectedDictionaryWord: String? = null,
     val currentDictionaryEntry: DictionaryEntry? = null,
     val dictionaryMatches: List<DictionaryMatch> = emptyList(),
@@ -173,6 +188,9 @@ class BibleViewModel(
     private var tts: TextToSpeech? = null
     private var isTtsInitialized = false
     private var hasSpokenChapterIntro = false
+    private var navigationHighlightJob: Job? = null
+    private var mainChapterJob: Job? = null
+    private var parallelChapterJob: Job? = null
 
     private val _searchQueryInput = MutableStateFlow("")
 
@@ -411,29 +429,35 @@ class BibleViewModel(
         bookName: String,
         chapter: Int,
         version: String = _uiState.value.activeVersion,
-        parallelVersion: String = _uiState.value.parallelVersion
+        parallelVersion: String = _uiState.value.parallelVersion,
+        preserveHighlight: Boolean = false
     ) {
         hasSpokenChapterIntro = false
+        if (!preserveHighlight) {
+            clearNavigationHighlight()
+        }
         _uiState.value = _uiState.value.copy(ttsVerseIndex = 0, selectedVerses = emptyList())
 
-        // 1. Cargar versículos del panel principal
-        viewModelScope.launch {
+        // 1. Cargar versículos y subtítulos automáticos del panel principal
+        mainChapterJob?.cancel()
+        mainChapterJob = viewModelScope.launch {
             repository.getVerses(version, bookName, chapter).collect { verseList ->
-                val cleanList = ArrayList<BibleVerse>()
-                for (verse in verseList) {
-                    val cleanText = verse.text
-                        .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                        .replace(Regex("(?<=\\p{L})\\d+"), "")
-                        .replace(Regex("\\s+"), " ")
-                        .trim()
-                    cleanList.add(verse.copy(text = cleanText))
+                val cleanList = verseList.map { verse ->
+                    verse.copy(text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, version))
                 }
+                val subheadings = repository.getChapterSubheadings(
+                    version = version,
+                    bookName = bookName,
+                    chapter = chapter,
+                    chapterVerseNumbers = cleanList.map { it.verse }
+                )
 
                 _uiState.value = _uiState.value.copy(
                     currentBook = bookName,
                     currentChapter = chapter,
                     activeVersion = version,
-                    verses = cleanList
+                    verses = cleanList,
+                    chapterSubheadings = subheadings
                 )
             }
         }
@@ -467,23 +491,25 @@ class BibleViewModel(
             }
         }
 
-        // 4. Cargar panel paralelo
+        // 4. Cargar panel paralelo y sus subtítulos automáticos
         if (!_uiState.value.isParallelMode || _uiState.value.isParallelLinked) {
-            viewModelScope.launch {
+            parallelChapterJob?.cancel()
+            parallelChapterJob = viewModelScope.launch {
                 repository.getVerses(parallelVersion, bookName, chapter).collect { pList ->
-                    val cleanParallelList = ArrayList<BibleVerse>()
-                    for (verse in pList) {
-                        val cleanText = verse.text
-                            .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                            .replace(Regex("(?<=\\p{L})\\d+"), "")
-                            .replace(Regex("\\s+"), " ")
-                            .trim()
-                        cleanParallelList.add(verse.copy(text = cleanText))
+                    val cleanParallelList = pList.map { verse ->
+                        verse.copy(text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, parallelVersion))
                     }
+                    val parallelSubheadings = repository.getChapterSubheadings(
+                        version = parallelVersion,
+                        bookName = bookName,
+                        chapter = chapter,
+                        chapterVerseNumbers = cleanParallelList.map { it.verse }
+                    )
 
                     _uiState.value = _uiState.value.copy(
                         parallelVersion = parallelVersion,
-                        parallelVerses = cleanParallelList
+                        parallelVerses = cleanParallelList,
+                        parallelChapterSubheadings = parallelSubheadings
                     )
                 }
             }
@@ -495,16 +521,22 @@ class BibleViewModel(
     }
 
     fun loadParallelChapter(bookName: String, chapter: Int, version: String = _uiState.value.parallelVersion) {
-        viewModelScope.launch {
+        parallelChapterJob?.cancel()
+        parallelChapterJob = viewModelScope.launch {
             repository.getVerses(version, bookName, chapter).collect { parallelList ->
-                val cleanedList = ArrayList<BibleVerse>()
-                for (item in parallelList) {
-                    val cleanText = DailyVerseCatalog.cleanBibleText(item.text)
-                    cleanedList.add(item.copy(text = cleanText))
+                val cleanedList = parallelList.map { item ->
+                    item.copy(text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(item.text, version))
                 }
+                val parallelSubheadings = repository.getChapterSubheadings(
+                    version = version,
+                    bookName = bookName,
+                    chapter = chapter,
+                    chapterVerseNumbers = cleanedList.map { it.verse }
+                )
                 _uiState.value = _uiState.value.copy(
                     parallelVerses = cleanedList,
-                    parallelVersion = version
+                    parallelVersion = version,
+                    parallelChapterSubheadings = parallelSubheadings
                 )
             }
         }
@@ -531,12 +563,46 @@ class BibleViewModel(
         }
     }
 
+    fun triggerNavigationHighlight(
+        verse: Int,
+        durationMs: Long = BibleStudyTextUtils.TEMP_HIGHLIGHT_DURATION_MS
+    ) {
+        navigationHighlightJob?.cancel()
+        val nextToken = _uiState.value.highlightToken + 1L
+        _uiState.value = _uiState.value.copy(
+            currentVerse = verse,
+            highlightedVerse = verse,
+            highlightToken = nextToken,
+            isNavigationHighlightActive = true
+        )
+        if (durationMs > 0L) {
+            navigationHighlightJob = viewModelScope.launch {
+                delay(durationMs)
+                if (_uiState.value.highlightToken == nextToken && _uiState.value.isNavigationHighlightActive) {
+                    clearNavigationHighlight()
+                }
+            }
+        }
+    }
+
+    fun clearNavigationHighlight() {
+        navigationHighlightJob?.cancel()
+        navigationHighlightJob = null
+        val state = _uiState.value
+        if (state.isNavigationHighlightActive || (!state.isTtsPlaying && state.highlightedVerse != null)) {
+            _uiState.value = state.copy(
+                highlightedVerse = if (state.isTtsPlaying) state.highlightedVerse else null,
+                isNavigationHighlightActive = false
+            )
+        }
+    }
+
     fun navigateToPassage(bookName: String, chapter: Int, verse: Int = 1) {
         _uiState.value = _uiState.value.copy(
-            currentDestination = AppDestination.BIBLE,
-            highlightedVerse = verse
+            currentDestination = AppDestination.BIBLE
         )
-        loadChapter(bookName, chapter)
+        triggerNavigationHighlight(verse)
+        loadChapter(bookName, chapter, preserveHighlight = true)
     }
 
     fun setActiveVersion(version: String) {
@@ -586,10 +652,10 @@ class BibleViewModel(
         val book = _uiState.value.pickerSelectedBook
         val chapter = _uiState.value.pickerSelectedChapter
         _uiState.value = _uiState.value.copy(
-            isPassagePickerVisible = false,
-            highlightedVerse = verse
+            isPassagePickerVisible = false
         )
-        loadChapter(book.name, chapter)
+        triggerNavigationHighlight(verse)
+        loadChapter(book.name, chapter, preserveHighlight = true)
     }
 
     fun onPickerBackStep() {
@@ -669,23 +735,69 @@ class BibleViewModel(
         }
     }
 
+    fun dismissMissingNoteModulePrompt() {
+        _uiState.value = _uiState.value.copy(missingNoteModulePrompt = null)
+    }
+
+    fun openAndDownloadMissingNoteModule() {
+        val prompt = _uiState.value.missingNoteModulePrompt ?: return
+        val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+        val targetModule = _uiState.value.modules.firstOrNull {
+            it.id == prompt.moduleId || it.versionTag.equals(prompt.moduleTag, ignoreCase = true)
+        }
+
+        _uiState.value = _uiState.value.copy(
+            missingNoteModulePrompt = null,
+            currentDestination = AppDestination.MODULES,
+            moduleSelectedTab = 1, // Pestaña Comentarios
+            moduleLanguageFilter = if (isEn) "All" else "Todos",
+            isBottomBarVisible = true
+        )
+
+        if (targetModule != null && !targetModule.isDownloaded) {
+            downloadModule(targetModule)
+        }
+    }
+
     fun onVersionNoteClick(verse: BibleVerse, marker: String) {
         val versionDbName = BibleRepository.resolveVersionCommentaryFileName(verse.version) ?: return
+        val isRvrAsterisk = BibleStudyTextUtils.isRvrAsteriskMarker(marker) ||
+            BibleStudyTextUtils.isRvr1960Version(verse.version)
+        val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
 
         viewModelScope.launch(Dispatchers.IO) {
             val isDownloaded = repository.isModuleDownloaded(versionDbName)
             if (!isDownloaded) {
+                val catalogMod = _uiState.value.modules.firstOrNull {
+                    it.fileName.equals(versionDbName, ignoreCase = true)
+                }
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        getApplication(),
-                        "Descarga el módulo de notas de ${verse.version} para consultar la nota [$marker]",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    if (isRvrAsterisk) {
+                        _uiState.value = _uiState.value.copy(
+                            missingNoteModulePrompt = MissingNoteModulePrompt(
+                                moduleId = catalogMod?.id ?: "mod_rv1960_c",
+                                moduleTag = catalogMod?.versionTag ?: "RVR-C",
+                                moduleTitle = catalogMod?.title ?: "Notas Reina-Valera 1960",
+                                version = verse.version,
+                                verseReference = "${verse.bookName} ${verse.chapter}:${verse.verse}"
+                            )
+                        )
+                    } else {
+                        Toast.makeText(
+                            getApplication(),
+                            if (isEn) {
+                                "Download the ${verse.version} notes module to view note [$marker]"
+                            } else {
+                                "Descarga el módulo de notas de ${verse.version} para consultar la nota [$marker]"
+                            },
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
                 return@launch
             }
 
-            val noteText = repository.getVersionNote(
+            val lookup = repository.getVersionNotes(
                 versionDbName = versionDbName,
                 bookName = verse.bookName,
                 chapter = verse.chapter,
@@ -694,27 +806,89 @@ class BibleViewModel(
             )
 
             withContext(Dispatchers.Main) {
-                if (!noteText.isNullOrBlank()) {
-                    val clean = noteText.replace(Regex("<.*?>"), "").replace(Regex("\\s+"), " ").trim()
-                    val noteCommentary = Commentary(
-                        bookName = verse.bookName,
-                        chapter = verse.chapter,
-                        verse = verse.verse,
-                        author = "Notas ${verse.version}",
-                        title = "Nota [$marker]",
-                        content = clean
-                    )
+                val formattedNotes = lookup.notes
+                    .map { BibleStudyTextUtils.formatCommentaryHtml(it) }
+                    .filter { it.isNotBlank() }
 
-                    _uiState.value = _uiState.value.copy(
-                        selectedCommentaryVerse = verse,
-                        currentVerseCommentaries = listOf(noteCommentary)
-                    )
-                } else {
-                    Toast.makeText(
-                        getApplication(),
-                        "No se encontró contenido para la nota [$marker]",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                val cleanVerse = verse.copy(
+                    text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, verse.version)
+                )
+
+                when {
+                    formattedNotes.isNotEmpty() -> {
+                        val combinedContent = if (formattedNotes.size == 1) {
+                            formattedNotes.first()
+                        } else {
+                            formattedNotes.mapIndexed { idx, body ->
+                                val heading = if (isEn) "Note ${idx + 1}" else "Nota ${idx + 1}"
+                                "$heading\n$body"
+                            }.joinToString("\n\n")
+                        }
+                        val noteAuthor = if (isRvrAsterisk) {
+                            "Notas Reina-Valera 1960 (RVR-C)"
+                        } else {
+                            "Notas ${verse.version}"
+                        }
+                        val noteTitle = when {
+                            isRvrAsterisk && formattedNotes.size > 1 ->
+                                if (isEn) "Verse Notes (*)" else "Notas del versículo (*)"
+                            isRvrAsterisk ->
+                                if (isEn) "Verse Note (*)" else "Nota de versículo (*)"
+                            else ->
+                                if (isEn) "Note [$marker]" else "Nota [$marker]"
+                        }
+                        val noteCommentary = Commentary(
+                            bookName = cleanVerse.bookName,
+                            chapter = cleanVerse.chapter,
+                            verse = cleanVerse.verse,
+                            author = noteAuthor,
+                            title = noteTitle,
+                            content = combinedContent
+                        )
+
+                        _uiState.value = _uiState.value.copy(
+                            selectedCommentaryVerse = cleanVerse,
+                            currentVerseCommentaries = listOf(noteCommentary),
+                            lastConsultedCommentary = noteCommentary
+                        )
+                    }
+
+                    isRvrAsterisk && lookup.hasBookIntroOnlySchema -> {
+                        val infoContent = if (isEn) {
+                            "The installed module \"Notas Reina-Valera 1960 (RVR-C)\" does not include a verse-level footnote for ${cleanVerse.bookName} ${cleanVerse.chapter}:${cleanVerse.verse} (this module edition currently contains general book introductions indexed at 1:1)."
+                        } else {
+                            "El módulo instalado «Notas Reina-Valera 1960 (RVR-C)» no incluye una nota específica al pie para ${cleanVerse.bookName} ${cleanVerse.chapter}:${cleanVerse.verse} (esta edición del módulo contiene únicamente introducciones generales por libro en 1:1)."
+                        }
+                        val infoCommentary = Commentary(
+                            bookName = cleanVerse.bookName,
+                            chapter = cleanVerse.chapter,
+                            verse = cleanVerse.verse,
+                            author = "Notas Reina-Valera 1960 (RVR-C)",
+                            title = if (isEn) "Verse Note (*)" else "Nota de versículo (*)",
+                            content = infoContent
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            selectedCommentaryVerse = cleanVerse,
+                            currentVerseCommentaries = listOf(infoCommentary)
+                        )
+                    }
+
+                    else -> {
+                        val msg = if (isRvrAsterisk) {
+                            if (isEn) {
+                                "No RVR-C note found for ${cleanVerse.bookName} ${cleanVerse.chapter}:${cleanVerse.verse}"
+                            } else {
+                                "No se encontró nota RVR-C para ${cleanVerse.bookName} ${cleanVerse.chapter}:${cleanVerse.verse}"
+                            }
+                        } else {
+                            if (isEn) {
+                                "No content found for note [$marker]"
+                            } else {
+                                "No se encontró contenido para la nota [$marker]"
+                            }
+                        }
+                        Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -842,15 +1016,18 @@ class BibleViewModel(
         val index = _uiState.value.ttsVerseIndex.coerceIn(0, verses.lastIndex)
         val verse = verses[index]
 
-        val cleanVerseText = DailyVerseCatalog.cleanBibleText(verse.text)
+        val cleanVerseText = BibleStudyTextUtils.sanitizeVerseTextForSpeech(verse.text, verse.version)
         val cleanSectionTitle = verse.sectionTitle?.let { DailyVerseCatalog.cleanBibleText(it) }?.trim() ?: ""
 
         configureNaturalTtsVoice(cleanVerseText)
+        navigationHighlightJob?.cancel()
+        navigationHighlightJob = null
 
         _uiState.value = _uiState.value.copy(
             isTtsPlaying = true,
             isTtsVisible = true,
-            highlightedVerse = verse.verse
+            highlightedVerse = verse.verse,
+            isNavigationHighlightActive = false
         )
 
         val isEnglish = _uiState.value.activeVersion.contains("KJV", ignoreCase = true) ||
@@ -884,16 +1061,24 @@ class BibleViewModel(
     fun stopTts() {
         tts?.stop()
         hasSpokenChapterIntro = false
-        _uiState.value = _uiState.value.copy(isTtsPlaying = false, isTtsVisible = false)
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            isTtsPlaying = false,
+            isTtsVisible = false,
+            highlightedVerse = if (state.isNavigationHighlightActive) state.highlightedVerse else null
+        )
     }
 
     fun nextTtsVerse() {
         val verses = _uiState.value.verses
         if (verses.isEmpty()) return
         val nextIdx = (_uiState.value.ttsVerseIndex + 1).coerceAtMost(verses.lastIndex)
+        navigationHighlightJob?.cancel()
+        navigationHighlightJob = null
         _uiState.value = _uiState.value.copy(
             ttsVerseIndex = nextIdx,
-            highlightedVerse = verses[nextIdx].verse
+            highlightedVerse = verses[nextIdx].verse,
+            isNavigationHighlightActive = false
         )
         if (_uiState.value.isTtsPlaying) {
             playTts()
@@ -904,9 +1089,12 @@ class BibleViewModel(
         val verses = _uiState.value.verses
         if (verses.isEmpty()) return
         val prevIdx = (_uiState.value.ttsVerseIndex - 1).coerceAtLeast(0)
+        navigationHighlightJob?.cancel()
+        navigationHighlightJob = null
         _uiState.value = _uiState.value.copy(
             ttsVerseIndex = prevIdx,
-            highlightedVerse = verses[prevIdx].verse
+            highlightedVerse = verses[prevIdx].verse,
+            isNavigationHighlightActive = false
         )
         if (_uiState.value.isTtsPlaying) {
             playTts()

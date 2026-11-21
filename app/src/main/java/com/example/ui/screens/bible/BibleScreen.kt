@@ -7,7 +7,9 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +63,9 @@ import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +75,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -101,6 +108,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextOverflow
@@ -125,9 +133,12 @@ import com.example.ui.theme.AppColors
 import com.example.ui.theme.AppIcon
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
+import com.example.ui.util.BibleStudyTextUtils
 import com.example.ui.util.StringsLocale
+import com.example.ui.util.VerseDisplayToken
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -143,12 +154,21 @@ fun BibleScreen(
 
     var rightBookTitle by remember { mutableStateOf(uiState.currentBook) }
     var rightChapter by remember { mutableIntStateOf(uiState.currentChapter) }
-    var rightVerse by remember { mutableIntStateOf(1) }
+    var rightTempHighlightedVerse by remember { mutableStateOf<Int?>(null) }
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.currentBook, uiState.currentChapter, uiState.isParallelLinked) {
         if (uiState.isParallelLinked) {
             rightBookTitle = uiState.currentBook
             rightChapter = uiState.currentChapter
+            rightTempHighlightedVerse = null
+        }
+    }
+
+    LaunchedEffect(rightTempHighlightedVerse) {
+        if (rightTempHighlightedVerse != null) {
+            delay(BibleStudyTextUtils.TEMP_HIGHLIGHT_DURATION_MS)
+            rightTempHighlightedVerse = null
         }
     }
 
@@ -156,6 +176,7 @@ fun BibleScreen(
         uiState.currentBook,
         uiState.currentChapter,
         uiState.highlightedVerse,
+        uiState.highlightToken,
         uiState.verses,
         uiState.parallelVerses
     ) {
@@ -163,19 +184,57 @@ fun BibleScreen(
 
         val leftHasChapter = uiState.verses.isNotEmpty() &&
                 uiState.verses.first().chapter == uiState.currentChapter
-        if (leftHasChapter) {
-            val idx = uiState.verses.indexOfFirst { it.verse == targetVerse }
-            val targetIdx = if (idx >= 0) idx else (targetVerse - 1).coerceIn(0, uiState.verses.lastIndex)
-            leftListState.scrollToItem(targetIdx)
-        }
+        isProgrammaticScroll = true
+        try {
+            if (leftHasChapter) {
+                val idx = uiState.verses.indexOfFirst { it.verse == targetVerse }
+                val targetIdx = if (idx >= 0) idx else (targetVerse - 1).coerceIn(0, uiState.verses.lastIndex)
+                // En SingleReaderView el encabezado del capítulo ocupa el índice 0
+                val scrollIdx = if (uiState.isParallelMode || targetIdx == 0) targetIdx else targetIdx + 1
+                leftListState.scrollToItem(scrollIdx)
+            }
 
-        if (uiState.isParallelMode && uiState.isParallelLinked) {
-            val rightHasChapter = uiState.parallelVerses.isNotEmpty() &&
-                    uiState.parallelVerses.first().chapter == uiState.currentChapter
-            if (rightHasChapter) {
-                val idx = uiState.parallelVerses.indexOfFirst { it.verse == targetVerse }
-                val targetIdx = if (idx >= 0) idx else (targetVerse - 1).coerceIn(0, uiState.parallelVerses.lastIndex)
-                rightListState.scrollToItem(targetIdx)
+            if (uiState.isParallelMode && uiState.isParallelLinked) {
+                val rightHasChapter = uiState.parallelVerses.isNotEmpty() &&
+                        uiState.parallelVerses.first().chapter == uiState.currentChapter
+                if (rightHasChapter) {
+                    val idx = uiState.parallelVerses.indexOfFirst { it.verse == targetVerse }
+                    val targetIdx = if (idx >= 0) idx else (targetVerse - 1).coerceIn(0, uiState.parallelVerses.lastIndex)
+                    rightListState.scrollToItem(targetIdx)
+                }
+            }
+        } finally {
+            isProgrammaticScroll = false
+        }
+    }
+
+    // Cancelar de inmediato el resaltado temporal en cuanto el usuario haga scroll/arrastre
+    LaunchedEffect(leftListState, uiState.isNavigationHighlightActive) {
+        if (!uiState.isNavigationHighlightActive) return@LaunchedEffect
+        leftListState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                viewModel.clearNavigationHighlight()
+            }
+        }
+    }
+
+    LaunchedEffect(rightListState, uiState.isNavigationHighlightActive, rightTempHighlightedVerse) {
+        if (!uiState.isNavigationHighlightActive && rightTempHighlightedVerse == null) return@LaunchedEffect
+        rightListState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                rightTempHighlightedVerse = null
+            }
+        }
+    }
+
+    LaunchedEffect(leftListState.isScrollInProgress, rightListState.isScrollInProgress, uiState.isNavigationHighlightActive) {
+        if (!isProgrammaticScroll && (leftListState.isScrollInProgress || rightListState.isScrollInProgress)) {
+            if (uiState.isNavigationHighlightActive) {
+                viewModel.clearNavigationHighlight()
+            }
+            if (rightTempHighlightedVerse != null && rightListState.isScrollInProgress) {
+                rightTempHighlightedVerse = null
             }
         }
     }
@@ -307,20 +366,27 @@ fun BibleScreen(
                     rightListState = rightListState,
                     rightBookTitle = rightBookTitle,
                     rightChapter = rightChapter,
-                    rightVerse = rightVerse,
+                    rightHighlightedVerse = rightTempHighlightedVerse,
+                    onClearRightHighlight = { rightTempHighlightedVerse = null },
                     onUpdateRightPassage = { newBook, newChapter, newVerse ->
                         rightBookTitle = newBook
                         rightChapter = newChapter
-                        rightVerse = newVerse
+                        rightTempHighlightedVerse = newVerse
                         viewModel.loadParallelChapter(newBook, newChapter, uiState.parallelVersion)
                         coroutineScope.launch {
-                            val targetIndex = (newVerse - 1).coerceAtLeast(0)
-                            rightListState.animateScrollToItem(targetIndex)
+                            isProgrammaticScroll = true
+                            try {
+                                val targetIndex = (newVerse - 1).coerceAtLeast(0)
+                                rightListState.animateScrollToItem(targetIndex)
+                            } finally {
+                                isProgrammaticScroll = false
+                            }
                         }
                     },
                     selectedVerses = selectedVerses,
                     selectedIsRightPane = selectedIsRightPane,
                     onLeftVerseClick = { verseNum ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
                         if (!selectedIsRightPane) {
                             selectedVerses = if (verseNum in selectedVerses) {
                                 selectedVerses - verseNum
@@ -333,6 +399,7 @@ fun BibleScreen(
                         }
                     },
                     onLeftVerseLongClick = { verseNum ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (!selectedIsRightPane) {
                             selectedVerses = selectedVerses + verseNum
@@ -342,6 +409,8 @@ fun BibleScreen(
                         }
                     },
                     onRightVerseClick = { verseNum ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                        rightTempHighlightedVerse = null
                         if (selectedIsRightPane) {
                             val updated = if (verseNum in selectedVerses) {
                                 selectedVerses - verseNum
@@ -356,6 +425,8 @@ fun BibleScreen(
                         }
                     },
                     onRightVerseLongClick = { verseNum ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                        rightTempHighlightedVerse = null
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (selectedIsRightPane) {
                             selectedVerses = selectedVerses + verseNum
@@ -378,6 +449,7 @@ fun BibleScreen(
                     viewModel = viewModel,
                     selectedVerses = if (selectedIsRightPane) emptySet() else selectedVerses,
                     onVerseClick = { verseNum ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
                         selectedIsRightPane = false
                         selectedVerses = if (verseNum in selectedVerses) {
                             selectedVerses - verseNum
@@ -386,6 +458,7 @@ fun BibleScreen(
                         }
                     },
                     onVerseLongClick = { verseNum ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         selectedIsRightPane = false
                         selectedVerses = selectedVerses + verseNum
@@ -552,6 +625,64 @@ fun BibleScreen(
                 commentaries = uiState.currentVerseCommentaries,
                 interfaceLanguage = lang,
                 onDismiss = { viewModel.dismissCommentary() }
+            )
+        }
+
+        uiState.missingNoteModulePrompt?.let { prompt ->
+            val isEn = lang.contains("English", ignoreCase = true)
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissMissingNoteModulePrompt() },
+                containerColor = appColors.surface,
+                titleContentColor = appColors.titleColor,
+                textContentColor = appColors.textPrimary,
+                shape = RoundedCornerShape(22.dp),
+                title = {
+                    Text(
+                        text = if (isEn) "Reina-Valera 1960 Notes" else "Notas de Reina-Valera 1960",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = appColors.titleColor
+                    )
+                },
+                text = {
+                    Text(
+                        text = if (isEn) {
+                            "To read the notes marked with (*) in RVR1960 (${prompt.verseReference}), you need the module \"${prompt.moduleTitle} (${prompt.moduleTag})\"."
+                        } else {
+                            "Las notas marcadas con (*) en RVR1960 (${prompt.verseReference}) requieren el módulo «${prompt.moduleTitle} (${prompt.moduleTag})»."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = appColors.textSecondary,
+                        lineHeight = 21.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.openAndDownloadMissingNoteModule() },
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = appColors.pillBg,
+                            contentColor = appColors.pillText
+                        ),
+                        modifier = Modifier.testTag("download_rvrc_module_button")
+                    ) {
+                        Text(
+                            text = if (isEn) "Download RVR-C" else "Descargar RVR-C",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.dismissMissingNoteModulePrompt() },
+                        modifier = Modifier.testTag("dismiss_rvrc_dialog_button")
+                    ) {
+                        Text(
+                            text = StringsLocale.get("cancel", lang),
+                            color = appColors.textSecondary
+                        )
+                    }
+                }
             )
         }
 
@@ -918,6 +1049,7 @@ private fun SingleReaderView(
             ) {
                 VerseRowItem(
                     verse = verse,
+                    subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
                     hasCommentary = hasCommentary,
                     hasCrossReference = hasCrossReference,
                     isHighlighted = uiState.highlightedVerse == verse.verse,
@@ -926,10 +1058,27 @@ private fun SingleReaderView(
                     fontFamily = fontFamily,
                     fontSize = fontSize,
                     lineHeight = lineHeight,
-                    onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
-                    onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                    onWordClick = { word -> viewModel.lookupWord(word, verse) },
-                    onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
+                    onCommentaryClick = { code ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                        viewModel.openCommentary(verse, code)
+                    },
+                    onCrossRefClick = {
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                        viewModel.openCrossReferences(verse)
+                    },
+                    onWordClick = { word ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                        viewModel.lookupWord(word, verse)
+                    },
+                    onNoteClick = { marker ->
+                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                        viewModel.onVersionNoteClick(verse, marker)
+                    },
+                    onAnyVerseTap = {
+                        if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
+                            viewModel.clearNavigationHighlight()
+                        }
+                    },
                     onVerseClick = { onVerseClick(verse.verse) },
                     onVerseLongClick = { onVerseLongClick(verse.verse) }
                 )
@@ -966,7 +1115,8 @@ private fun ParallelReaderView(
     rightListState: LazyListState,
     rightBookTitle: String,
     rightChapter: Int,
-    rightVerse: Int,
+    rightHighlightedVerse: Int?,
+    onClearRightHighlight: () -> Unit,
     onUpdateRightPassage: (String, Int, Int) -> Unit,
     selectedVerses: Set<Int>,
     selectedIsRightPane: Boolean,
@@ -1146,6 +1296,7 @@ private fun ParallelReaderView(
 
                     VerseRowItem(
                         verse = verse,
+                        subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
                         hasCommentary = hasCommentary,
                         hasCrossReference = hasCrossReference,
                         isHighlighted = uiState.highlightedVerse == verse.verse,
@@ -1154,10 +1305,27 @@ private fun ParallelReaderView(
                         fontFamily = fontFamily,
                         fontSize = fontSize,
                         lineHeight = lineHeight,
-                        onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
-                        onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
-                        onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
+                        onCommentaryClick = { code ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.openCommentary(verse, code)
+                        },
+                        onCrossRefClick = {
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.openCrossReferences(verse)
+                        },
+                        onWordClick = { word ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.lookupWord(word, verse)
+                        },
+                        onNoteClick = { marker ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.onVersionNoteClick(verse, marker)
+                        },
+                        onAnyVerseTap = {
+                            if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
+                                viewModel.clearNavigationHighlight()
+                            }
+                        },
                         onVerseClick = { onLeftVerseClick(verse.verse) },
                         onVerseLongClick = { onLeftVerseLongClick(verse.verse) }
                     )
@@ -1370,18 +1538,47 @@ private fun ParallelReaderView(
 
                     VerseRowItem(
                         verse = verse,
+                        subheadings = uiState.parallelChapterSubheadings[verse.verse].orEmpty(),
                         hasCommentary = hasCommentary,
                         hasCrossReference = hasCrossReference,
-                        isHighlighted = rightVerse == verse.verse,
+                        isHighlighted = if (isLinked) {
+                            uiState.highlightedVerse == verse.verse
+                        } else {
+                            rightHighlightedVerse == verse.verse
+                        },
                         isSelected = selectedIsRightPane && verse.verse in selectedVerses,
                         isSelectionMode = isSelectionMode,
                         fontFamily = fontFamily,
                         fontSize = fontSize,
                         lineHeight = lineHeight,
-                        onCommentaryClick = { code -> viewModel.openCommentary(verse, code) },
-                        onCrossRefClick = { viewModel.openCrossReferences(verse) },
-                        onWordClick = { word -> viewModel.lookupWord(word, verse) },
-                        onNoteClick = { marker -> viewModel.onVersionNoteClick(verse, marker) },
+                        onCommentaryClick = { code ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            onClearRightHighlight()
+                            viewModel.openCommentary(verse, code)
+                        },
+                        onCrossRefClick = {
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            onClearRightHighlight()
+                            viewModel.openCrossReferences(verse)
+                        },
+                        onWordClick = { word ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            onClearRightHighlight()
+                            viewModel.lookupWord(word, verse)
+                        },
+                        onNoteClick = { marker ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            onClearRightHighlight()
+                            viewModel.onVersionNoteClick(verse, marker)
+                        },
+                        onAnyVerseTap = {
+                            if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
+                                viewModel.clearNavigationHighlight()
+                            }
+                            if (rightHighlightedVerse != null && rightHighlightedVerse != verse.verse) {
+                                onClearRightHighlight()
+                            }
+                        },
                         onVerseClick = { onRightVerseClick(verse.verse) },
                         onVerseLongClick = { onRightVerseLongClick(verse.verse) }
                     )
@@ -1547,6 +1744,7 @@ private fun ChapterBottomNavigationControls(
 @Composable
 private fun VerseRowItem(
     verse: BibleVerse,
+    subheadings: List<String> = emptyList(),
     hasCommentary: Boolean,
     hasCrossReference: Boolean,
     isHighlighted: Boolean,
@@ -1559,18 +1757,39 @@ private fun VerseRowItem(
     onCrossRefClick: () -> Unit,
     onWordClick: (String) -> Unit,
     onNoteClick: (marker: String) -> Unit,
+    onAnyVerseTap: () -> Unit = {},
     onVerseClick: () -> Unit,
     onVerseLongClick: () -> Unit
 ) {
     val appColors = AppTheme.colors
     val selectionBgColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val tempHighlightColor = appColors.accent.copy(alpha = if (appColors.isDark) 0.22f else 0.14f)
 
-    val rawCleanText = remember(verse.text) {
-        verse.text
-            .replace(Regex("<S>.*?</S>|<.*?>"), "")
-            .replace(Regex("(?<=\\p{L})\\d+"), "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
+    val targetBgColor = when {
+        isSelected -> selectionBgColor
+        isHighlighted -> tempHighlightColor
+        else -> Color.Transparent
+    }
+    val animatedBgColor by animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = tween(durationMillis = if (isHighlighted || isSelected) 220 else 550),
+        label = "verseHighlightBg"
+    )
+
+    val isRvr1960 = remember(verse.version) {
+        BibleStudyTextUtils.isRvr1960Version(verse.version)
+    }
+
+    val rawCleanText = remember(verse.text, verse.version) {
+        BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, verse.version)
+    }
+
+    val effectiveSubheadings = remember(subheadings, verse.sectionTitle) {
+        if (subheadings.isNotEmpty()) {
+            subheadings
+        } else {
+            listOfNotNull(verse.sectionTitle?.takeIf { it.isNotBlank() })
+        }
     }
 
     val currentIsSelectionMode by rememberUpdatedState(isSelectionMode)
@@ -1580,10 +1799,12 @@ private fun VerseRowItem(
     val currentOnCrossRefClick by rememberUpdatedState(onCrossRefClick)
     val currentOnWordClick by rememberUpdatedState(onWordClick)
     val currentOnNoteClick by rememberUpdatedState(onNoteClick)
+    val currentOnAnyVerseTap by rememberUpdatedState(onAnyVerseTap)
 
     val annotatedString = remember(
         verse.verse,
         rawCleanText,
+        isRvr1960,
         appColors.verseNumberColor,
         appColors.textPrimary,
         appColors.accent,
@@ -1605,39 +1826,51 @@ private fun VerseRowItem(
             }
             pop()
 
-            // Tokenizar texto en: notas de versión [n], palabras interactuables y puntuación/espacios
-            val tokenPattern = Regex("(\\[(\\d+)\\])|([\\p{L}\\p{Nd}]+)|([^\\s\\[\\]\\p{L}\\p{Nd}]+)|(\\s+)")
-            val noteStyle = SpanStyle(
+            val bracketNoteStyle = SpanStyle(
                 color = appColors.accent.copy(alpha = 0.85f),
                 fontSize = (fontSize.value * 0.65f).sp,
                 baselineShift = BaselineShift.Superscript,
                 fontWeight = FontWeight.Medium
             )
+            val asteriskNoteStyle = SpanStyle(
+                color = appColors.accent,
+                fontSize = (fontSize.value * 0.78f).sp,
+                baselineShift = BaselineShift.Superscript,
+                fontWeight = FontWeight.Bold
+            )
             val wordStyle = SpanStyle(
                 color = appColors.textPrimary
             )
 
-            tokenPattern.findAll(rawCleanText).forEach { match ->
-                val noteMarker = match.groups[2]?.value
-                val word = match.groups[3]?.value
-                when {
-                    noteMarker != null -> {
-                        pushStringAnnotation(tag = "NOTE", annotation = noteMarker)
-                        withStyle(noteStyle) {
-                            append("[$noteMarker]")
+            BibleStudyTextUtils.tokenizeVerseText(rawCleanText, isRvr1960).forEach { token ->
+                when (token) {
+                    is VerseDisplayToken.BracketNote -> {
+                        pushStringAnnotation(tag = "NOTE", annotation = token.marker)
+                        withStyle(bracketNoteStyle) {
+                            append("[${token.marker}]")
                         }
                         pop()
                     }
-                    word != null -> {
-                        pushStringAnnotation(tag = "WORD", annotation = word)
-                        withStyle(wordStyle) {
-                            append(word)
+                    is VerseDisplayToken.AsteriskNote -> {
+                        pushStringAnnotation(
+                            tag = "NOTE",
+                            annotation = "${BibleStudyTextUtils.RVR_NOTE_MARKER_PREFIX}${token.ordinal}"
+                        )
+                        withStyle(asteriskNoteStyle) {
+                            append("*")
                         }
                         pop()
                     }
-                    else -> {
+                    is VerseDisplayToken.Word -> {
+                        pushStringAnnotation(tag = "WORD", annotation = token.text)
                         withStyle(wordStyle) {
-                            append(match.value)
+                            append(token.text)
+                        }
+                        pop()
+                    }
+                    is VerseDisplayToken.Other -> {
+                        withStyle(wordStyle) {
+                            append(token.text)
                         }
                     }
                 }
@@ -1762,118 +1995,146 @@ private fun VerseRowItem(
 
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                when {
-                    isSelected -> selectionBgColor
-                    isHighlighted -> appColors.surfaceVariant
-                    else -> Color.Transparent
-                }
-            )
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {
-                    if (currentIsSelectionMode) {
-                        currentOnVerseClick()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Subtítulos de pasaje automáticos (fuera del bloque resaltable/seleccionable del versículo)
+        if (effectiveSubheadings.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = 4.dp,
+                        end = 4.dp,
+                        top = if (verse.verse == 1) 4.dp else 14.dp,
+                        bottom = 4.dp
+                    )
+                    .testTag("verse_subheading_${verse.verse}")
+            ) {
+                effectiveSubheadings.forEachIndexed { idx, heading ->
+                    val isParallelRef = BibleStudyTextUtils.isParallelReferenceSubheading(heading)
+                    if (isParallelRef) {
+                        Text(
+                            text = heading,
+                            fontSize = (fontSize.value * 0.80f).coerceIn(11.5f, 16.5f).sp,
+                            lineHeight = (fontSize.value * 1.15f).coerceIn(15f, 22f).sp,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Normal,
+                            color = appColors.textSecondary,
+                            fontFamily = fontFamily,
+                            modifier = Modifier.padding(top = if (idx > 0) 2.dp else 0.dp)
+                        )
+                    } else {
+                        Text(
+                            text = heading,
+                            fontSize = (fontSize.value * 1.03f).coerceIn(14.5f, 23f).sp,
+                            lineHeight = (fontSize.value * 1.32f).coerceIn(19f, 29f).sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = appColors.titleColor,
+                            fontFamily = fontFamily,
+                            modifier = Modifier.padding(top = if (idx > 0) 4.dp else 0.dp)
+                        )
                     }
-                },
-                onLongClick = { currentOnVerseLongClick() }
-            )
-            .padding(vertical = 4.dp, horizontal = 4.dp)
-            .testTag("verse_item_${verse.verse}")
-    ) {
-        if (!verse.sectionTitle.isNullOrBlank()) {
-            Text(
-                text = verse.sectionTitle,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = appColors.titleColor,
-                fontFamily = fontFamily,
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-            )
+                }
+            }
         }
 
-        // Renderizado unificado y continuo en una sola pasada con píldoras atómicas y notas integradas
-        Text(
-            text = annotatedString,
-            inlineContent = inlineContent,
-            fontSize = fontSize,
-            lineHeight = lineHeight,
-            fontFamily = fontFamily,
-            onTextLayout = { layoutResult = it },
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .pointerInput(annotatedString) {
-                    val hitBoxExpandPx = 20.dp.toPx()
-                    detectTapGestures(
-                        onLongPress = { currentOnVerseLongClick() },
-                        onTap = { pos ->
-                            if (currentIsSelectionMode) {
-                                currentOnVerseClick()
-                                return@detectTapGestures
-                            }
+                .clip(RoundedCornerShape(8.dp))
+                .background(animatedBgColor)
+                .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {
+                        currentOnAnyVerseTap()
+                        if (currentIsSelectionMode) {
+                            currentOnVerseClick()
+                        }
+                    },
+                    onLongClick = { currentOnVerseLongClick() }
+                )
+                .padding(vertical = 4.dp, horizontal = 4.dp)
+                .testTag("verse_item_${verse.verse}")
+        ) {
+            // Renderizado unificado y continuo en una sola pasada con píldoras atómicas y notas integradas
+            Text(
+                text = annotatedString,
+                inlineContent = inlineContent,
+                fontSize = fontSize,
+                lineHeight = lineHeight,
+                fontFamily = fontFamily,
+                onTextLayout = { layoutResult = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(annotatedString) {
+                        val hitBoxExpandPx = 20.dp.toPx()
+                        detectTapGestures(
+                            onLongPress = { currentOnVerseLongClick() },
+                            onTap = { pos ->
+                                currentOnAnyVerseTap()
+                                if (currentIsSelectionMode) {
+                                    currentOnVerseClick()
+                                    return@detectTapGestures
+                                }
 
-                            layoutResult?.let { layout ->
-                                // 1. Hit-box ampliada (mínimo 40x40 dp) para notas de versión [n]
-                                val noteAnnotations = annotatedString.getStringAnnotations("NOTE", 0, annotatedString.length)
-                                var bestNote: String? = null
-                                var minDistance = Float.MAX_VALUE
+                                layoutResult?.let { layout ->
+                                    // 1. Hit-box ampliada (mínimo 40x40 dp) para notas de versión [n] y asteriscos (*)
+                                    val noteAnnotations = annotatedString.getStringAnnotations("NOTE", 0, annotatedString.length)
+                                    var bestNote: String? = null
+                                    var minDistance = Float.MAX_VALUE
 
-                                for (annotation in noteAnnotations) {
-                                    if (annotation.start < layout.layoutInput.text.length && annotation.end <= layout.layoutInput.text.length) {
-                                        val startBox = layout.getBoundingBox(annotation.start)
-                                        val endBox = layout.getBoundingBox((annotation.end - 1).coerceAtLeast(annotation.start))
-                                        val left = minOf(startBox.left, endBox.left) - hitBoxExpandPx
-                                        val right = maxOf(startBox.right, endBox.right) + hitBoxExpandPx
-                                        val top = minOf(startBox.top, endBox.top) - hitBoxExpandPx
-                                        val bottom = maxOf(startBox.bottom, endBox.bottom) + hitBoxExpandPx
+                                    for (annotation in noteAnnotations) {
+                                        if (annotation.start < layout.layoutInput.text.length && annotation.end <= layout.layoutInput.text.length) {
+                                            val startBox = layout.getBoundingBox(annotation.start)
+                                            val endBox = layout.getBoundingBox((annotation.end - 1).coerceAtLeast(annotation.start))
+                                            val left = minOf(startBox.left, endBox.left) - hitBoxExpandPx
+                                            val right = maxOf(startBox.right, endBox.right) + hitBoxExpandPx
+                                            val top = minOf(startBox.top, endBox.top) - hitBoxExpandPx
+                                            val bottom = maxOf(startBox.bottom, endBox.bottom) + hitBoxExpandPx
 
-                                        if (pos.x in left..right && pos.y in top..bottom) {
-                                            val centerX = (left + right) / 2f
-                                            val centerY = (top + bottom) / 2f
-                                            val dist = (pos.x - centerX) * (pos.x - centerX) + (pos.y - centerY) * (pos.y - centerY)
-                                            if (dist < minDistance) {
-                                                minDistance = dist
-                                                bestNote = annotation.item
+                                            if (pos.x in left..right && pos.y in top..bottom) {
+                                                val centerX = (left + right) / 2f
+                                                val centerY = (top + bottom) / 2f
+                                                val dist = (pos.x - centerX) * (pos.x - centerX) + (pos.y - centerY) * (pos.y - centerY)
+                                                if (dist < minDistance) {
+                                                    minDistance = dist
+                                                    bestNote = annotation.item
+                                                }
                                             }
                                         }
                                     }
-                                }
 
-                                if (bestNote != null) {
-                                    currentOnNoteClick(bestNote)
-                                    return@detectTapGestures
-                                }
+                                    if (bestNote != null) {
+                                        currentOnNoteClick(bestNote)
+                                        return@detectTapGestures
+                                    }
 
-                                val offset = layout.getOffsetForPosition(pos)
+                                    val offset = layout.getOffsetForPosition(pos)
 
-                                // 2. Fallback para etiquetas individuales si el toque cae en el margen del Placeholder
-                                val comAnnotation = annotatedString.getStringAnnotations("COM", offset, offset).firstOrNull()
-                                if (comAnnotation != null) {
-                                    currentOnCommentaryClick("COM")
-                                    return@detectTapGestures
-                                }
-                                val refAnnotation = annotatedString.getStringAnnotations("REF", offset, offset).firstOrNull()
-                                if (refAnnotation != null) {
-                                    currentOnCrossRefClick()
-                                    return@detectTapGestures
-                                }
+                                    // 2. Fallback para etiquetas individuales si el toque cae en el margen del Placeholder
+                                    val comAnnotation = annotatedString.getStringAnnotations("COM", offset, offset).firstOrNull()
+                                    if (comAnnotation != null) {
+                                        currentOnCommentaryClick("COM")
+                                        return@detectTapGestures
+                                    }
+                                    val refAnnotation = annotatedString.getStringAnnotations("REF", offset, offset).firstOrNull()
+                                    if (refAnnotation != null) {
+                                        currentOnCrossRefClick()
+                                        return@detectTapGestures
+                                    }
 
-                                // 3. Búsqueda de palabra en diccionario
-                                val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
-                                if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
-                                    currentOnWordClick(wordAnnotation.item)
-                                    return@detectTapGestures
+                                    // 3. Búsqueda de palabra en diccionario
+                                    val wordAnnotation = annotatedString.getStringAnnotations("WORD", offset, offset).firstOrNull()
+                                    if (wordAnnotation != null && wordAnnotation.item.isNotBlank()) {
+                                        currentOnWordClick(wordAnnotation.item)
+                                        return@detectTapGestures
+                                    }
                                 }
                             }
-                        }
-                    )
-                }
-        )
+                        )
+                    }
+            )
+        }
     }
 }
 

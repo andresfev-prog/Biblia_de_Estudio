@@ -25,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.DarkMode
@@ -38,11 +37,13 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,11 +63,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.repository.SyncStatus
@@ -78,6 +82,17 @@ import com.example.ui.theme.AppThemeIds
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
+
+private val SettingsCrispLightBg = Color(0xFFF6F7F9)
+private val SettingsCrispTitleNavy = Color(0xFF0D2240)
+private val SettingsCrispBorder = Color(0xFFE5E9F0)
+private val SettingsCrispMutedText = Color(0xFF566376)
+private val SettingsCrispSubtitleHeader = Color(0xFF475569)
+private val SettingsCrispSoftChipBg = Color(0xFFD7DEE8)
+private val SettingsCrispUnselectedPillBg = Color(0xFFF0F2F6)
+private val SettingsCrispAvatarBg = Color(0xFFE8ECF2)
+private val SettingsCrispPreviewBg = Color(0xFFF1F3F7)
+private val SettingsCrispPreviewBorder = Color(0xFFDDE3EC)
 
 @Composable
 fun SettingsScreen(
@@ -101,7 +116,7 @@ fun SettingsScreen(
                 scrollState.animateScrollTo(420)
             }
             TutorialStep.SETTINGS_TYPOGRAPHY -> {
-                scrollState.animateScrollTo(740)
+                scrollState.animateScrollTo(720)
             }
             else -> {}
         }
@@ -112,6 +127,40 @@ fun SettingsScreen(
     var darkThemeMenuOpen by remember { mutableStateOf(false) }
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+
+    val screenBg = if (isCrispLight) SettingsCrispLightBg else appColors.background
+    val headingColor = if (isCrispLight) SettingsCrispTitleNavy else appColors.titleColor
+    val headerSubtitleColor = if (isCrispLight) SettingsCrispSubtitleHeader else appColors.textSecondary
+    val mutedTextColor = if (isCrispLight) SettingsCrispMutedText else appColors.textSecondary
+    val iconTint = if (isCrispLight) SettingsCrispTitleNavy else appColors.accent
+    val cardBorderColor = if (isCrispLight) SettingsCrispBorder else appColors.border
+    val cardElevation = if (appColors.isDark) 0.dp else 1.5.dp
+    val cardShape = RoundedCornerShape(22.dp)
+
+    val softChipBg = when {
+        isCrispLight -> SettingsCrispSoftChipBg
+        !appColors.isDark -> appColors.primaryContainer
+        else -> appColors.surfaceVariant
+    }
+    val softChipText = when {
+        isCrispLight -> SettingsCrispTitleNavy
+        !appColors.isDark -> appColors.onPrimaryContainer
+        else -> appColors.textPrimary
+    }
+    val softChipBorder = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null
+
+    val selectedPillBg = if (isCrispLight) SettingsCrispTitleNavy else appColors.pillBg
+    val selectedPillText = if (isCrispLight) Color.White else appColors.pillText
+    val unselectedPillBg = if (isCrispLight) SettingsCrispUnselectedPillBg else appColors.surfaceVariant
+    val avatarBg = if (isCrispLight) SettingsCrispAvatarBg else appColors.surfaceVariant
+    val previewBg = if (isCrispLight) SettingsCrispPreviewBg else appColors.surfaceVariant
+    val previewBorder = if (isCrispLight) SettingsCrispPreviewBorder else appColors.border
+
+    val sliderActive = if (isCrispLight) SettingsCrispTitleNavy else appColors.accent
+    val sliderInactive = if (isCrispLight) SettingsCrispSoftChipBg else appColors.border
+    val sliderActiveTick = if (isCrispLight) Color.White.copy(alpha = 0.85f) else appColors.cardBg.copy(alpha = 0.85f)
+    val sliderInactiveTick = if (isCrispLight) SettingsCrispTitleNavy.copy(alpha = 0.65f) else appColors.textSecondary.copy(alpha = 0.65f)
 
     val isEn = lang.contains("English", ignoreCase = true)
     // Opciones: English y Spanish en inglés, o Español e Inglés en español
@@ -156,28 +205,32 @@ fun SettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(appColors.background)
+            .background(screenBg)
             .verticalScroll(scrollState)
             .padding(
                 start = 20.dp,
                 end = 20.dp,
-                top = 16.dp,
-                bottom = 96.dp + navBarBottom
+                top = 18.dp,
+                bottom = 140.dp + navBarBottom
             )
             .testTag("settings_screen")
     ) {
         Text(
             text = StringsLocale.get("settings_title", lang),
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontSize = 27.sp,
+                letterSpacing = (-0.4).sp
+            ),
             fontWeight = FontWeight.Bold,
-            color = appColors.titleColor,
+            color = headingColor,
             maxLines = 1,
             softWrap = false
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = StringsLocale.get("settings_subtitle", lang),
-            style = MaterialTheme.typography.bodySmall,
-            color = appColors.textSecondary
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.5.sp),
+            color = headerSubtitleColor
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -189,15 +242,15 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .testTag("user_profile_card")
                 .tutorialTarget(TutorialStep.SETTINGS_PROFILE),
-            shape = RoundedCornerShape(20.dp),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            border = BorderStroke(1.dp, cardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp),
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Avatar con iniciales dinámicas o ícono de invitado
@@ -205,13 +258,13 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(if (initials.isNotBlank()) appColors.pillBg else appColors.surfaceVariant),
+                        .background(if (initials.isNotBlank()) selectedPillBg else avatarBg),
                     contentAlignment = Alignment.Center
                 ) {
                     if (initials.isNotBlank()) {
                         Text(
                             text = initials,
-                            color = appColors.pillText,
+                            color = selectedPillText,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -221,7 +274,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Outlined.Person,
                             contentDescription = null,
-                            tint = appColors.accent,
+                            tint = iconTint,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -234,17 +287,17 @@ fun SettingsScreen(
                         isGoogleLinked -> {
                             Text(
                                 text = activeProfileName.ifBlank { uiState.googleEmail },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = headingColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (uiState.googleEmail.isNotBlank()) {
                                 Text(
                                     text = uiState.googleEmail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = appColors.textSecondary,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                    color = mutedTextColor,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -291,9 +344,9 @@ fun SettingsScreen(
                         activeProfileName.isNotBlank() -> {
                             Text(
                                 text = activeProfileName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = headingColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -302,14 +355,14 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.CloudOff,
                                     contentDescription = null,
-                                    tint = appColors.textSecondary,
+                                    tint = mutedTextColor,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = StringsLocale.get("profile_local_subtitle", lang),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = appColors.textSecondary,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                    color = mutedTextColor,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -319,17 +372,20 @@ fun SettingsScreen(
                         else -> {
                             Text(
                                 text = StringsLocale.get("profile_guest_name", lang),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = headingColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = StringsLocale.get("profile_guest_subtitle", lang),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 13.sp,
+                                    lineHeight = 17.sp
+                                ),
+                                color = mutedTextColor,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -345,14 +401,14 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(appColors.surfaceVariant)
+                        .background(avatarBg)
                         .testTag("edit_profile_button")
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Edit,
                         contentDescription = StringsLocale.get("profile_backup_title", lang),
-                        tint = appColors.accent,
-                        modifier = Modifier.size(20.dp)
+                        tint = iconTint,
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
@@ -360,372 +416,180 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // "Favoritos" item in Settings (situated above modules and preferences)
+        // 2. "Favoritos" — tarjeta independiente (separada de Idioma)
         Card(
             onClick = { viewModel.showFavoritesDialog(true) },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("settings_favorites_item")
                 .tutorialTarget(TutorialStep.SETTINGS_FAVORITES),
-            shape = RoundedCornerShape(20.dp),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            border = BorderStroke(1.dp, cardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Favorite,
-                            contentDescription = null,
-                            tint = appColors.accent
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = StringsLocale.get("favorites_option", lang),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Text(
-                                text = String.format(StringsLocale.get("saved_favorites_count", lang), uiState.favorites.size),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = Icons.Filled.Favorite,
                         contentDescription = null,
-                        tint = appColors.textSecondary,
-                        modifier = Modifier.size(20.dp)
+                        tint = iconTint,
+                        modifier = Modifier.size(22.dp)
                     )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = StringsLocale.get("favorites_option", lang),
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.5.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = headingColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Text(
+                            text = String.format(StringsLocale.get("saved_favorites_count", lang), uiState.favorites.size),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                            color = mutedTextColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = mutedTextColor,
+                    modifier = Modifier.size(19.dp)
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 2. Interface Language Dropdown (Requirement 5: Only Español & English)
+        // 3. Interface Language Dropdown — tarjeta independiente (separada de Favoritos)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            border = BorderStroke(1.dp, cardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Language,
-                            contentDescription = null,
-                            tint = appColors.accent
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = StringsLocale.get("interface_language", lang),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Text(
-                                text = StringsLocale.get("interface_language_sub", lang),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Box {
-                        Surface(
-                            shape = CircleShape,
-                            color = appColors.pillBg,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { languageMenuOpen = true }
-                                .testTag("language_dropdown_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = currentLanguageDisplay,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = appColors.pillText,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowDropDown,
-                                    contentDescription = null,
-                                    tint = appColors.pillText
-                                )
-                            }
-                        }
-
-                        DropdownMenu(
-                            expanded = languageMenuOpen,
-                            onDismissRequest = { languageMenuOpen = false },
-                            shape = RoundedCornerShape(16.dp),
-                            containerColor = appColors.surface,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 8.dp,
-                            border = BorderStroke(
-                                1.dp,
-                                appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
-                            )
-                        ) {
-                            languages.forEach { languageName ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = languageName,
-                                            fontWeight = if (currentLanguageDisplay == languageName) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (currentLanguageDisplay == languageName) appColors.accent else appColors.textPrimary,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    },
-                                    onClick = {
-                                        val targetLanguage = when (languageName) {
-                                            "Spanish" -> "Español"
-                                            "English", "Inglés" -> "English"
-                                            else -> languageName
-                                        }
-                                        viewModel.updateInterfaceLanguage(targetLanguage)
-                                        languageMenuOpen = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 3. Theme Selector (Claro, Oscuro, Automático) - Requirement 6
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("theme_selector_card")
-                .tutorialTarget(TutorialStep.SETTINGS_THEMES),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Palette,
+                        imageVector = Icons.Filled.Language,
                         contentDescription = null,
-                        tint = appColors.accent
+                        tint = iconTint,
+                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = StringsLocale.get("app_theme", lang),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.titleColor,
-                        maxLines = 1,
-                        softWrap = false
-                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = StringsLocale.get("interface_language", lang),
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.5.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = headingColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Text(
+                            text = StringsLocale.get("interface_language_sub", lang),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                            color = mutedTextColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val themes = listOf(
-                        Triple("LIGHT", StringsLocale.get("theme_light", lang), Icons.Filled.LightMode),
-                        Triple("DARK", StringsLocale.get("theme_dark", lang), Icons.Filled.DarkMode),
-                        Triple("AUTO", StringsLocale.get("theme_auto", lang), Icons.Filled.SettingsBrightness)
-                    )
-
-                    themes.forEach { (modeKey, modeName, icon) ->
-                        val isSelected = if (modeKey == "AUTO") {
-                            uiState.userPreferences.themeMode.equals("AUTO", ignoreCase = true) ||
-                                uiState.userPreferences.themeMode.equals("AUTOMATIC", ignoreCase = true)
-                        } else {
-                            uiState.userPreferences.themeMode.equals(modeKey, ignoreCase = true)
+                Box {
+                    Surface(
+                        shape = CircleShape,
+                        color = softChipBg,
+                        border = softChipBorder,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { languageMenuOpen = true }
+                            .testTag("language_dropdown_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = currentLanguageDisplay,
+                                style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.5.sp),
+                                fontWeight = FontWeight.Medium,
+                                color = softChipText,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = softChipText,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
+                    }
 
-                        Box(modifier = Modifier.weight(1f)) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(50))
-                                    .background(if (isSelected) appColors.pillBg else appColors.surfaceVariant)
-                                    .clickable {
-                                        when (modeKey) {
-                                            "LIGHT" -> {
-                                                viewModel.updateThemeMode("LIGHT")
-                                                lightThemeMenuOpen = true
-                                            }
-                                            "DARK" -> {
-                                                viewModel.updateThemeMode("DARK")
-                                                darkThemeMenuOpen = true
-                                            }
-                                            else -> {
-                                                viewModel.updateThemeMode("AUTO")
-                                            }
-                                        }
-                                    }
-                                    .padding(vertical = 12.dp)
-                                    .testTag("theme_button_$modeKey"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        tint = if (isSelected) appColors.pillText else appColors.textSecondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
+                    DropdownMenu(
+                        expanded = languageMenuOpen,
+                        onDismissRequest = { languageMenuOpen = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = appColors.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(
+                            1.dp,
+                            appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                        )
+                    ) {
+                        languages.forEach { languageName ->
+                            DropdownMenuItem(
+                                text = {
                                     Text(
-                                        text = modeName,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) appColors.pillText else appColors.textPrimary,
+                                        text = languageName,
+                                        fontWeight = if (currentLanguageDisplay == languageName) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (currentLanguageDisplay == languageName) appColors.accent else appColors.textPrimary,
                                         maxLines = 1,
                                         softWrap = false
                                     )
-                                }
-                            }
-
-                            if (modeKey == "LIGHT") {
-                                val lightOptions = listOf(
-                                    AppThemeIds.CRISP_LIGHT to StringsLocale.get("theme_crisp_light", lang),
-                                    AppThemeIds.WARM_PARCHMENT to StringsLocale.get("theme_warm_parchment", lang),
-                                    AppThemeIds.SERENE_OLIVE to StringsLocale.get("theme_serene_olive", lang)
-                                )
-                                DropdownMenu(
-                                    expanded = lightThemeMenuOpen,
-                                    onDismissRequest = { lightThemeMenuOpen = false },
-                                    shape = RoundedCornerShape(16.dp),
-                                    containerColor = appColors.surface,
-                                    tonalElevation = 0.dp,
-                                    shadowElevation = 8.dp,
-                                    border = BorderStroke(
-                                        1.dp,
-                                        appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
-                                    )
-                                ) {
-                                    lightOptions.forEach { (themeKey, themeLabel) ->
-                                        val isOptionSelected = uiState.userPreferences.selectedLightTheme == themeKey
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = themeLabel,
-                                                    fontWeight = if (isOptionSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (isOptionSelected) appColors.accent else appColors.textPrimary,
-                                                    maxLines = 1,
-                                                    softWrap = false
-                                                )
-                                            },
-                                            trailingIcon = if (isOptionSelected) {
-                                                {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Check,
-                                                        contentDescription = null,
-                                                        tint = appColors.accent,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-                                            } else null,
-                                            onClick = {
-                                                viewModel.updateSelectedLightTheme(themeKey, activateMode = true)
-                                                lightThemeMenuOpen = false
-                                            },
-                                            modifier = Modifier.testTag("theme_option_$themeKey")
-                                        )
+                                },
+                                onClick = {
+                                    val targetLanguage = when (languageName) {
+                                        "Spanish" -> "Español"
+                                        "English", "Inglés" -> "English"
+                                        else -> languageName
                                     }
+                                    viewModel.updateInterfaceLanguage(targetLanguage)
+                                    languageMenuOpen = false
                                 }
-                            } else if (modeKey == "DARK") {
-                                val darkOptions = listOf(
-                                    AppThemeIds.MIDNIGHT_BLUE to StringsLocale.get("theme_midnight_blue", lang),
-                                    AppThemeIds.DEEP_DARK to StringsLocale.get("theme_deep_dark", lang),
-                                    AppThemeIds.OBSIDIAN_ONYX to StringsLocale.get("theme_obsidian_onyx", lang)
-                                )
-                                DropdownMenu(
-                                    expanded = darkThemeMenuOpen,
-                                    onDismissRequest = { darkThemeMenuOpen = false },
-                                    shape = RoundedCornerShape(16.dp),
-                                    containerColor = appColors.surface,
-                                    tonalElevation = 0.dp,
-                                    shadowElevation = 8.dp,
-                                    border = BorderStroke(
-                                        1.dp,
-                                        appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
-                                    )
-                                ) {
-                                    darkOptions.forEach { (themeKey, themeLabel) ->
-                                        val isOptionSelected = uiState.userPreferences.selectedDarkTheme == themeKey
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = themeLabel,
-                                                    fontWeight = if (isOptionSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (isOptionSelected) appColors.accent else appColors.textPrimary,
-                                                    maxLines = 1,
-                                                    softWrap = false
-                                                )
-                                            },
-                                            trailingIcon = if (isOptionSelected) {
-                                                {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Check,
-                                                        contentDescription = null,
-                                                        tint = appColors.accent,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-                                            } else null,
-                                            onClick = {
-                                                viewModel.updateSelectedDarkTheme(themeKey, activateMode = true)
-                                                darkThemeMenuOpen = false
-                                            },
-                                            modifier = Modifier.testTag("theme_option_$themeKey")
-                                        )
-                                    }
-                                }
-                            }
+                            )
                         }
                     }
                 }
@@ -734,184 +598,406 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 4. Typography Controls (Font Size Slider 8 pt to 20 pt)
+        // 4. Bloque unificado de Apariencia (Tema de la Aplicación + Tipografía y lectura)
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("typography_controls_card")
-                .tutorialTarget(TutorialStep.SETTINGS_TYPOGRAPHY),
-            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            border = BorderStroke(1.dp, cardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // 4a. Selector de Tema (Claro, Oscuro, Automático)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 18.dp)
+                        .testTag("theme_selector_card")
+                        .tutorialTarget(TutorialStep.SETTINGS_THEMES)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Filled.FormatColorText,
+                            imageVector = Icons.Filled.Palette,
                             contentDescription = null,
-                            tint = appColors.accent
+                            tint = iconTint,
+                            modifier = Modifier.size(22.dp)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        val isEn = lang.contains("English", ignoreCase = true)
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = StringsLocale.get("typography_title", lang),
-                            style = if (isEn) MaterialTheme.typography.titleSmall.copy(fontSize = 12.5.sp) else MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.titleColor,
+                            text = StringsLocale.get("app_theme", lang),
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = headingColor,
                             maxLines = 1,
                             softWrap = false
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    Box {
-                        Surface(
-                            shape = CircleShape,
-                            color = appColors.pillBg,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { fontMenuOpen = true }
-                                .testTag("font_family_dropdown_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = currentFontDisplay,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = appColors.pillText,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowDropDown,
-                                    contentDescription = null,
-                                    tint = appColors.pillText
-                                )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        val themes = listOf(
+                            Triple("LIGHT", StringsLocale.get("theme_light", lang), Icons.Filled.LightMode),
+                            Triple("DARK", StringsLocale.get("theme_dark", lang), Icons.Filled.DarkMode),
+                            Triple("AUTO", StringsLocale.get("theme_auto", lang), Icons.Filled.SettingsBrightness)
+                        )
+
+                        themes.forEach { (modeKey, modeName, icon) ->
+                            val isSelected = if (modeKey == "AUTO") {
+                                uiState.userPreferences.themeMode.equals("AUTO", ignoreCase = true) ||
+                                    uiState.userPreferences.themeMode.equals("AUTOMATIC", ignoreCase = true)
+                            } else {
+                                uiState.userPreferences.themeMode.equals(modeKey, ignoreCase = true)
                             }
-                        }
 
-                        DropdownMenu(
-                            expanded = fontMenuOpen,
-                            onDismissRequest = { fontMenuOpen = false },
-                            shape = RoundedCornerShape(16.dp),
-                            containerColor = appColors.surface,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 8.dp,
-                            border = BorderStroke(
-                                1.dp,
-                                appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
-                            )
-                        ) {
-                            availableFonts.forEach { font ->
-                                DropdownMenuItem(
-                                    text = {
+                            Box(modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(50))
+                                        .background(if (isSelected) selectedPillBg else unselectedPillBg)
+                                        .clickable {
+                                            when (modeKey) {
+                                                "LIGHT" -> {
+                                                    viewModel.updateThemeMode("LIGHT")
+                                                    lightThemeMenuOpen = true
+                                                }
+                                                "DARK" -> {
+                                                    viewModel.updateThemeMode("DARK")
+                                                    darkThemeMenuOpen = true
+                                                }
+                                                else -> {
+                                                    viewModel.updateThemeMode("AUTO")
+                                                }
+                                            }
+                                        }
+                                        .padding(vertical = 11.dp)
+                                        .testTag("theme_button_$modeKey"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = if (isSelected) selectedPillText else mutedTextColor,
+                                            modifier = Modifier.size(19.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = font,
-                                            fontWeight = if (currentFontDisplay == font) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (currentFontDisplay == font) appColors.accent else appColors.textPrimary,
+                                            text = modeName,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (isSelected) selectedPillText else headingColor,
                                             maxLines = 1,
                                             softWrap = false
                                         )
-                                    },
-                                    onClick = {
-                                        viewModel.updateFontFamily(font)
-                                        Log.i("BIBLE_DEBUG", "Fuente seleccionada en Ajustes: $font")
-                                        fontMenuOpen = false
                                     }
-                                )
+                                }
+
+                                if (modeKey == "LIGHT") {
+                                    val lightOptions = listOf(
+                                        AppThemeIds.CRISP_LIGHT to StringsLocale.get("theme_crisp_light", lang),
+                                        AppThemeIds.WARM_PARCHMENT to StringsLocale.get("theme_warm_parchment", lang),
+                                        AppThemeIds.SERENE_OLIVE to StringsLocale.get("theme_serene_olive", lang)
+                                    )
+                                    DropdownMenu(
+                                        expanded = lightThemeMenuOpen,
+                                        onDismissRequest = { lightThemeMenuOpen = false },
+                                        shape = RoundedCornerShape(16.dp),
+                                        containerColor = appColors.surface,
+                                        tonalElevation = 0.dp,
+                                        shadowElevation = 8.dp,
+                                        border = BorderStroke(
+                                            1.dp,
+                                            appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                                        )
+                                    ) {
+                                        lightOptions.forEach { (themeKey, themeLabel) ->
+                                            val isOptionSelected = uiState.userPreferences.selectedLightTheme == themeKey
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = themeLabel,
+                                                        fontWeight = if (isOptionSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isOptionSelected) appColors.accent else appColors.textPrimary,
+                                                        maxLines = 1,
+                                                        softWrap = false
+                                                    )
+                                                },
+                                                trailingIcon = if (isOptionSelected) {
+                                                    {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Check,
+                                                            contentDescription = null,
+                                                            tint = appColors.accent,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                } else null,
+                                                onClick = {
+                                                    viewModel.updateSelectedLightTheme(themeKey, activateMode = true)
+                                                    lightThemeMenuOpen = false
+                                                },
+                                                modifier = Modifier.testTag("theme_option_$themeKey")
+                                            )
+                                        }
+                                    }
+                                } else if (modeKey == "DARK") {
+                                    val darkOptions = listOf(
+                                        AppThemeIds.MIDNIGHT_BLUE to StringsLocale.get("theme_midnight_blue", lang),
+                                        AppThemeIds.DEEP_DARK to StringsLocale.get("theme_deep_dark", lang),
+                                        AppThemeIds.OBSIDIAN_ONYX to StringsLocale.get("theme_obsidian_onyx", lang)
+                                    )
+                                    DropdownMenu(
+                                        expanded = darkThemeMenuOpen,
+                                        onDismissRequest = { darkThemeMenuOpen = false },
+                                        shape = RoundedCornerShape(16.dp),
+                                        containerColor = appColors.surface,
+                                        tonalElevation = 0.dp,
+                                        shadowElevation = 8.dp,
+                                        border = BorderStroke(
+                                            1.dp,
+                                            appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                                        )
+                                    ) {
+                                        darkOptions.forEach { (themeKey, themeLabel) ->
+                                            val isOptionSelected = uiState.userPreferences.selectedDarkTheme == themeKey
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = themeLabel,
+                                                        fontWeight = if (isOptionSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isOptionSelected) appColors.accent else appColors.textPrimary,
+                                                        maxLines = 1,
+                                                        softWrap = false
+                                                    )
+                                                },
+                                                trailingIcon = if (isOptionSelected) {
+                                                    {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Check,
+                                                            contentDescription = null,
+                                                            tint = appColors.accent,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                } else null,
+                                                onClick = {
+                                                    viewModel.updateSelectedDarkTheme(themeKey, activateMode = true)
+                                                    darkThemeMenuOpen = false
+                                                },
+                                                modifier = Modifier.testTag("theme_option_$themeKey")
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Font Size Slider 8 pt to 20 pt
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${StringsLocale.get("font_size", lang)}: ${uiState.userPreferences.fontSizePt.toInt()} pt",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.textPrimary,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Text(
-                        text = StringsLocale.get("font_range", lang),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = appColors.textSecondary,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-
-                Slider(
-                    value = uiState.userPreferences.fontSizePt,
-                    onValueChange = { viewModel.updateFontSizePt(it) },
-                    valueRange = 8f..20f,
-                    steps = 11,
-                    colors = SliderDefaults.colors(
-                        thumbColor = appColors.accent,
-                        activeTrackColor = appColors.accent,
-                        inactiveTrackColor = appColors.border
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("font_size_slider")
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 18.dp),
+                    thickness = 1.dp,
+                    color = cardBorderColor
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Live Preview
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = appColors.surfaceVariant,
-                    border = BorderStroke(1.dp, appColors.border),
+                // 4b. Tipografía y lectura (Fuente, Slider 8–20 pt y Vista previa en lector)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .padding(horizontal = 18.dp, vertical = 18.dp)
+                        .testTag("typography_controls_card")
+                        .tutorialTarget(TutorialStep.SETTINGS_TYPOGRAPHY)
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FormatColorText,
+                                contentDescription = null,
+                                tint = iconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = StringsLocale.get("typography_title", lang),
+                                style = if (isEn) {
+                                    MaterialTheme.typography.titleSmall.copy(fontSize = 13.5.sp)
+                                } else {
+                                    MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp)
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                                color = headingColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Box {
+                            Surface(
+                                shape = CircleShape,
+                                color = softChipBg,
+                                border = softChipBorder,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { fontMenuOpen = true }
+                                    .testTag("font_family_dropdown_button")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = currentFontDisplay,
+                                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.5.sp),
+                                        fontWeight = FontWeight.Medium,
+                                        color = softChipText,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Icon(
+                                        imageVector = Icons.Rounded.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = softChipText,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = fontMenuOpen,
+                                onDismissRequest = { fontMenuOpen = false },
+                                shape = RoundedCornerShape(16.dp),
+                                containerColor = appColors.surface,
+                                tonalElevation = 0.dp,
+                                shadowElevation = 8.dp,
+                                border = BorderStroke(
+                                    1.dp,
+                                    appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f)
+                                )
+                            ) {
+                                availableFonts.forEach { font ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = font,
+                                                fontWeight = if (currentFontDisplay == font) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (currentFontDisplay == font) appColors.accent else appColors.textPrimary,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        },
+                                        onClick = {
+                                            viewModel.updateFontFamily(font)
+                                            Log.i("BIBLE_DEBUG", "Fuente seleccionada en Ajustes: $font")
+                                            fontMenuOpen = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Font Size Slider 8 pt to 20 pt
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = StringsLocale.get("reader_preview", lang),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = appColors.accent,
-                            fontWeight = FontWeight.Bold,
+                            text = "${StringsLocale.get("font_size", lang)}: ${uiState.userPreferences.fontSizePt.toInt()} pt",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = headingColor,
                             maxLines = 1,
                             softWrap = false
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        val sampleText = if (isEn) {
-                            "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life. — John 3:16"
-                        } else {
-                            "1 En el principio era el Verbo, y el Verbo era con Dios, y el Verbo era Dios."
-                        }
                         Text(
-                            text = sampleText,
-                            fontSize = (uiState.userPreferences.fontSizePt * 1.35f).sp,
-                            lineHeight = (uiState.userPreferences.fontSizePt * 1.9f).sp,
-                            fontFamily = resolveBibleFont(currentFontDisplay), // <-- Vinculación de fuente en vivo
-                            color = appColors.textPrimary,
-                            fontWeight = FontWeight.Normal
+                            text = StringsLocale.get("font_range", lang),
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                            color = mutedTextColor,
+                            maxLines = 1,
+                            softWrap = false
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Slider(
+                        value = uiState.userPreferences.fontSizePt,
+                        onValueChange = { viewModel.updateFontSizePt(it) },
+                        valueRange = 8f..20f,
+                        steps = 11,
+                        colors = SliderDefaults.colors(
+                            thumbColor = sliderActive,
+                            activeTrackColor = sliderActive,
+                            inactiveTrackColor = sliderInactive,
+                            activeTickColor = sliderActiveTick,
+                            inactiveTickColor = sliderInactiveTick
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("font_size_slider")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Live Preview Box
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = previewBg,
+                        border = BorderStroke(1.dp, previewBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = StringsLocale.get("reader_preview", lang),
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                color = if (isCrispLight) SettingsCrispSubtitleHeader else appColors.accent,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            val sampleAnnotated = remember(isEn, headingColor, appColors.textPrimary) {
+                                buildAnnotatedString {
+                                    if (isEn) {
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = headingColor)) {
+                                            append("16 ")
+                                        }
+                                        append("For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.")
+                                    } else {
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = headingColor)) {
+                                            append("1 ")
+                                        }
+                                        append("En el principio era el Verbo, y el Verbo era con Dios, y el Verbo era Dios.")
+                                    }
+                                }
+                            }
+                            Text(
+                                text = sampleAnnotated,
+                                fontSize = (uiState.userPreferences.fontSizePt * 1.35f).sp,
+                                lineHeight = (uiState.userPreferences.fontSizePt * 1.9f).sp,
+                                fontFamily = resolveBibleFont(currentFontDisplay), // <-- Vinculación de fuente en vivo
+                                color = appColors.textPrimary,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }
@@ -924,74 +1010,78 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("settings_tutorial_card"),
-            shape = RoundedCornerShape(20.dp),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            border = BorderStroke(1.dp, cardBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                            contentDescription = null,
-                            tint = appColors.accent,
-                            modifier = Modifier.size(24.dp)
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(23.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = StringsLocale.get("tutorial_card_title", lang),
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.5.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = headingColor,
+                            maxLines = 1,
+                            softWrap = false
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = StringsLocale.get("tutorial_card_title", lang),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Text(
-                                text = StringsLocale.get("tutorial_card_subtitle", lang),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Text(
+                            text = StringsLocale.get("tutorial_card_subtitle", lang),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                            color = mutedTextColor,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { viewModel.startTutorial() }
-                            .testTag("start_tutorial_button")
+                Surface(
+                    shape = CircleShape,
+                    color = selectedPillBg,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { viewModel.startTutorial() }
+                        .testTag("start_tutorial_button")
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = StringsLocale.get("tutorial_card_start", lang),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
+                        Text(
+                            text = StringsLocale.get("tutorial_card_start", lang),
+                            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = selectedPillText,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
         }
+
+        // Margen adicional de seguridad para garantizar cero solapamiento con la barra inferior flotante
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Favorites Dialog
         if (uiState.showFavoritesDialog) {

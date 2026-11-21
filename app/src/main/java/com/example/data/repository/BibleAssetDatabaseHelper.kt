@@ -329,6 +329,300 @@ class BibleAssetDatabaseHelper(private val context: Context) {
         return commentText
     }
 
+    data class VersionNotesLookup(
+        val notes: List<String>,
+        val hasBookIntroOnlySchema: Boolean = false
+    )
+
+    data class NativeSubheadingsLookup(
+        val hasNativeSubheadings: Boolean,
+        val subheadingsByVerse: Map<Int, List<String>>
+    )
+
+    private fun getTableColumns(database: SQLiteDatabase, tableName: String): Set<String> {
+        val columns = mutableSetOf<String>()
+        try {
+            database.rawQuery("PRAGMA table_info(\"$tableName\")", null).use { cursor ->
+                val nameIdx = cursor.getColumnIndex("name")
+                while (cursor.moveToNext()) {
+                    if (nameIdx >= 0) {
+                        cursor.getString(nameIdx)?.lowercase()?.let { columns.add(it) }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return columns
+    }
+
+    private fun findExistingTableName(database: SQLiteDatabase, candidates: List<String>): String? {
+        try {
+            database.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
+                val available = mutableListOf<String>()
+                while (cursor.moveToNext()) {
+                    cursor.getString(0)?.let { available.add(it) }
+                }
+                for (candidate in candidates) {
+                    val match = available.firstOrNull { it.equals(candidate, ignoreCase = true) }
+                    if (match != null) return match
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
+    fun getNativeChapterSubheadings(
+        dbName: String,
+        bookNameOrAbbr: String,
+        chapter: Int,
+        isEnglish: Boolean
+    ): NativeSubheadingsLookup {
+        val database = openDatabaseReadOnly(context, dbName)
+            ?: return NativeSubheadingsLookup(false, emptyMap())
+
+        try {
+            val tableName = findExistingTableName(database, listOf("stories", "subheadings"))
+                ?: return NativeSubheadingsLookup(false, emptyMap())
+
+            // Verificar que la tabla de subtítulos nativa realmente contiene registros
+            val hasAnyRows = database.rawQuery("SELECT 1 FROM \"$tableName\" LIMIT 1", null).use {
+                it.moveToFirst()
+            }
+            if (!hasAnyRows) {
+                return NativeSubheadingsLookup(false, emptyMap())
+            }
+
+            val cols = getTableColumns(database, tableName)
+            val textCol = when {
+                "title" in cols -> "title"
+                "subheading" in cols -> "subheading"
+                else -> return NativeSubheadingsLookup(false, emptyMap())
+            }
+            if ("book_number" !in cols || "chapter" !in cols || "verse" !in cols) {
+                return NativeSubheadingsLookup(false, emptyMap())
+            }
+
+            val orderByClause = if ("order_if_several" in cols) {
+                "ORDER BY verse ASC, order_if_several ASC"
+            } else {
+                "ORDER BY verse ASC"
+            }
+
+            val bookNumber = resolveBookNumber(bookNameOrAbbr)
+            val query = """
+                SELECT verse, "$textCol" FROM "$tableName"
+                WHERE book_number = ? AND chapter = ?
+                $orderByClause
+            """.trimIndent()
+
+            val result = linkedMapOf<Int, MutableList<String>>()
+            database.rawQuery(query, arrayOf(bookNumber.toString(), chapter.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val verseNum = cursor.getInt(0)
+                    val rawHeading = cursor.getString(1) ?: ""
+                    val cleaned = com.example.ui.util.BibleStudyTextUtils.cleanSubheadingText(rawHeading, isEnglish)
+                    if (cleaned.isNotBlank()) {
+                        result.getOrPut(verseNum) { mutableListOf() }.add(cleaned)
+                    }
+                }
+            }
+
+            return NativeSubheadingsLookup(
+                hasNativeSubheadings = true,
+                subheadingsByVerse = result.mapValues { it.value.toList() }
+            )
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error consultando subtítulos nativos en $dbName: ${e.message}", e)
+            return NativeSubheadingsLookup(false, emptyMap())
+        } finally {
+            database.close()
+        }
+    }
+
+    fun getFallbackChapterSubheadings(
+        subheadingsDbName: String,
+        bookNameOrAbbr: String,
+        chapter: Int,
+        isEnglish: Boolean
+    ): Map<Int, List<String>> {
+        val database = openDatabaseReadOnly(context, subheadingsDbName) ?: return emptyMap()
+        try {
+            val tableName = findExistingTableName(database, listOf("subheadings", "stories")) ?: return emptyMap()
+            val cols = getTableColumns(database, tableName)
+            val textCol = when {
+                "subheading" in cols -> "subheading"
+                "title" in cols -> "title"
+                else -> return emptyMap()
+            }
+            if ("book_number" !in cols || "chapter" !in cols || "verse" !in cols) {
+                return emptyMap()
+            }
+
+            val orderByClause = if ("order_if_several" in cols) {
+                "ORDER BY verse ASC, order_if_several ASC"
+            } else {
+                "ORDER BY verse ASC"
+            }
+
+            val bookNumber = resolveBookNumber(bookNameOrAbbr)
+            val query = """
+                SELECT verse, "$textCol" FROM "$tableName"
+                WHERE book_number = ? AND chapter = ?
+                $orderByClause
+            """.trimIndent()
+
+            val result = linkedMapOf<Int, MutableList<String>>()
+            database.rawQuery(query, arrayOf(bookNumber.toString(), chapter.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val verseNum = cursor.getInt(0)
+                    val rawHeading = cursor.getString(1) ?: ""
+                    val cleaned = com.example.ui.util.BibleStudyTextUtils.cleanSubheadingText(rawHeading, isEnglish)
+                    if (cleaned.isNotBlank()) {
+                        result.getOrPut(verseNum) { mutableListOf() }.add(cleaned)
+                    }
+                }
+            }
+            return result.mapValues { it.value.toList() }
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error consultando subtítulos de respaldo en $subheadingsDbName: ${e.message}", e)
+            return emptyMap()
+        } finally {
+            database.close()
+        }
+    }
+
+    fun getVersionNotes(
+        dbName: String,
+        bookNameOrAbbr: String,
+        chapter: Int,
+        verse: Int,
+        marker: String
+    ): VersionNotesLookup {
+        val database = openDatabaseReadOnly(context, dbName) ?: return VersionNotesLookup(emptyList())
+        val bookNumber = resolveBookNumber(bookNameOrAbbr)
+        val isAsterisk = com.example.ui.util.BibleStudyTextUtils.isRvrAsteriskMarker(marker)
+        val asteriskOrdinal = com.example.ui.util.BibleStudyTextUtils.extractAsteriskOrdinal(marker)
+        val cleanMarker = marker.trim().removeSurrounding("[", "]")
+
+        try {
+            val cols = getTableColumns(database, "commentaries")
+            val hasMarkerColumn = "marker" in cols
+
+            if (hasMarkerColumn && !isAsterisk && cleanMarker.isNotBlank()) {
+                val queryMarker = """
+                    SELECT text FROM commentaries 
+                    WHERE book_number = ? 
+                      AND chapter_number_from = ? 
+                      AND verse_number_from = ? 
+                      AND (marker = ? OR marker = ? OR marker LIKE ?)
+                    LIMIT 1
+                """.trimIndent()
+
+                database.rawQuery(
+                    queryMarker,
+                    arrayOf(
+                        bookNumber.toString(),
+                        chapter.toString(),
+                        verse.toString(),
+                        cleanMarker,
+                        "[$cleanMarker]",
+                        "%$cleanMarker%"
+                    )
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val txt = cursor.getString(0)?.trim().orEmpty()
+                        if (txt.isNotBlank()) {
+                            return VersionNotesLookup(listOf(txt))
+                        }
+                    }
+                }
+            }
+
+            if (hasMarkerColumn && isAsterisk) {
+                val queryAllWithMarker = """
+                    SELECT marker, text FROM commentaries
+                    WHERE book_number = ?
+                      AND chapter_number_from = ?
+                      AND verse_number_from <= ?
+                      AND (verse_number_to >= ? OR verse_number_to IS NULL OR verse_number_to = 0)
+                """.trimIndent()
+
+                val rows = mutableListOf<Pair<String, String>>()
+                database.rawQuery(
+                    queryAllWithMarker,
+                    arrayOf(bookNumber.toString(), chapter.toString(), verse.toString(), verse.toString())
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val m = cursor.getString(0)?.trim().orEmpty()
+                        val t = cursor.getString(1)?.trim().orEmpty()
+                        if (t.isNotBlank()) rows.add(m to t)
+                    }
+                }
+
+                if (rows.isNotEmpty()) {
+                    if (rows.size == 1) {
+                        return VersionNotesLookup(listOf(rows.first().second))
+                    }
+                    // Solo enlazar 1 a 1 si el esquema SQLite distingue índices únicos por posición
+                    val distinctNumericMarkers = rows.map { it.first.removeSurrounding("[", "]") }.toSet()
+                    if (asteriskOrdinal != null && distinctNumericMarkers.size == rows.size) {
+                        val exact = rows.firstOrNull {
+                            it.first.removeSurrounding("[", "]") == asteriskOrdinal.toString()
+                        }
+                        if (exact != null) {
+                            return VersionNotesLookup(listOf(exact.second))
+                        }
+                    }
+                    // Sin correspondencia posicional 1 a 1: devolver el bloque completo de notas del versículo
+                    return VersionNotesLookup(rows.map { it.second }.distinct())
+                }
+            }
+
+            // Consulta estándar sin columna `marker` (ej. RV1960-c.commentaries.SQLite3) o fallback
+            val queryVerseBlock = """
+                SELECT text FROM commentaries 
+                WHERE book_number = ? 
+                  AND chapter_number_from = ? 
+                  AND verse_number_from <= ? 
+                  AND (verse_number_to >= ? OR verse_number_to IS NULL OR verse_number_to = 0)
+            """.trimIndent()
+
+            val verseNotes = mutableListOf<String>()
+            database.rawQuery(
+                queryVerseBlock,
+                arrayOf(bookNumber.toString(), chapter.toString(), verse.toString(), verse.toString())
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val txt = cursor.getString(0)?.trim().orEmpty()
+                    if (txt.isNotBlank()) {
+                        verseNotes.add(txt)
+                    }
+                }
+            }
+
+            if (verseNotes.isNotEmpty()) {
+                return VersionNotesLookup(verseNotes.distinct())
+            }
+
+            // Diagnóstico transparente si el módulo instalado solo almacena introducciones por libro (cap 1:1)
+            val totalRows = database.rawQuery("SELECT COUNT(*) FROM commentaries", null).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            val nonIntroRows = database.rawQuery(
+                "SELECT COUNT(*) FROM commentaries WHERE chapter_number_from != 1 OR verse_number_from != 1",
+                null
+            ).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            val isBookIntroOnly = totalRows in 1..70 && nonIntroRows == 0
+            return VersionNotesLookup(emptyList(), hasBookIntroOnlySchema = isBookIntroOnly)
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error consultando nota de versión en $dbName: ${e.message}", e)
+            return VersionNotesLookup(emptyList())
+        } finally {
+            database.close()
+        }
+    }
+
     fun getVersionNoteText(
         dbName: String,
         bookNameOrAbbr: String,
@@ -336,72 +630,8 @@ class BibleAssetDatabaseHelper(private val context: Context) {
         verse: Int,
         marker: String
     ): String? {
-        val database = openDatabaseReadOnly(context, dbName) ?: return null
-        val bookNumber = resolveBookNumber(bookNameOrAbbr)
-        val cleanMarker = marker.trim().removeSurrounding("[", "]")
-
-        var noteText: String? = null
-        try {
-            val queryMarker = """
-                SELECT text FROM commentaries 
-                WHERE book_number = ? 
-                  AND chapter_number_from = ? 
-                  AND verse_number_from = ? 
-                  AND (marker = ? OR marker = ? OR marker LIKE ?)
-                LIMIT 1
-            """.trimIndent()
-
-            database.rawQuery(
-                queryMarker,
-                arrayOf(
-                    bookNumber.toString(),
-                    chapter.toString(),
-                    verse.toString(),
-                    cleanMarker,
-                    "[$cleanMarker]",
-                    "%$cleanMarker%"
-                )
-            ).use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val textIndex = cursor.getColumnIndex("text")
-                    if (textIndex >= 0) {
-                        noteText = cursor.getString(textIndex)
-                    }
-                }
-            }
-
-            if (noteText.isNullOrBlank()) {
-                val queryFallback = """
-                    SELECT text FROM commentaries 
-                    WHERE book_number = ? 
-                      AND chapter_number_from = ? 
-                      AND verse_number_from = ? 
-                    LIMIT 1
-                """.trimIndent()
-
-                database.rawQuery(
-                    queryFallback,
-                    arrayOf(
-                        bookNumber.toString(),
-                        chapter.toString(),
-                        verse.toString()
-                    )
-                ).use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val textIndex = cursor.getColumnIndex("text")
-                        if (textIndex >= 0) {
-                            noteText = cursor.getString(textIndex)
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("BIBLE_DEBUG", "Error consultando nota de versión en $dbName: ${e.message}", e)
-        } finally {
-            database.close()
-        }
-
-        return noteText
+        val lookup = getVersionNotes(dbName, bookNameOrAbbr, chapter, verse, marker)
+        return lookup.notes.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
     }
 
     fun getDictionaryEntry(

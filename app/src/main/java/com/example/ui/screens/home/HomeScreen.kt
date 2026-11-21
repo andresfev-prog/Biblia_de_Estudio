@@ -7,11 +7,13 @@ import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -31,13 +33,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -54,14 +54,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,18 +75,28 @@ import com.example.ui.components.tutorialTarget
 import com.example.ui.theme.AppIcon
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
+import com.example.ui.util.BibleStudyTextUtils
 import com.example.ui.util.DailyVerseCatalog
-import com.example.ui.util.LoadedDailyVerse
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
-import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+
+private val HomeCrispLightBg = Color(0xFFF6F7F9)
+private val HomeCrispTitleNavy = Color(0xFF0D2240)
+private val HomeCrispBorder = Color(0xFFE5E9F0)
+private val HomeCrispMutedText = Color(0xFF647082)
+private val HomeCrispInnerBox = Color(0xFFF2F4F8)
+private val HeroMidnightTop = Color(0xFF0F1D33)
+private val HeroMidnightBottom = Color(0xFF08111E)
+private val HeroPillBg = Color(0xFF1A3154)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,6 +109,15 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+
+    val screenBg = if (isCrispLight) HomeCrispLightBg else appColors.background
+    val headingColor = if (isCrispLight) HomeCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) HomeCrispMutedText else appColors.textSecondary
+    val cardBorderColor = if (isCrispLight) HomeCrispBorder else appColors.border
+    val innerPreviewBg = if (isCrispLight) HomeCrispInnerBox else appColors.surfaceVariant
+    val softBadgeBg = if (isCrispLight) HomeCrispInnerBox else appColors.primaryContainer
+    val softBadgeText = if (isCrispLight) HomeCrispTitleNavy else appColors.onPrimaryContainer
 
     // Auto-scroll para el tutorial en vivo
     LaunchedEffect(uiState.activeTutorialStep) {
@@ -142,17 +161,17 @@ fun HomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(appColors.background)
+            .background(screenBg)
             .verticalScroll(scrollState)
             .padding(
                 start = 20.dp,
                 end = 20.dp,
-                top = 14.dp,
-                bottom = 96.dp + navBarBottom
+                top = 18.dp,
+                bottom = 118.dp + navBarBottom
             )
             .testTag("home_screen")
     ) {
-        // Greeting Header
+        // Encabezado con jerarquía tipográfica limpia
         val effectiveDisplayName = remember(uiState.googleDisplayName, uiState.userPreferences.userName) {
             uiState.googleDisplayName.trim().ifBlank {
                 uiState.userPreferences.userName.trim()
@@ -167,43 +186,48 @@ fun HomeScreen(
             if (effectiveDisplayName.isNotBlank()) {
                 Text(
                     text = "$greeting,",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = appColors.textSecondary,
+                    fontSize = 23.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = mutedTextColor,
                     maxLines = 1,
                     softWrap = false
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = effectiveDisplayName,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = appColors.titleColor,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = headingColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
                 Text(
                     text = greeting,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = appColors.titleColor,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = headingColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = StringsLocale.get("home_subtitle", lang),
-                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
-                color = appColors.textSecondary
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.Normal,
+                color = mutedTextColor
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         // =========================================================================
         // Versículo del Día: Detección Robusta de Idioma (Español vs English)
-        // Sincroniza con userPreferences y soporta tanto códigos "en" como "English"
         // =========================================================================
         val prefLang = uiState.userPreferences.interfaceLanguage
         val effectiveLang = if (prefLang.isNotBlank()) prefLang else lang
@@ -219,17 +243,14 @@ fun HomeScreen(
         val todayRef = remember { DailyVerseCatalog.getTodayReference() }
         val todayBookName = if (isEnglish) todayRef.bookNameEn else todayRef.bookNameEs
 
-        // Texto de arranque verificado según el idioma activo (elimina desfasajes)
         val authenticDefaultText = if (isEnglish) {
             "And ye shall know the truth, and the truth shall make you free."
         } else {
             "Y conoceréis la verdad, y la verdad os hará libres."
         }
 
-        // Al cambiar isEnglish, el estado local se reinicia inmediatamente al idioma correcto
         var verseTextState by remember(isEnglish) { mutableStateOf(authenticDefaultText) }
 
-        // Consulta física a SQLite (KJV.SQLite3 para inglés, RVR1960.SQLite3 para español)
         LaunchedEffect(isEnglish) {
             var retrievedText = ""
             var attempts = 0
@@ -265,22 +286,26 @@ fun HomeScreen(
 
         val isCurrentVotdFav = viewModel.isFavorite(dailyVerse, uiState.favoriteKeys)
 
+        // Tarjeta protagonista «Versículo del día» — Azul medianoche (#0F1D33) con tipografía serif
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("verse_of_the_day_card")
                 .tutorialTarget(TutorialStep.HOME_VERSE_OF_DAY),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = appColors.cardBg
-            ),
-            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = HeroMidnightTop),
+            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            elevation = CardDefaults.cardElevation(defaultElevation = if (appColors.isDark) 2.dp else 3.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(HeroMidnightTop, HeroMidnightBottom)
+                        )
+                    )
+                    .padding(horizontal = 20.dp, vertical = 18.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -289,49 +314,54 @@ fun HomeScreen(
                 ) {
                     Text(
                         text = if (isEnglish) "Verse of the Day" else "Versículo del día",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.titleColor,
-                        letterSpacing = 1.sp,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFFD2DCEB),
                         maxLines = 1,
                         softWrap = false
                     )
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(appColors.primaryContainer)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .background(Color.White.copy(alpha = 0.14f))
+                            .padding(horizontal = 11.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = versionBadge,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.onPrimaryContainer,
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFE2E8F0),
                             maxLines = 1,
                             softWrap = false
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 Text(
                     text = "«${dailyVerse.text}»",
-                    style = MaterialTheme.typography.bodyLarge,
-                    lineHeight = 26.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 18.sp,
+                    lineHeight = 27.sp,
                     fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Bold,
-                    color = appColors.textPrimary
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Text(
                     text = "${dailyVerse.bookName} ${dailyVerse.chapter}:${dailyVerse.verse}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = appColors.titleColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFFCBD5E1),
                     maxLines = 1,
                     softWrap = false
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -342,29 +372,39 @@ fun HomeScreen(
                             viewModel.navigateToPassage(dailyVerse.bookName, dailyVerse.chapter, dailyVerse.verse)
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.pillBg,
-                            contentColor = appColors.pillText
+                            containerColor = HeroPillBg,
+                            contentColor = Color.White
                         ),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
                         shape = CircleShape,
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
                         modifier = Modifier.testTag("read_full_chapter_button")
                     ) {
                         Text(
                             text = if (isEnglish) "Read full chapter" else "Leer capítulo completo",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             softWrap = false
                         )
                     }
-                    Row {
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         IconButton(
                             onClick = { viewModel.toggleFavorite(dailyVerse) },
-                            modifier = Modifier.testTag("votd_favorite_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("votd_favorite_button")
                         ) {
                             Icon(
-                                imageVector = if (isCurrentVotdFav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                imageVector = if (isCurrentVotdFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 contentDescription = "Guardar en favoritos",
-                                tint = if (isCurrentVotdFav) appColors.accent else appColors.textSecondary
+                                tint = if (isCurrentVotdFav) Color(0xFFF87171) else Color(0xFFCBD5E1),
+                                modifier = Modifier.size(21.dp)
                             )
                         }
                         IconButton(
@@ -377,17 +417,20 @@ fun HomeScreen(
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, StringsLocale.get("copied_clipboard", normalizedLang), Toast.LENGTH_SHORT).show()
                             },
-                            modifier = Modifier.testTag("votd_copy_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("votd_copy_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.ContentCopy,
+                                imageVector = Icons.Outlined.ContentCopy,
                                 contentDescription = "Copiar versículo",
-                                tint = appColors.textSecondary
+                                tint = Color(0xFFCBD5E1),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         IconButton(
                             onClick = {
-                                val sendIntent: Intent = Intent().apply {
+                                val sendIntent = Intent().apply {
                                     action = Intent.ACTION_SEND
                                     putExtra(
                                         Intent.EXTRA_TEXT,
@@ -397,18 +440,22 @@ fun HomeScreen(
                                 }
                                 context.startActivity(Intent.createChooser(sendIntent, StringsLocale.get("share_verse", normalizedLang)))
                             },
-                            modifier = Modifier.testTag("votd_share_button")
+                            modifier = Modifier
+                                .size(38.dp)
+                                .testTag("votd_share_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Share,
+                                imageVector = Icons.Outlined.Share,
                                 contentDescription = "Compartir versículo",
-                                tint = appColors.textSecondary
+                                tint = Color(0xFFCBD5E1),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
             }
         }
+
         Spacer(modifier = Modifier.height(14.dp))
 
         // Bloque unificado: Lectura reciente y Notas
@@ -417,271 +464,90 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .tutorialTarget(TutorialStep.HOME_CONTINUE_NOTES)
         ) {
-            // "Continúa donde quedaste" Card
+            // Tarjeta «Continúa donde quedaste» — completa tocable, sin «Modo sin conexión listo» ni botón gigante
             val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
-        val lastChapter = uiState.readingProgress?.chapter ?: 1
-        val lastVersion = uiState.readingProgress?.version ?: "RVR 1960"
+            val lastChapter = uiState.readingProgress?.chapter ?: 1
+            val lastVersion = uiState.readingProgress?.version ?: "RVR1960"
 
-        val isEnglishVersion = BibleBooksData.isEnglishVersion(lastVersion)
-        val shouldShowInEnglish = isEnglish || isEnglishVersion
-        val bookInfo = BibleBooksData.getBookByName(lastBookRaw)
-        val bookNumber = bookInfo?.number ?: 43
-        val displayLastBook = BibleBooksData.getLocalizedBookName(bookNumber, shouldShowInEnglish)
+            val isEnglishVersion = BibleBooksData.isEnglishVersion(lastVersion)
+            val shouldShowInEnglish = isEnglish || isEnglishVersion
+            val bookInfo = BibleBooksData.getBookByName(lastBookRaw)
+            val bookNumber = bookInfo?.number ?: 43
+            val displayLastBook = BibleBooksData.getLocalizedBookName(bookNumber, shouldShowInEnglish)
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("continue_reading_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = appColors.cardBg
-            ),
-            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(
+            Card(
+                onClick = { viewModel.navigateToPassage(lastBookRaw, lastChapter) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("continue_reading_card"),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
+                border = BorderStroke(1.dp, cardBorderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = StringsLocale.get("continue_where_left", lang),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.textSecondary,
-                            letterSpacing = 1.sp,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        // Localized reading progress title: renders canonical localized book name and chapter
-                        Text(
-                            text = "$displayLastBook $lastChapter",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.titleColor,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Text(
-                            text = "$lastVersion • ${StringsLocale.get("offline_ready", lang)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = appColors.textSecondary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(appColors.pillBg),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AppIcon(
-                            glyph = AppIcons.Bible,
-                            contentDescription = null,
-                            tint = appColors.pillText,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = {
-                        viewModel.navigateToPassage(lastBookRaw, lastChapter)
-                    },
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("continue_reading_button"),
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = appColors.pillBg,
-                        contentColor = appColors.pillText
-                    )
-                ) {
-                    Text(
-                        text = StringsLocale.get("continue_reading", lang),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = appColors.pillText
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // "Mis Notas" Card (Dynamic: preview if notes exist, elegant prompt with "Crear nota" if empty)
-        val latestNote = uiState.notes.firstOrNull()
-        val noteDateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()) }
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("home_notes_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = appColors.cardBg
-            ),
-            border = if (appColors.isDark || appColors.background != appColors.cardBg) androidx.compose.foundation.BorderStroke(1.dp, appColors.border) else null,
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-            ) {
-                // Header Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
                 ) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(appColors.pillBg),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AppIcon(
-                                glyph = AppIcons.MyNotes,
-                                contentDescription = null,
-                                tint = appColors.pillText,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = StringsLocale.get("notes_title", lang),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                text = StringsLocale.get("continue_where_left", lang),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = mutedTextColor,
                                 maxLines = 1,
                                 softWrap = false
                             )
-                            val noteCount = uiState.notes.size
-                            val notesCountText = if (isEnglish) {
-                                "$noteCount ${if (noteCount == 1) "note saved" else "notes saved"}"
-                            } else {
-                                "$noteCount ${if (noteCount == 1) "nota guardada" else "notas guardadas"}"
-                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = notesCountText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary
-                            )
-                        }
-                    }
-
-                    if (latestNote != null && latestNote.biblicalReference.isNotBlank()) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        val badgeLabel = remember(latestNote.biblicalReference) {
-                            latestNote.biblicalReference.lineSequence()
-                                .firstOrNull { it.isNotBlank() }
-                                ?.trim()
-                                .orEmpty()
-                        }
-                        Surface(
-                            shape = CircleShape,
-                            color = appColors.primaryContainer,
-                            modifier = Modifier.widthIn(max = 150.dp)
-                        ) {
-                            Text(
-                                text = badgeLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                text = "$displayLastBook $lastChapter",
+                                fontSize = 23.sp,
+                                lineHeight = 28.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = headingColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (latestNote != null) {
-                    // Preview of the latest note created (title/reference, date, 2-line snippet) - Interactive
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(appColors.surfaceVariant)
-                            .clickable { viewModel.openNotesSheet(latestNote) }
-                            .padding(12.dp)
-                            .testTag("home_latest_note_preview")
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = latestNote.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                text = lastVersion,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = mutedTextColor,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = noteDateFormat.format(Date(latestNote.timestamp)),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = appColors.textSecondary,
-                                fontSize = 11.sp
+                                softWrap = false
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = latestNote.content.ifBlank { StringsLocale.get("no_additional_content", lang) },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = appColors.textSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 18.sp
+
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = headingColor.copy(alpha = 0.75f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { viewModel.openNotesSheet(null) },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("home_view_all_notes_button"),
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.pillBg,
-                            contentColor = appColors.pillText
-                        )
+                            .padding(vertical = 2.dp)
+                            .testTag("continue_reading_button"),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = StringsLocale.get("view_all_notes", lang),
-                            fontWeight = FontWeight.Bold,
+                            text = StringsLocale.get("continue_reading", lang),
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = headingColor,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -689,42 +555,218 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
-                            tint = appColors.pillText
-                        )
-                    }
-                } else {
-                    // Empty state: "Aún no has tomado notas. Toca aquí para escribir una reflexión."Crear nota"
-                    Text(
-                        text = StringsLocale.get("no_notes_home", lang),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = appColors.textSecondary,
-                        lineHeight = 20.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = { viewModel.openNotesSheet() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("home_create_note_button"),
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = appColors.pillBg,
-                            contentColor = appColors.pillText
-                        )
-                    ) {
-                        Text(
-                            text = StringsLocale.get("create_note", lang).replace("+", "").trim(),
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.pillText,
-                            maxLines = 1,
-                            softWrap = false
+                            tint = headingColor,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
-        }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Tarjeta «Mis Notas» — limpia con enlace inferior centrado en lugar de botón sólido gigante
+            val latestNote = uiState.notes.firstOrNull()
+            val noteDateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()) }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("home_notes_card"),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
+                border = BorderStroke(1.dp, cardBorderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                ) {
+                    // Header Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isCrispLight) HomeCrispTitleNavy else appColors.pillBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AppIcon(
+                                    glyph = AppIcons.MyNotes,
+                                    contentDescription = null,
+                                    tint = if (isCrispLight) Color.White else appColors.pillText,
+                                    modifier = Modifier.size(21.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = StringsLocale.get("notes_title", lang),
+                                    fontSize = 16.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = headingColor,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                val noteCount = uiState.notes.size
+                                val notesCountText = if (isEnglish) {
+                                    "$noteCount ${if (noteCount == 1) "note saved" else "notes saved"}"
+                                } else {
+                                    "$noteCount ${if (noteCount == 1) "nota guardada" else "notas guardadas"}"
+                                }
+                                Text(
+                                    text = notesCountText,
+                                    fontSize = 13.sp,
+                                    color = mutedTextColor
+                                )
+                            }
+                        }
+
+                        if (latestNote != null && latestNote.biblicalReference.isNotBlank()) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            val badgeLabel = remember(latestNote.biblicalReference) {
+                                latestNote.biblicalReference.lineSequence()
+                                    .firstOrNull { it.isNotBlank() }
+                                    ?.trim()
+                                    .orEmpty()
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = softBadgeBg,
+                                modifier = Modifier.widthIn(max = 150.dp)
+                            ) {
+                                Text(
+                                    text = badgeLabel,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = softBadgeText,
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (latestNote != null) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(innerPreviewBg)
+                                .clickable { viewModel.openNotesSheet(latestNote) }
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                                .testTag("home_latest_note_preview")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = latestNote.title,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = headingColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = noteDateFormat.format(Date(latestNote.timestamp)),
+                                    fontSize = 11.5.sp,
+                                    color = mutedTextColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = latestNote.content.ifBlank { StringsLocale.get("no_additional_content", lang) },
+                                fontSize = 13.sp,
+                                color = mutedTextColor,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 18.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.openNotesSheet(null) }
+                                .padding(vertical = 6.dp)
+                                .testTag("home_view_all_notes_button"),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = StringsLocale.get("view_all_notes", lang),
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = headingColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = headingColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = StringsLocale.get("no_notes_home", lang),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = mutedTextColor,
+                            lineHeight = 20.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.openNotesSheet() }
+                                .padding(vertical = 6.dp)
+                                .testTag("home_create_note_button"),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = StringsLocale.get("create_note", lang).replace("+", "").trim(),
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = headingColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = headingColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Notes Sheet on Home
@@ -798,11 +840,8 @@ private fun queryDailyVerseFromDatabase(
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
                     val rawText = cursor.getString(0) ?: ""
-                    cleanVerseText = rawText
-                        .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                        .replace(Regex("(?<=\\p{L})\\d+"), "")
-                        .replace(Regex("\\s+"), " ")
-                        .trim()
+                    val versionHint = if (databaseName.contains("KJV", ignoreCase = true)) "KJV" else "RVR1960"
+                    cleanVerseText = BibleStudyTextUtils.sanitizeVerseTextForSpeech(rawText, versionHint)
                     Log.i(
                         "BIBLE_DEBUG",
                         "Versículo del Día ($bookName [$bookNumber] $chapter:$verse) obtenido con éxito de $databaseName: $cleanVerseText"

@@ -28,7 +28,16 @@ class BibleRepository(
     private val dao: BibleDao
 ) {
 
-    private fun resolveBibleDatabaseFileName(version: String): String {
+    private fun isBibleTextDbFile(fileName: String): Boolean {
+        val lower = fileName.lowercase()
+        return lower.endsWith(".sqlite3") &&
+            !lower.contains(".subheadings.") &&
+            !lower.contains(".commentaries.") &&
+            !lower.contains(".dictionary.") &&
+            !lower.contains(".crossreferences.")
+    }
+
+    internal fun resolveBibleDatabaseFileName(version: String): String {
         val cleanVersion = version.trim().removeSuffix(".SQLite3")
         val defaultName = "$cleanVersion.SQLite3"
 
@@ -36,30 +45,35 @@ class BibleRepository(
         val exactFile = context.getDatabasePath(defaultName)
         if (exactFile.exists()) return exactFile.name
 
-        // 2. Búsqueda insensible a mayúsculas/minúsculas en el directorio de bases de datos
+        // 2. Búsqueda insensible a mayúsculas/minúsculas en el directorio de bases de datos (solo textos bíblicos)
         val dbDir = exactFile.parentFile
         if (dbDir != null && dbDir.exists()) {
-            val files = dbDir.listFiles()
+            val bibleFiles = dbDir.listFiles()?.filter { isBibleTextDbFile(it.name) }.orEmpty()
 
             // Coincidencia ignorando mayúsculas (ej: busca "T4T.SQLite3" y encuentra "t4t.SQLite3")
-            val matchCaseInsensitive = files?.firstOrNull { it.name.equals(defaultName, ignoreCase = true) }
+            val matchCaseInsensitive = bibleFiles.firstOrNull { it.name.equals(defaultName, ignoreCase = true) }
             if (matchCaseInsensitive != null) return matchCaseInsensitive.name
 
-            // Coincidencia por prefijo del tag de versión
-            val matchPrefix = files?.firstOrNull {
-                it.name.startsWith(cleanVersion, ignoreCase = true) && it.name.endsWith(".SQLite3", ignoreCase = true)
+            // Coincidencia por prefijo del tag de versión (excluyendo subtítulos, comentarios, diccionarios y referencias)
+            val matchPrefix = bibleFiles.firstOrNull {
+                it.name.startsWith(cleanVersion, ignoreCase = true)
             }
             if (matchPrefix != null) return matchPrefix.name
         }
 
-        // 3. Verificación en assets si aún no ha sido extraída
+        // 3. Verificación en assets (raíz y carpeta databases/) priorizando coincidencia exacta
         try {
-            val assets = context.assets.list("") ?: emptyArray()
-            val assetMatch = assets.firstOrNull {
-                it.equals(defaultName, ignoreCase = true) ||
-                        (it.startsWith(cleanVersion, ignoreCase = true) && it.endsWith(".SQLite3", ignoreCase = true))
-            }
-            if (assetMatch != null) return assetMatch
+            val dbAssets = (context.assets.list("databases") ?: emptyArray()).filter { isBibleTextDbFile(it) }
+            val exactDbAsset = dbAssets.firstOrNull { it.equals(defaultName, ignoreCase = true) }
+            if (exactDbAsset != null) return exactDbAsset
+            val prefixDbAsset = dbAssets.firstOrNull { it.startsWith(cleanVersion, ignoreCase = true) }
+            if (prefixDbAsset != null) return prefixDbAsset
+
+            val rootAssets = (context.assets.list("") ?: emptyArray()).filter { isBibleTextDbFile(it) }
+            val exactRootAsset = rootAssets.firstOrNull { it.equals(defaultName, ignoreCase = true) }
+            if (exactRootAsset != null) return exactRootAsset
+            val prefixRootAsset = rootAssets.firstOrNull { it.startsWith(cleanVersion, ignoreCase = true) }
+            if (prefixRootAsset != null) return prefixRootAsset
         } catch (_: Exception) { }
 
         return defaultName
@@ -85,8 +99,8 @@ class BibleRepository(
                 bookName = displayBookName,
                 chapter = chapter,
                 verse = verseNum,
-                text = text,
-                sectionTitle = if (verseNum == 1) getCanonicalSectionSubtitle(bookName, chapter, isEnglish) else null
+                text = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(text, version),
+                sectionTitle = null
             )
         }
 
@@ -96,6 +110,43 @@ class BibleRepository(
             emit(generateFallbackChapter(version, bookName, chapter))
         }
     }.flowOn(Dispatchers.IO)
+
+    suspend fun getChapterSubheadings(
+        version: String,
+        bookName: String,
+        chapter: Int,
+        chapterVerseNumbers: List<Int>
+    ): Map<Int, List<String>> = withContext(Dispatchers.IO) {
+        if (chapterVerseNumbers.isEmpty()) return@withContext emptyMap()
+        val isEnglish = BibleBooksData.isEnglishVersion(version)
+        val dbFileName = resolveBibleDatabaseFileName(version)
+
+        val nativeLookup = helper.getNativeChapterSubheadings(
+            dbName = dbFileName,
+            bookNameOrAbbr = bookName,
+            chapter = chapter,
+            isEnglish = isEnglish
+        )
+
+        val fallbackMap = if (nativeLookup.hasNativeSubheadings) {
+            emptyMap()
+        } else {
+            val fallbackDbName = com.example.ui.util.BibleStudyTextUtils.resolveFallbackSubheadingsDbName(version)
+            helper.getFallbackChapterSubheadings(
+                subheadingsDbName = fallbackDbName,
+                bookNameOrAbbr = bookName,
+                chapter = chapter,
+                isEnglish = isEnglish
+            )
+        }
+
+        com.example.ui.util.BibleStudyTextUtils.resolveEffectiveChapterSubheadings(
+            hasNativeSubheadingsTable = nativeLookup.hasNativeSubheadings,
+            nativeSubheadingsByVerse = nativeLookup.subheadingsByVerse,
+            fallbackSubheadingsByVerse = fallbackMap,
+            chapterVerseNumbers = chapterVerseNumbers
+        )
+    }
 
     companion object {
         private const val GITHUB_BASE_URL = "https://github.com/andresfev-prog/Biblia_de_Estudio/releases/download/1.0.0"
@@ -230,6 +281,16 @@ class BibleRepository(
         marker: String
     ): String? = withContext(Dispatchers.IO) {
         helper.getVersionNoteText(versionDbName, bookName, chapter, verse, marker)
+    }
+
+    suspend fun getVersionNotes(
+        versionDbName: String,
+        bookName: String,
+        chapter: Int,
+        verse: Int,
+        marker: String
+    ): BibleAssetDatabaseHelper.VersionNotesLookup = withContext(Dispatchers.IO) {
+        helper.getVersionNotes(versionDbName, bookName, chapter, verse, marker)
     }
 
     fun getVersesWithComments(
