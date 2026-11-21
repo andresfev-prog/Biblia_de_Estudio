@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
@@ -71,9 +72,14 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleVerse
 import com.example.ui.components.TutorialStep
 import com.example.ui.components.tutorialTarget
+import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
+
+private val SearchCrispTitleNavy = Color(0xFF0D2240)
+private val SearchCrispMutedText = Color(0xFF566376)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -85,6 +91,11 @@ fun SearchScreen(
     },
     modifier: Modifier = Modifier
 ) {
+    val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) SearchCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) SearchCrispMutedText else appColors.textSecondary
+
     val isEnglish = uiState.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
     val hasQuery = uiState.searchQuery.trim().length >= 2
     var isVersionMenuOpen by remember { mutableStateOf(false) }
@@ -119,14 +130,18 @@ fun SearchScreen(
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.onSearchQueryChanged(it) },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 14.5.sp,
+                    color = appColors.textPrimary
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .testTag("search_text_field"),
                 placeholder = {
                     Text(
                         text = if (isEnglish) "Search word..." else "Buscar palabra...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                        color = mutedTextColor.copy(alpha = 0.85f),
                         maxLines = 1
                     )
                 },
@@ -143,7 +158,7 @@ fun SearchScreen(
                             Icon(
                                 imageVector = Icons.Default.Clear,
                                 contentDescription = "Borrar texto",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = mutedTextColor
                             )
                         }
                     }
@@ -181,9 +196,9 @@ fun SearchScreen(
                     ) {
                         Text(
                             text = uiState.searchVersion,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = headingColor,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -192,7 +207,7 @@ fun SearchScreen(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = "Cambiar versión",
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = headingColor
                         )
                     }
                 }
@@ -211,11 +226,12 @@ fun SearchScreen(
                             text = {
                                 Text(
                                     text = version,
-                                    fontWeight = if (uiState.searchVersion == version) FontWeight.Bold else FontWeight.Normal,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (uiState.searchVersion == version) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (uiState.searchVersion == version) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        MaterialTheme.colorScheme.onSurface
+                                        appColors.textPrimary
                                     }
                                 )
                             },
@@ -261,7 +277,7 @@ fun SearchScreen(
                 label = {
                     Text(
                         text = if (isEnglish) "Exact" else "Exacta",
-                        fontSize = 11.sp,
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.5.sp),
                         fontWeight = FontWeight.SemiBold
                     )
                 },
@@ -321,9 +337,13 @@ fun SearchScreen(
                             } else {
                                 "No se encontraron coincidencias en ${uiState.searchVersion}."
                             },
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 14.5.sp,
+                                lineHeight = 21.sp
+                            ),
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = headingColor,
+                            textAlign = TextAlign.Center
                         )
                         if (uiState.searchExactWord) {
                             Spacer(modifier = Modifier.height(4.dp))
@@ -333,8 +353,11 @@ fun SearchScreen(
                                 } else {
                                     "Prueba desactivando 'Exacta' para ampliar la búsqueda."
                                 },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp
+                                ),
+                                color = mutedTextColor,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -357,14 +380,15 @@ fun SearchScreen(
                             ) {
                                 Text(
                                     text = if (isEnglish) "Recent searches" else "Búsquedas recientes",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.5.sp),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = mutedTextColor
                                 )
                                 TextButton(onClick = { viewModel.clearSearchHistory() }) {
                                     Text(
                                         text = if (isEnglish) "Clear" else "Borrar",
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                                        fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 }
@@ -394,14 +418,15 @@ fun SearchScreen(
                                             Icon(
                                                 imageVector = Icons.Default.History,
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = mutedTextColor,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = item.query,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                                fontWeight = FontWeight.Medium,
+                                                color = appColors.textPrimary
                                             )
                                         }
                                     }
@@ -415,8 +440,12 @@ fun SearchScreen(
                             } else {
                                 "Escribe al menos 2 letras para buscar."
                             },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            ),
+                            color = mutedTextColor,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -462,6 +491,10 @@ private fun SearchScopeFilterBar(
     isEnglish: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val mutedTextColor = if (isCrispLight) SearchCrispMutedText else MaterialTheme.colorScheme.onSurfaceVariant
+
     val filters = listOf(
         Triple("TODOS", if (isEnglish) "All" else "Todos", countAll),
         Triple("AT", if (isEnglish) "OT" else "AT", countOt),
@@ -498,13 +531,14 @@ private fun SearchScopeFilterBar(
                 ) {
                     Text(
                         text = labelText,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = if (showCount) 10.sp else 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = if (showCount) 10.5.sp else 11.5.sp
+                        ),
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         color = if (isSelected) {
                             MaterialTheme.colorScheme.onPrimary
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            mutedTextColor
                         },
                         maxLines = 1,
                         softWrap = false,
@@ -528,6 +562,11 @@ private fun SearchResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) SearchCrispTitleNavy else MaterialTheme.colorScheme.primary
+    val mutedTextColor = if (isCrispLight) SearchCrispMutedText else MaterialTheme.colorScheme.onSurfaceVariant
+
     val primaryColor = MaterialTheme.colorScheme.primary
     val highlightedText = remember(verse.text, searchQuery, exactWord, primaryColor) {
         buildHighlightedVerseText(
@@ -555,9 +594,9 @@ private fun SearchResultItem(
             ) {
                 Text(
                     text = "${verse.bookName} ${verse.chapter}:${verse.verse}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.5.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = headingColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -577,7 +616,7 @@ private fun SearchResultItem(
                         tint = if (isFavorite) {
                             MaterialTheme.colorScheme.primary
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            mutedTextColor
                         },
                         modifier = Modifier.size(20.dp)
                     )
@@ -588,11 +627,13 @@ private fun SearchResultItem(
 
             Text(
                 text = highlightedText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 13.5.sp,
+                    lineHeight = 20.sp
+                ),
+                color = appColors.textPrimary,
                 maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 20.sp
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

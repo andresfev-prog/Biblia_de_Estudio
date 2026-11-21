@@ -50,8 +50,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +61,7 @@ import com.example.data.model.BibleModule
 import com.example.ui.components.TutorialStep
 import com.example.ui.components.tutorialTarget
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
 import com.example.ui.theme.ModuleDeleteRed
 import com.example.ui.theme.ModuleInstalledGreen
 import com.example.ui.util.StringsLocale
@@ -71,6 +74,10 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
+
+private val ModulesCrispTitleNavy = Color(0xFF0D2240)
+private val ModulesCrispSubtitleHeader = Color(0xFF475569)
+private val ModulesCrispMutedText = Color(0xFF566376)
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +93,10 @@ fun ModulesScreen(
     val isEn = lang.contains("English", ignoreCase = true)
     val languages = if (isEn) listOf("All", "Spanish", "English") else listOf("Todos", "Español", "Inglés")
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ModulesCrispTitleNavy else appColors.titleColor
+    val headerSubtitleColor = if (isCrispLight) ModulesCrispSubtitleHeader else appColors.textSecondary
+    val mutedTextColor = if (isCrispLight) ModulesCrispMutedText else appColors.textSecondary
 
     Column(
         modifier = modifier
@@ -98,16 +109,23 @@ fun ModulesScreen(
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = StringsLocale.get("modules_title", lang),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = 27.sp,
+                    letterSpacing = (-0.4).sp
+                ),
                 fontWeight = FontWeight.Bold,
-                color = appColors.titleColor,
+                color = headingColor,
                 maxLines = 1,
                 softWrap = false
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = StringsLocale.get("modules_subtitle", lang),
-                style = MaterialTheme.typography.bodySmall,
-                color = appColors.textSecondary
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 13.5.sp,
+                    lineHeight = 18.sp
+                ),
+                color = headerSubtitleColor
             )
         }
 
@@ -148,10 +166,9 @@ fun ModulesScreen(
                     ) {
                         Text(
                             text = "${StringsLocale.get("language_label", lang)}: $currentDisplayLang",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.5.sp),
+                            fontWeight = FontWeight.SemiBold,
                             color = appColors.pillText,
-                            fontSize = 12.5.sp,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -180,7 +197,8 @@ fun ModulesScreen(
                             text = {
                                 Text(
                                     text = languageItem,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (isSelected) appColors.accent else appColors.textPrimary,
                                     maxLines = 1,
                                     softWrap = false
@@ -210,16 +228,15 @@ fun ModulesScreen(
                     Icon(
                         imageVector = Icons.Filled.CloudDone,
                         contentDescription = null,
-                        tint = if (onlyDownloaded) appColors.pillText else appColors.textSecondary,
+                        tint = if (onlyDownloaded) appColors.pillText else mutedTextColor,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (isEn) "Downloaded" else "Descargados",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (onlyDownloaded) appColors.pillText else appColors.textPrimary,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.5.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (onlyDownloaded) appColors.pillText else headingColor,
                         maxLines = 1,
                         softWrap = false
                     )
@@ -250,11 +267,11 @@ fun ModulesScreen(
                     text = {
                         Text(
                             text = title,
-                            fontSize = 12.5.sp,
+                            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
                             maxLines = 1,
                             softWrap = false,
-                            fontWeight = if (uiState.moduleSelectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                            color = if (uiState.moduleSelectedTab == index) appColors.accent else appColors.textSecondary
+                            fontWeight = if (uiState.moduleSelectedTab == index) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (uiState.moduleSelectedTab == index) appColors.accent else mutedTextColor
                         )
                     },
                     modifier = Modifier.testTag("module_tab_$index")
@@ -294,10 +311,13 @@ fun ModulesScreen(
             ) {
                 Text(
                     text = if (isEn) "No downloaded modules in this category." else "No hay módulos descargados en esta categoría.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = appColors.textSecondary,
-                    maxLines = 1,
-                    softWrap = false
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    ),
+                    color = mutedTextColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2
                 )
             }
         } else if (baseFiltered.isEmpty()) {
@@ -309,10 +329,13 @@ fun ModulesScreen(
             ) {
                 Text(
                     text = if (isEn) "No modules available." else "No se encontraron módulos disponibles.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = appColors.textSecondary,
-                    maxLines = 1,
-                    softWrap = false
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    ),
+                    color = mutedTextColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2
                 )
             }
         } else {
@@ -372,6 +395,8 @@ private fun LabeledDivider(
     modifier: Modifier = Modifier
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val mutedTextColor = if (isCrispLight) ModulesCrispMutedText else appColors.textSecondary
     val dividerColor = appColors.border
 
     Row(
@@ -387,10 +412,12 @@ private fun LabeledDivider(
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = 12.sp,
+                letterSpacing = 0.2.sp
+            ),
             fontWeight = FontWeight.SemiBold,
-            color = appColors.textSecondary,
-            fontSize = 11.5.sp,
+            color = mutedTextColor,
             modifier = Modifier.padding(horizontal = 12.dp)
         )
         HorizontalDivider(
@@ -410,6 +437,9 @@ private fun ModuleItemCard(
     onToggleDownload: () -> Unit
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ModulesCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) ModulesCrispMutedText else appColors.textSecondary
     val isDownloading = progress != null
 
     val roleLabel = when (module.category) {
@@ -459,10 +489,12 @@ private fun ModuleItemCard(
             ) {
                 Text(
                     text = module.versionTag,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        letterSpacing = 0.2.sp
+                    ),
+                    fontWeight = FontWeight.SemiBold,
                     color = appColors.onPrimaryContainer,
-                    fontSize = 10.sp,
                     maxLines = 1,
                     softWrap = false
                 )
@@ -496,11 +528,12 @@ private fun ModuleItemCard(
                 Text(
                     text = titleAnnotated,
                     inlineContent = inlineContent,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontSize = 13.5.sp,
-                    lineHeight = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = appColors.titleColor,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp
+                    ),
+                    fontWeight = FontWeight.SemiBold,
+                    color = headingColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -509,21 +542,27 @@ private fun ModuleItemCard(
 
                 Text(
                     text = "$roleLabel: ${module.author}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = appColors.textSecondary,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp
+                    ),
+                    color = mutedTextColor,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    softWrap = false
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = getLocalizedModuleDescription(module, isEn),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp
+                    ),
                     color = appColors.textPrimary,
-                    lineHeight = 18.sp,
-                    maxLines = 2
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -538,17 +577,15 @@ private fun ModuleItemCard(
                         ) {
                             Text(
                                 text = if (isEn) "Downloading..." else "Descargando...",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                                 color = appColors.accent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "${(progress * 100).toInt()}%",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                                 color = appColors.accent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -572,18 +609,18 @@ private fun ModuleItemCard(
                 ) {
                     Text(
                         text = "${StringsLocale.get("language_label", lang)}: $localizedModuleLanguage",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = appColors.textSecondary,
-                        fontSize = 11.sp,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                        fontWeight = FontWeight.Medium,
+                        color = mutedTextColor,
                         maxLines = 1,
                         softWrap = false
                     )
 
                     Text(
                         text = "${StringsLocale.get("size", lang)}: ${module.sizeText}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = appColors.textSecondary,
-                        fontSize = 11.sp,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                        fontWeight = FontWeight.Medium,
+                        color = mutedTextColor,
                         maxLines = 1,
                         softWrap = false
                     )
@@ -599,10 +636,9 @@ private fun ModuleItemCard(
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = StringsLocale.get("installed", lang),
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                                 color = ModuleInstalledGreen,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 softWrap = false
                             )

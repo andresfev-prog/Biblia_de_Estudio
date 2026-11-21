@@ -122,6 +122,9 @@ object BibleBooksData {
         730 to 66
     )
 
+    private val canonicalToMyBibleBookNumberMap: Map<Int, Int> =
+        myBibleBookNumberToCanonical.entries.associate { (myBible, canonical) -> canonical to myBible }
+
     private fun normalizeToken(raw: String): String {
         return java.text.Normalizer.normalize(raw.trim(), java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
@@ -158,6 +161,10 @@ object BibleBooksData {
         getBookByName(bookName)?.let { return it.number }
         if (bookNumber in 1..66) return bookNumber
         return myBibleBookNumberToCanonical[bookNumber]
+    }
+
+    fun resolveMyBibleBookNumber(canonicalBookId: Int): Int? {
+        return canonicalToMyBibleBookNumberMap[canonicalBookId]
     }
 
     fun getLocalizedBookName(bookNumber: Int, isEnglish: Boolean): String {
@@ -280,5 +287,127 @@ object BibleBooksData {
                 v.contains("WEB") || v.contains("YLT") || v.contains("DARBY") ||
                 v.contains("MSG") || v.contains("ENGLISH") || v.contains("INGLES") ||
                 v.contains("INGLÉS")
+    }
+}
+
+/**
+ * Catálogo 100 % dinámico construido desde la tabla `verses` del SQLite de una versión bíblica.
+ * Garantiza que biblias parciales (ej. TPT, solo NT o solo AT) muestren y naveguen
+ * exclusivamente por los libros y capítulos que realmente contienen versículos.
+ */
+data class ModuleBibleCatalog(
+    val version: String,
+    val availableBooks: List<BookInfo>,
+    val chaptersByBookNumber: Map<Int, List<Int>>
+) {
+    val oldTestamentBooks: List<BookInfo>
+        get() = availableBooks.filter { it.testament == "AT" }
+
+    val newTestamentBooks: List<BookInfo>
+        get() = availableBooks.filter { it.testament == "NT" }
+
+    val hasOldTestament: Boolean
+        get() = availableBooks.any { it.testament == "AT" }
+
+    val hasNewTestament: Boolean
+        get() = availableBooks.any { it.testament == "NT" }
+
+    fun getAvailableChapters(book: BookInfo): List<Int> =
+        chaptersByBookNumber[book.number].orEmpty()
+
+    fun getAvailableChapters(bookName: String): List<Int> {
+        val canonicalId = BibleBooksData.resolveCanonicalBookId(bookName) ?: return emptyList()
+        return chaptersByBookNumber[canonicalId].orEmpty()
+    }
+
+    fun hasPassage(bookName: String, chapter: Int): Boolean {
+        return chapter in getAvailableChapters(bookName)
+    }
+
+    fun findAvailableBook(bookName: String): BookInfo? {
+        val canonicalId = BibleBooksData.resolveCanonicalBookId(bookName) ?: return null
+        return availableBooks.firstOrNull { it.number == canonicalId }
+    }
+
+    /**
+     * Retorna el par `(BookInfo, chapter)` anterior disponible dentro del módulo,
+     * cruzando únicamente hacia libros y capítulos que realmente existen en el SQLite.
+     */
+    fun getPreviousPassage(bookName: String, chapter: Int): Pair<BookInfo, Int>? {
+        val canonicalId = BibleBooksData.resolveCanonicalBookId(bookName) ?: return null
+        val bookIndex = availableBooks.indexOfFirst { it.number == canonicalId }
+        if (bookIndex < 0) return null
+
+        val currentBook = availableBooks[bookIndex]
+        val chapters = chaptersByBookNumber[canonicalId].orEmpty()
+        val prevInSameBook = chapters.lastOrNull { it < chapter }
+        if (prevInSameBook != null) {
+            return currentBook to prevInSameBook
+        }
+
+        for (i in (bookIndex - 1) downTo 0) {
+            val prevBook = availableBooks[i]
+            val prevChapters = chaptersByBookNumber[prevBook.number].orEmpty()
+            val lastChapter = prevChapters.lastOrNull()
+            if (lastChapter != null) {
+                return prevBook to lastChapter
+            }
+        }
+        return null
+    }
+
+    /**
+     * Retorna el par `(BookInfo, chapter)` siguiente disponible dentro del módulo,
+     * saltando libros o capítulos ausentes en módulos parciales.
+     */
+    fun getNextPassage(bookName: String, chapter: Int): Pair<BookInfo, Int>? {
+        val canonicalId = BibleBooksData.resolveCanonicalBookId(bookName) ?: return null
+        val bookIndex = availableBooks.indexOfFirst { it.number == canonicalId }
+        if (bookIndex < 0) return null
+
+        val currentBook = availableBooks[bookIndex]
+        val chapters = chaptersByBookNumber[canonicalId].orEmpty()
+        val nextInSameBook = chapters.firstOrNull { it > chapter }
+        if (nextInSameBook != null) {
+            return currentBook to nextInSameBook
+        }
+
+        for (i in (bookIndex + 1) until availableBooks.size) {
+            val nextBook = availableBooks[i]
+            val nextChapters = chaptersByBookNumber[nextBook.number].orEmpty()
+            val firstChapter = nextChapters.firstOrNull()
+            if (firstChapter != null) {
+                return nextBook to firstChapter
+            }
+        }
+        return null
+    }
+
+    companion object {
+        fun fromChaptersMap(
+            version: String,
+            chaptersByCanonicalBook: Map<Int, List<Int>>
+        ): ModuleBibleCatalog {
+            val normalizedMap = linkedMapOf<Int, List<Int>>()
+            val books = mutableListOf<BookInfo>()
+
+            for (canonicalBook in BibleBooksData.books) {
+                val chapters = chaptersByCanonicalBook[canonicalBook.number]
+                    ?.filter { it > 0 }
+                    ?.distinct()
+                    ?.sorted()
+                    .orEmpty()
+                if (chapters.isNotEmpty()) {
+                    normalizedMap[canonicalBook.number] = chapters
+                    books.add(canonicalBook.copy(chapterCount = chapters.size))
+                }
+            }
+
+            return ModuleBibleCatalog(
+                version = version,
+                availableBooks = books,
+                chaptersByBookNumber = normalizedMap
+            )
+        }
     }
 }

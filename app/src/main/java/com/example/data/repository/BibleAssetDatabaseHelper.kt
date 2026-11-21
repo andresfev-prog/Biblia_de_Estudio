@@ -184,9 +184,24 @@ class BibleAssetDatabaseHelper(private val context: Context) {
             730 to "Apocalipsis"
         )
 
+        private val bookIntroOnlyCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+        fun invalidateVersionNotesCache(dbName: String? = null) {
+            if (dbName.isNullOrBlank()) {
+                bookIntroOnlyCache.clear()
+            } else {
+                bookIntroOnlyCache.remove(dbName.lowercase())
+            }
+        }
+
         fun resolveBookNumber(bookNameOrAbbreviation: String): Int {
             val normalized = bookNameOrAbbreviation.trim().lowercase()
-            return BOOK_NUMBER_MAP[normalized] ?: 10
+            BOOK_NUMBER_MAP[normalized]?.let { return it }
+            val canonical = com.example.data.model.BibleBooksData.resolveCanonicalBookId(bookNameOrAbbreviation)
+            if (canonical != null) {
+                com.example.data.model.BibleBooksData.resolveMyBibleBookNumber(canonical)?.let { return it }
+            }
+            return -1
         }
 
         fun resolveBookName(bookNumber: Int): String {
@@ -194,11 +209,75 @@ class BibleAssetDatabaseHelper(private val context: Context) {
         }
     }
 
+    /**
+     * Consulta la tabla `verses` del módulo SQLite para obtener el mapa real
+     * de libros (ID canónico 1..66) -> lista ordenada de capítulos con versículos reales.
+     */
+    fun loadModuleAvailableBookChapters(dbName: String): Map<Int, List<Int>> {
+        val database = openDatabaseReadOnly(context, dbName) ?: return emptyMap()
+        val chaptersByCanonical = linkedMapOf<Int, MutableSet<Int>>()
+        try {
+            val query = """
+                SELECT DISTINCT book_number, chapter
+                FROM verses
+                WHERE TRIM(COALESCE(text, '')) != ''
+                ORDER BY book_number ASC, chapter ASC
+            """.trimIndent()
+            database.rawQuery(query, null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val rawBookNum = cursor.getInt(0)
+                    val chapterNum = cursor.getInt(1)
+                    if (chapterNum <= 0) continue
+                    val canonicalId = com.example.data.model.BibleBooksData.resolveCanonicalBookId("", rawBookNum)
+                        ?: continue
+                    chaptersByCanonical.getOrPut(canonicalId) { linkedSetOf() }.add(chapterNum)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error cargando catálogo dinámico de $dbName: ${e.message}", e)
+        } finally {
+            database.close()
+        }
+        return chaptersByCanonical.mapValues { (_, set) -> set.sorted() }
+    }
+
+    /**
+     * Retorna la lista real de números de versículo disponibles en un capítulo dado
+     * directamente desde el SQLite de la versión solicitada.
+     */
+    fun getAvailableVerseNumbers(dbName: String, bookNameOrAbbr: String, chapter: Int): List<Int> {
+        val bookNumber = resolveBookNumber(bookNameOrAbbr)
+        if (bookNumber < 0 || chapter <= 0) return emptyList()
+        val database = openDatabaseReadOnly(context, dbName) ?: return emptyList()
+        val verses = mutableListOf<Int>()
+        try {
+            val query = """
+                SELECT DISTINCT verse
+                FROM verses
+                WHERE book_number = ? AND chapter = ? AND TRIM(COALESCE(text, '')) != ''
+                ORDER BY verse ASC
+            """.trimIndent()
+            database.rawQuery(query, arrayOf(bookNumber.toString(), chapter.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val v = cursor.getInt(0)
+                    if (v > 0) verses.add(v)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error consultando versículos disponibles en $dbName: ${e.message}", e)
+        } finally {
+            database.close()
+        }
+        return verses
+    }
+
     fun getVersesFromAsset(dbName: String, bookNameOrAbbr: String, chapter: Int): List<Pair<Int, String>> {
+        val bookNumber = resolveBookNumber(bookNameOrAbbr)
+        if (bookNumber < 0 || chapter <= 0) return emptyList()
+
         val result = mutableListOf<Pair<Int, String>>()
         val database = openDatabaseReadOnly(context, dbName) ?: return emptyList()
 
-        val bookNumber = resolveBookNumber(bookNameOrAbbr)
         val query = "SELECT verse, text FROM verses WHERE book_number = ? AND chapter = ? ORDER BY verse ASC"
         val selectionArgs = arrayOf(bookNumber.toString(), chapter.toString())
 
@@ -215,7 +294,9 @@ class BibleAssetDatabaseHelper(private val context: Context) {
                         .replace(Regex("(?<=\\p{L})\\d+"), "")
                         .replace(Regex("\\s+"), " ")
                         .trim()
-                    result.add(Pair(verseNum, cleanText))
+                    if (cleanText.isNotBlank()) {
+                        result.add(Pair(verseNum, cleanText))
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -228,8 +309,9 @@ class BibleAssetDatabaseHelper(private val context: Context) {
     }
 
     fun getRawVerseText(dbName: String, bookNameOrAbbr: String, chapter: Int, verse: Int): String? {
-        val database = openDatabaseReadOnly(context, dbName) ?: return null
         val bookNumber = resolveBookNumber(bookNameOrAbbr)
+        if (bookNumber < 0) return null
+        val database = openDatabaseReadOnly(context, dbName) ?: return null
         val query = "SELECT text FROM verses WHERE book_number = ? AND chapter = ? AND verse = ? LIMIT 1"
         var rawText: String? = null
 
@@ -623,6 +705,96 @@ class BibleAssetDatabaseHelper(private val context: Context) {
         }
     }
 
+    private fun isBookIntroOnlySchema(dbName: String, database: SQLiteDatabase): Boolean {
+        val cacheKey = dbName.lowercase()
+        bookIntroOnlyCache[cacheKey]?.let { return it }
+        val result = try {
+            val totalRows = database.rawQuery("SELECT COUNT(*) FROM commentaries", null).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            val nonIntroRows = database.rawQuery(
+                "SELECT COUNT(*) FROM commentaries WHERE chapter_number_from != 1 OR verse_number_from != 1",
+                null
+            ).use { c ->
+                if (c.moveToFirst()) c.getInt(0) else 0
+            }
+            totalRows in 1..70 && nonIntroRows == 0
+        } catch (_: Exception) {
+            false
+        }
+        bookIntroOnlyCache[cacheKey] = result
+        return result
+    }
+
+    /**
+     * Retorna el conjunto de números de versículo en el capítulo que poseen una nota real
+     * de versículo dentro del módulo de notas de versión (`dbName`, ej. `RV1960-c.commentaries.SQLite3`).
+     * Si el módulo no existe en disco o solo contiene introducciones generales de libro (1:1),
+     * retorna `emptySet()` para ocultar asteriscos sin respaldo real.
+     */
+    fun getVersesWithRealVersionNotes(
+        dbName: String,
+        bookNameOrAbbr: String,
+        chapter: Int
+    ): Set<Int> {
+        val bookNumber = resolveBookNumber(bookNameOrAbbr)
+        if (bookNumber < 0 || chapter <= 0) return emptySet()
+
+        val dbFile = context.getDatabasePath(dbName)
+        if (!dbFile.exists() || dbFile.length() == 0L) return emptySet()
+
+        val database = try {
+            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error abriendo $dbName para verificar notas reales: ${e.message}", e)
+            return emptySet()
+        }
+
+        val versesWithNotes = mutableSetOf<Int>()
+        try {
+            if (isBookIntroOnlySchema(dbName, database)) {
+                return emptySet()
+            }
+
+            val cols = getTableColumns(database, "commentaries")
+            if ("book_number" !in cols || "chapter_number_from" !in cols || "verse_number_from" !in cols || "text" !in cols) {
+                return emptySet()
+            }
+            val hasVerseTo = "verse_number_to" in cols
+            val sql = if (hasVerseTo) {
+                """
+                SELECT verse_number_from, verse_number_to
+                FROM commentaries
+                WHERE book_number = ? AND chapter_number_from = ? AND TRIM(COALESCE(text, '')) != ''
+                """.trimIndent()
+            } else {
+                """
+                SELECT verse_number_from
+                FROM commentaries
+                WHERE book_number = ? AND chapter_number_from = ? AND TRIM(COALESCE(text, '')) != ''
+                """.trimIndent()
+            }
+
+            database.rawQuery(sql, arrayOf(bookNumber.toString(), chapter.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val fromVerse = cursor.getInt(0)
+                    if (fromVerse <= 0) continue
+                    val rawToVerse = if (hasVerseTo && !cursor.isNull(1)) cursor.getInt(1) else fromVerse
+                    val toVerse = if (rawToVerse >= fromVerse) minOf(rawToVerse, fromVerse + 199) else fromVerse
+                    for (v in fromVerse..toVerse) {
+                        versesWithNotes.add(v)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error consultando versículos con notas reales en $dbName: ${e.message}", e)
+        } finally {
+            database.close()
+        }
+
+        return versesWithNotes
+    }
+
     fun getVersionNoteText(
         dbName: String,
         bookNameOrAbbr: String,
@@ -956,11 +1128,11 @@ class BibleAssetDatabaseHelper(private val context: Context) {
                             val textList = mutableListOf<String>()
                             while (c.moveToNext()) {
                                 if (tIdx >= 0) {
-                                    val t = c.getString(tIdx)
-                                        .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                                        .replace(Regex("(?<=\\p{L})\\d+"), "")
-                                        .replace(Regex("\\s+"), " ")
-                                        .trim()
+                                    val t = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                                        rawText = c.getString(tIdx).orEmpty(),
+                                        version = bibleDbName.removeSuffix(".SQLite3"),
+                                        showRvrAsterisks = false
+                                    )
                                     textList.add(t)
                                 }
                             }

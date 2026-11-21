@@ -17,12 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -34,11 +34,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
+
+private val TtsCrispTitleNavy = Color(0xFF0D2240)
+private val TtsCrispMutedText = Color(0xFF566376)
 
 @Composable
 fun TtsPlayerBar(
@@ -48,6 +53,7 @@ fun TtsPlayerBar(
     chapter: Int,
     currentVerse: Int,
     totalVerses: Int,
+    interfaceLanguage: String = "Español",
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onNext: () -> Unit,
@@ -56,6 +62,10 @@ fun TtsPlayerBar(
     modifier: Modifier = Modifier
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) TtsCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) TtsCrispMutedText else appColors.textSecondary
+    val isEn = interfaceLanguage.contains("English", ignoreCase = true)
 
     AnimatedVisibility(
         visible = isVisible,
@@ -114,7 +124,7 @@ fun TtsPlayerBar(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.VolumeUp,
+                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = null,
                                 tint = appColors.accent,
                                 modifier = Modifier.size(20.dp)
@@ -126,16 +136,16 @@ fun TtsPlayerBar(
                         Column {
                             Text(
                                 text = "$bookName $chapter:$currentVerse",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.5.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = headingColor,
                                 maxLines = 1,
                                 softWrap = false
                             )
                             Text(
-                                text = "Lectura de voz (Audio TTS)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = appColors.textSecondary,
+                                text = if (isEn) "Voice reading (Audio TTS)" else "Lectura de voz (Audio TTS)",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = mutedTextColor,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -152,8 +162,8 @@ fun TtsPlayerBar(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.SkipPrevious,
-                                contentDescription = "Anterior",
-                                tint = appColors.titleColor
+                                contentDescription = if (isEn) "Previous" else "Anterior",
+                                tint = headingColor
                             )
                         }
 

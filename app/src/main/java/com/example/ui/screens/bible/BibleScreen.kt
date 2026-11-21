@@ -52,6 +52,7 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -66,6 +67,7 @@ import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,6 +75,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -111,6 +114,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
@@ -120,6 +124,7 @@ import com.example.data.model.BibleBooksData
 import com.example.data.model.BibleModule
 import com.example.data.model.BibleVerse
 import com.example.data.model.BookInfo
+import com.example.data.model.ModuleBibleCatalog
 import com.example.ui.components.CommentaryBottomSheet
 import com.example.ui.components.CrossReferenceBottomSheet
 import com.example.ui.components.DictionaryBottomSheet
@@ -133,6 +138,7 @@ import com.example.ui.theme.AppColors
 import com.example.ui.theme.AppIcon
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
 import com.example.ui.util.BibleStudyTextUtils
 import com.example.ui.util.StringsLocale
 import com.example.ui.util.VerseDisplayToken
@@ -140,6 +146,9 @@ import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private val ReaderCrispTitleNavy = Color(0xFF0D2240)
+private val ReaderCrispMutedText = Color(0xFF566376)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -239,20 +248,40 @@ fun BibleScreen(
         }
     }
 
-    LaunchedEffect(leftListState.isScrollInProgress, uiState.isParallelLinked) {
-        if (uiState.isParallelLinked && leftListState.isScrollInProgress && !rightListState.isScrollInProgress) {
+    LaunchedEffect(
+        leftListState.isScrollInProgress,
+        uiState.isParallelLinked,
+        uiState.verses.isNotEmpty(),
+        uiState.parallelVerses.isNotEmpty()
+    ) {
+        if (uiState.isParallelLinked &&
+            uiState.verses.isNotEmpty() &&
+            uiState.parallelVerses.isNotEmpty() &&
+            leftListState.isScrollInProgress &&
+            !rightListState.isScrollInProgress
+        ) {
             snapshotFlow { Pair(leftListState.firstVisibleItemIndex, leftListState.firstVisibleItemScrollOffset) }
                 .collect { (idx, offset) ->
-                    rightListState.scrollToItem(idx, offset)
+                    rightListState.scrollToItem(idx.coerceIn(0, uiState.parallelVerses.lastIndex), offset)
                 }
         }
     }
 
-    LaunchedEffect(rightListState.isScrollInProgress, uiState.isParallelLinked) {
-        if (uiState.isParallelLinked && rightListState.isScrollInProgress && !leftListState.isScrollInProgress) {
+    LaunchedEffect(
+        rightListState.isScrollInProgress,
+        uiState.isParallelLinked,
+        uiState.verses.isNotEmpty(),
+        uiState.parallelVerses.isNotEmpty()
+    ) {
+        if (uiState.isParallelLinked &&
+            uiState.verses.isNotEmpty() &&
+            uiState.parallelVerses.isNotEmpty() &&
+            rightListState.isScrollInProgress &&
+            !leftListState.isScrollInProgress
+        ) {
             snapshotFlow { Pair(rightListState.firstVisibleItemIndex, rightListState.firstVisibleItemScrollOffset) }
                 .collect { (idx, offset) ->
-                    leftListState.scrollToItem(idx, offset)
+                    leftListState.scrollToItem(idx.coerceIn(0, uiState.verses.lastIndex), offset)
                 }
         }
     }
@@ -345,6 +374,7 @@ fun BibleScreen(
                         availableVersions = downloadedVersions,
                         isParallelMode = uiState.isParallelMode,
                         isParallelLinked = uiState.isParallelLinked,
+                        hasReadableVerses = uiState.verses.isNotEmpty(),
                         interfaceLanguage = lang,
                         onOpenPassagePicker = { viewModel.openPassagePicker() },
                         onSelectActiveVersion = { viewModel.setActiveVersion(it) },
@@ -447,7 +477,10 @@ fun BibleScreen(
                 SingleReaderView(
                     uiState = uiState,
                     viewModel = viewModel,
+                    availableVersions = downloadedVersions,
                     selectedVerses = if (selectedIsRightPane) emptySet() else selectedVerses,
+                    onOpenPassagePicker = { viewModel.openPassagePicker() },
+                    onSelectVersion = { viewModel.setActiveVersion(it) },
                     onVerseClick = { verseNum ->
                         if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
                         selectedIsRightPane = false
@@ -479,12 +512,13 @@ fun BibleScreen(
             label = "ttsBottomPadding"
         )
         TtsPlayerBar(
-            isVisible = uiState.isTtsVisible,
+            isVisible = uiState.isTtsVisible && uiState.verses.isNotEmpty(),
             isPlaying = uiState.isTtsPlaying,
             bookName = uiState.currentBook,
             chapter = uiState.currentChapter,
             currentVerse = if (uiState.verses.isNotEmpty()) uiState.verses.getOrNull(uiState.ttsVerseIndex)?.verse ?: 1 else 1,
             totalVerses = uiState.verses.size,
+            interfaceLanguage = lang,
             onPlay = { viewModel.playTts() },
             onPause = { viewModel.pauseTts() },
             onNext = { viewModel.nextTtsVerse() },
@@ -610,6 +644,8 @@ fun BibleScreen(
                 currentStep = uiState.pickerStep,
                 selectedBook = uiState.pickerSelectedBook,
                 selectedChapter = uiState.pickerSelectedChapter,
+                catalog = uiState.activeVersionCatalog,
+                availableVerses = uiState.pickerAvailableVerses,
                 interfaceLanguage = lang,
                 onBookSelected = { viewModel.onPickerBookSelected(it) },
                 onChapterSelected = { viewModel.onPickerChapterSelected(it) },
@@ -739,6 +775,7 @@ private fun ReaderTopControls(
     availableVersions: List<BibleModule>,
     isParallelMode: Boolean,
     isParallelLinked: Boolean,
+    hasReadableVerses: Boolean = true,
     interfaceLanguage: String,
     onOpenPassagePicker: () -> Unit,
     onSelectActiveVersion: (String) -> Unit,
@@ -751,6 +788,10 @@ private fun ReaderTopControls(
 ) {
     var versionMenuExpanded by remember { mutableStateOf(false) }
     var overflowMenuExpanded by remember { mutableStateOf(false) }
+
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ReaderCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) ReaderCrispMutedText else appColors.textSecondary
 
     val isVersionEn = BibleBooksData.isEnglishVersion(activeVersion)
     val bookInfo = BibleBooksData.getBookByName(currentBook)
@@ -780,17 +821,16 @@ private fun ReaderTopControls(
                 ) {
                     Text(
                         text = "$bookName $currentChapter",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.5.sp),
                         fontWeight = FontWeight.SemiBold,
-                        color = appColors.textPrimary
+                        color = headingColor
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
-                        tint = appColors.textSecondary
+                        tint = mutedTextColor
                     )
                 }
             }
@@ -807,7 +847,7 @@ private fun ReaderTopControls(
                     Icon(
                         imageVector = if (isParallelLinked) Icons.Rounded.Link else Icons.Rounded.LinkOff,
                         contentDescription = if (isParallelLinked) "Modo Enlazado" else "Modo Libre",
-                        tint = if (isParallelLinked) appColors.accent else appColors.textSecondary,
+                        tint = if (isParallelLinked) appColors.accent else mutedTextColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -830,17 +870,16 @@ private fun ReaderTopControls(
                         ) {
                             Text(
                                 text = activeVersion,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontSize = 13.sp,
+                                style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
                                 fontWeight = FontWeight.SemiBold,
-                                color = appColors.textPrimary
+                                color = headingColor
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
-                                tint = appColors.textSecondary
+                                tint = mutedTextColor
                             )
                         }
                     }
@@ -856,14 +895,26 @@ private fun ReaderTopControls(
                     ) {
                         if (availableVersions.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("Reina-Valera 1960 (RVR1960)", color = appColors.textPrimary) },
+                                text = {
+                                    Text(
+                                        "Reina-Valera 1960 (RVR1960)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = appColors.textPrimary
+                                    )
+                                },
                                 onClick = {
                                     onSelectActiveVersion("RVR1960")
                                     versionMenuExpanded = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("King James Version (KJV)", color = appColors.textPrimary) },
+                                text = {
+                                    Text(
+                                        "King James Version (KJV)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = appColors.textPrimary
+                                    )
+                                },
                                 onClick = {
                                     onSelectActiveVersion("KJV")
                                     versionMenuExpanded = false
@@ -875,8 +926,9 @@ private fun ReaderTopControls(
                                     text = {
                                         Text(
                                             text = "${module.title} (${module.versionTag})",
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = if (activeVersion == module.versionTag) appColors.accent else appColors.textPrimary,
-                                            fontWeight = if (activeVersion == module.versionTag) FontWeight.Bold else FontWeight.Normal,
+                                            fontWeight = if (activeVersion == module.versionTag) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1,
                                             softWrap = false
                                         )
@@ -901,7 +953,7 @@ private fun ReaderTopControls(
                     AppIcon(
                         glyph = AppIcons.ThreeDotsMenu,
                         contentDescription = "Más opciones",
-                        tint = appColors.textPrimary,
+                        tint = headingColor,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -916,18 +968,20 @@ private fun ReaderTopControls(
                     border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
                 ) {
                     DropdownMenuItem(
+                        enabled = hasReadableVerses,
                         leadingIcon = {
                             AppIcon(
                                 glyph = AppIcons.TtsAudio,
                                 contentDescription = null,
-                                tint = appColors.accent,
+                                tint = if (hasReadableVerses) appColors.accent else mutedTextColor.copy(alpha = 0.45f),
                                 modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
                             Text(
                                 text = StringsLocale.get("overflow_audio", interfaceLanguage),
-                                color = appColors.textPrimary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (hasReadableVerses) appColors.textPrimary else mutedTextColor.copy(alpha = 0.45f),
                                 fontWeight = FontWeight.Medium
                             )
                         },
@@ -942,15 +996,16 @@ private fun ReaderTopControls(
                             AppIcon(
                                 glyph = AppIcons.SplitScreen,
                                 contentDescription = null,
-                                tint = if (isParallelMode) appColors.accent else appColors.textSecondary,
+                                tint = if (isParallelMode) appColors.accent else mutedTextColor,
                                 modifier = Modifier.size(24.dp)
                             )
                         },
                         text = {
                             Text(
                                 text = StringsLocale.get("overflow_split", interfaceLanguage),
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = appColors.textPrimary,
-                                fontWeight = if (isParallelMode) FontWeight.Bold else FontWeight.Medium
+                                fontWeight = if (isParallelMode) FontWeight.SemiBold else FontWeight.Medium
                             )
                         },
                         onClick = {
@@ -971,6 +1026,7 @@ private fun ReaderTopControls(
                         text = {
                             Text(
                                 text = StringsLocale.get("overflow_notes", interfaceLanguage),
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = appColors.textPrimary,
                                 fontWeight = FontWeight.Medium
                             )
@@ -991,7 +1047,10 @@ private fun ReaderTopControls(
 private fun SingleReaderView(
     uiState: BibleUiState,
     viewModel: BibleViewModel,
+    availableVersions: List<BibleModule>,
     selectedVerses: Set<Int>,
+    onOpenPassagePicker: () -> Unit,
+    onSelectVersion: (String) -> Unit,
     onVerseClick: (Int) -> Unit,
     onVerseLongClick: (Int) -> Unit,
     fontFamily: FontFamily,
@@ -1001,8 +1060,11 @@ private fun SingleReaderView(
     modifier: Modifier = Modifier
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ReaderCrispTitleNavy else appColors.titleColor
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val isSelectionMode = selectedVerses.isNotEmpty()
+    val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
 
     LazyColumn(
         state = listState,
@@ -1016,7 +1078,6 @@ private fun SingleReaderView(
             .testTag("single_reader_list")
     ) {
         item {
-            val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
             val bookInfo = BibleBooksData.getBookByName(uiState.currentBook)
             val bookId = bookInfo?.number ?: 43
             val displayBookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
@@ -1027,82 +1088,128 @@ private fun SingleReaderView(
             ) {
                 Text(
                     text = "$displayBookName ${uiState.currentChapter}",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 27.sp,
+                        letterSpacing = (-0.4).sp
+                    ),
                     fontWeight = FontWeight.Bold,
-                    color = appColors.titleColor,
+                    color = headingColor,
                     maxLines = 1,
-                    softWrap = false
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        items(
-            count = uiState.verses.size,
-            key = { index -> uiState.verses[index].id }
-        ) { index ->
-            val verse = uiState.verses[index]
-            val hasCommentary = true // La etiqueta COM debe mantenerse siempre visible en todos los versículos
-            val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
-
-            Box(
-                modifier = if (index == 0) Modifier.tutorialTarget(TutorialStep.BIBLE_VERSES_INTERACTION) else Modifier
-            ) {
-                VerseRowItem(
-                    verse = verse,
-                    subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
-                    hasCommentary = hasCommentary,
-                    hasCrossReference = hasCrossReference,
-                    isHighlighted = uiState.highlightedVerse == verse.verse,
-                    isSelected = verse.verse in selectedVerses,
-                    isSelectionMode = isSelectionMode,
-                    fontFamily = fontFamily,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight,
-                    onCommentaryClick = { code ->
-                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                        viewModel.openCommentary(verse, code)
-                    },
-                    onCrossRefClick = {
-                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                        viewModel.openCrossReferences(verse)
-                    },
-                    onWordClick = { word ->
-                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                        viewModel.lookupWord(word, verse)
-                    },
-                    onNoteClick = { marker ->
-                        if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                        viewModel.onVersionNoteClick(verse, marker)
-                    },
-                    onAnyVerseTap = {
-                        if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
-                            viewModel.clearNavigationHighlight()
-                        }
-                    },
-                    onVerseClick = { onVerseClick(verse.verse) },
-                    onVerseLongClick = { onVerseLongClick(verse.verse) }
+        if (uiState.isChapterLoading && uiState.verses.isEmpty()) {
+            item(key = "single_loading") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 64.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(30.dp),
+                        color = appColors.accent,
+                        strokeWidth = 2.5.dp
+                    )
+                }
+            }
+        } else if (uiState.verses.isEmpty()) {
+            item(key = "single_unavailable") {
+                PassageUnavailableState(
+                    versionCode = uiState.activeVersion,
+                    interfaceLanguage = uiState.userPreferences.interfaceLanguage,
+                    availableVersions = availableVersions,
+                    onOpenAvailableBooks = onOpenPassagePicker,
+                    onSelectVersion = onSelectVersion,
+                    compact = false,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 48.dp, bottom = 32.dp)
+                        .testTag("passage_unavailable_state")
                 )
             }
-        }
+        } else {
+            items(
+                count = uiState.verses.size,
+                key = { index -> uiState.verses[index].id }
+            ) { index ->
+                val verse = uiState.verses[index]
+                val hasCommentary = true // La etiqueta COM debe mantenerse siempre visible en todos los versículos
+                val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
+                val hasRvrVersionNote = verse.verse in uiState.versesWithRvrNotes
 
-        item {
-            val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
-            val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
-            ChapterBottomNavigationControls(
-                currentChapter = uiState.currentChapter,
-                totalChapters = totalChapters,
-                isEnglish = isVersionEn,
-                onPreviousChapter = {
-                    if (uiState.currentChapter > 1) {
-                        viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
-                    }
-                },
-                onNextChapter = {
-                    if (uiState.currentChapter < totalChapters) {
-                        viewModel.loadChapter(uiState.currentBook, uiState.currentChapter + 1)
+                Box(
+                    modifier = if (index == 0) Modifier.tutorialTarget(TutorialStep.BIBLE_VERSES_INTERACTION) else Modifier
+                ) {
+                    VerseRowItem(
+                        verse = verse,
+                        subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
+                        hasCommentary = hasCommentary,
+                        hasCrossReference = hasCrossReference,
+                        hasRvrVersionNote = hasRvrVersionNote,
+                        isHighlighted = uiState.highlightedVerse == verse.verse,
+                        isSelected = verse.verse in selectedVerses,
+                        isSelectionMode = isSelectionMode,
+                        fontFamily = fontFamily,
+                        fontSize = fontSize,
+                        lineHeight = lineHeight,
+                        onCommentaryClick = { code ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.openCommentary(verse, code)
+                        },
+                        onCrossRefClick = {
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.openCrossReferences(verse)
+                        },
+                        onWordClick = { word ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.lookupWord(word, verse)
+                        },
+                        onNoteClick = { marker ->
+                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                            viewModel.onVersionNoteClick(verse, marker)
+                        },
+                        onAnyVerseTap = {
+                            if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
+                                viewModel.clearNavigationHighlight()
+                            }
+                        },
+                        onVerseClick = { onVerseClick(verse.verse) },
+                        onVerseLongClick = { onVerseLongClick(verse.verse) }
+                    )
+                }
+            }
+
+            item {
+                val catalog = uiState.activeVersionCatalog
+                val currentCanonicalId = BibleBooksData.resolveCanonicalBookId(uiState.currentBook)
+                val prevPassage = catalog?.getPreviousPassage(uiState.currentBook, uiState.currentChapter)
+                val nextPassage = catalog?.getNextPassage(uiState.currentBook, uiState.currentChapter)
+
+                val prevLabel = prevPassage?.let { (book, chap) ->
+                    if (book.number == currentCanonicalId) {
+                        if (isVersionEn) "Chapter $chap" else "Capítulo $chap"
+                    } else {
+                        "${if (isVersionEn) book.englishName else book.name} $chap"
                     }
                 }
-            )
+                val nextLabel = nextPassage?.let { (book, chap) ->
+                    if (book.number == currentCanonicalId) {
+                        if (isVersionEn) "Chapter $chap" else "Capítulo $chap"
+                    } else {
+                        "${if (isVersionEn) book.englishName else book.name} $chap"
+                    }
+                }
+
+                ChapterBottomNavigationControls(
+                    previousLabel = prevLabel,
+                    nextLabel = nextLabel,
+                    onPreviousChapter = { viewModel.navigateToPreviousChapter() },
+                    onNextChapter = { viewModel.navigateToNextChapter() }
+                )
+            }
         }
     }
 }
@@ -1134,12 +1241,19 @@ private fun ParallelReaderView(
     val isLinked = uiState.isParallelLinked
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val isSelectionMode = selectedVerses.isNotEmpty()
+    val coroutineScope = rememberCoroutineScope()
+
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ReaderCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) ReaderCrispMutedText else appColors.textSecondary
 
     var isLeftVersionMenuOpen by remember { mutableStateOf(false) }
     var isRightVersionMenuOpen by remember { mutableStateOf(false) }
 
     var isRightPickerOpen by remember { mutableStateOf(false) }
     var rightPickerStep by remember { mutableIntStateOf(1) }
+    var rightPickerCatalog by remember { mutableStateOf<ModuleBibleCatalog?>(uiState.parallelVersionCatalog) }
+    var rightPickerAvailableVerses by remember { mutableStateOf<List<Int>>(emptyList()) }
     var rightBookInfo by remember {
         mutableStateOf<BookInfo?>(
             BibleBooksData.getBookByName(rightBookTitle)
@@ -1148,6 +1262,42 @@ private fun ParallelReaderView(
         )
     }
     var rightPickerChapter by remember { mutableIntStateOf(rightChapter) }
+
+    LaunchedEffect(uiState.parallelVersionCatalog) {
+        if (uiState.parallelVersionCatalog != null) {
+            rightPickerCatalog = uiState.parallelVersionCatalog
+        }
+    }
+
+    fun openRightIndependentPicker(currentRightTitle: String, currentRightChap: Int) {
+        val currentCatalog = uiState.parallelVersionCatalog
+        rightPickerCatalog = currentCatalog
+        val initialBook = currentCatalog?.findAvailableBook(currentRightTitle)
+            ?: currentCatalog?.availableBooks?.firstOrNull()
+            ?: BibleBooksData.getBookByName(currentRightTitle)
+            ?: BibleBooksData.books.first()
+        val chapters = currentCatalog?.getAvailableChapters(initialBook).orEmpty()
+        rightBookInfo = initialBook
+        rightPickerChapter = if (currentRightChap in chapters) currentRightChap else (chapters.firstOrNull() ?: currentRightChap)
+        rightPickerAvailableVerses = emptyList()
+        rightPickerStep = 1
+        isRightPickerOpen = true
+
+        coroutineScope.launch {
+            val loaded = viewModel.getModuleCatalogForVersion(uiState.parallelVersion)
+            rightPickerCatalog = loaded
+            val resolvedBook = loaded.findAvailableBook(currentRightTitle)
+                ?: loaded.availableBooks.firstOrNull()
+                ?: rightBookInfo
+            if (resolvedBook != null) {
+                rightBookInfo = resolvedBook
+                val loadedChapters = loaded.getAvailableChapters(resolvedBook)
+                if (rightPickerChapter !in loadedChapters) {
+                    rightPickerChapter = loadedChapters.firstOrNull() ?: 1
+                }
+            }
+        }
+    }
 
     Row(modifier = modifier.fillMaxSize()) {
         // =====================================================================
@@ -1179,9 +1329,9 @@ private fun ParallelReaderView(
                     val displayBookName = BibleBooksData.getLocalizedBookName(leftBookId, isLeftVersionEn)
                     Text(
                         text = "$displayBookName ${uiState.currentChapter}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.textPrimary,
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.5.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = headingColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1189,7 +1339,7 @@ private fun ParallelReaderView(
                         imageVector = Icons.Default.ArrowDropDown,
                         contentDescription = "Cambiar pasaje izquierdo",
                         modifier = Modifier.size(16.dp),
-                        tint = appColors.textSecondary
+                        tint = mutedTextColor
                     )
                 }
 
@@ -1209,12 +1359,11 @@ private fun ParallelReaderView(
                         ) {
                             Text(
                                 text = uiState.activeVersion,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.sp,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                                 maxLines = 1,
                                 softWrap = false,
                                 color = appColors.accent,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Icon(
@@ -1241,7 +1390,8 @@ private fun ParallelReaderView(
                                     text = {
                                         Text(
                                             text = label,
-                                            fontWeight = if (uiState.activeVersion == tag) FontWeight.Bold else FontWeight.Normal,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (uiState.activeVersion == tag) FontWeight.SemiBold else FontWeight.Normal,
                                             color = if (uiState.activeVersion == tag) appColors.accent else appColors.textPrimary
                                         )
                                     },
@@ -1257,7 +1407,8 @@ private fun ParallelReaderView(
                                     text = {
                                         Text(
                                             text = "${module.title} (${module.versionTag})",
-                                            fontWeight = if (uiState.activeVersion == module.versionTag) FontWeight.Bold else FontWeight.Normal,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (uiState.activeVersion == module.versionTag) FontWeight.SemiBold else FontWeight.Normal,
                                             color = if (uiState.activeVersion == module.versionTag) appColors.accent else appColors.textPrimary,
                                             maxLines = 1,
                                             softWrap = false
@@ -1286,69 +1437,113 @@ private fun ParallelReaderView(
                     bottom = 96.dp + navBarBottom
                 )
             ) {
-                items(
-                    count = uiState.verses.size,
-                    key = { index -> "L_${uiState.verses[index].id}" }
-                ) { index ->
-                    val verse = uiState.verses[index]
-                    val hasCommentary = true
-                    val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
+                if (uiState.isChapterLoading && uiState.verses.isEmpty()) {
+                    item(key = "left_loading") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = appColors.accent,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                } else if (uiState.verses.isEmpty()) {
+                    item(key = "left_unavailable") {
+                        PassageUnavailableState(
+                            versionCode = uiState.activeVersion,
+                            interfaceLanguage = uiState.userPreferences.interfaceLanguage,
+                            availableVersions = downloadedVersions,
+                            onOpenAvailableBooks = { viewModel.openPassagePicker() },
+                            onSelectVersion = { viewModel.setActiveVersion(it) },
+                            compact = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp)
+                                .testTag("left_passage_unavailable_state")
+                        )
+                    }
+                } else {
+                    items(
+                        count = uiState.verses.size,
+                        key = { index -> "L_${uiState.verses[index].id}" }
+                    ) { index ->
+                        val verse = uiState.verses[index]
+                        val hasCommentary = true
+                        val hasCrossReference = verse.verse in uiState.versesWithCrossReferences
+                        val hasRvrVersionNote = verse.verse in uiState.versesWithRvrNotes
 
-                    VerseRowItem(
-                        verse = verse,
-                        subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
-                        hasCommentary = hasCommentary,
-                        hasCrossReference = hasCrossReference,
-                        isHighlighted = uiState.highlightedVerse == verse.verse,
-                        isSelected = !selectedIsRightPane && verse.verse in selectedVerses,
-                        isSelectionMode = isSelectionMode,
-                        fontFamily = fontFamily,
-                        fontSize = fontSize,
-                        lineHeight = lineHeight,
-                        onCommentaryClick = { code ->
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            viewModel.openCommentary(verse, code)
-                        },
-                        onCrossRefClick = {
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            viewModel.openCrossReferences(verse)
-                        },
-                        onWordClick = { word ->
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            viewModel.lookupWord(word, verse)
-                        },
-                        onNoteClick = { marker ->
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            viewModel.onVersionNoteClick(verse, marker)
-                        },
-                        onAnyVerseTap = {
-                            if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
-                                viewModel.clearNavigationHighlight()
-                            }
-                        },
-                        onVerseClick = { onLeftVerseClick(verse.verse) },
-                        onVerseLongClick = { onLeftVerseLongClick(verse.verse) }
-                    )
-                }
+                        VerseRowItem(
+                            verse = verse,
+                            subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
+                            hasCommentary = hasCommentary,
+                            hasCrossReference = hasCrossReference,
+                            hasRvrVersionNote = hasRvrVersionNote,
+                            isHighlighted = uiState.highlightedVerse == verse.verse,
+                            isSelected = !selectedIsRightPane && verse.verse in selectedVerses,
+                            isSelectionMode = isSelectionMode,
+                            fontFamily = fontFamily,
+                            fontSize = fontSize,
+                            lineHeight = lineHeight,
+                            onCommentaryClick = { code ->
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                viewModel.openCommentary(verse, code)
+                            },
+                            onCrossRefClick = {
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                viewModel.openCrossReferences(verse)
+                            },
+                            onWordClick = { word ->
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                viewModel.lookupWord(word, verse)
+                            },
+                            onNoteClick = { marker ->
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                viewModel.onVersionNoteClick(verse, marker)
+                            },
+                            onAnyVerseTap = {
+                                if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
+                                    viewModel.clearNavigationHighlight()
+                                }
+                            },
+                            onVerseClick = { onLeftVerseClick(verse.verse) },
+                            onVerseLongClick = { onLeftVerseLongClick(verse.verse) }
+                        )
+                    }
 
-                item {
-                    val totalChapters = BibleBooksData.getBookByName(uiState.currentBook)?.chapterCount ?: 1
-                    val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
-                    ChapterBottomNavigationControls(
-                        currentChapter = uiState.currentChapter,
-                        totalChapters = totalChapters,
-                        isEnglish = isVersionEn,
-                        onPreviousChapter = {
-                            if (uiState.currentChapter > 1) {
-                                viewModel.loadChapter(uiState.currentBook, uiState.currentChapter - 1)
-                            }
-                        },
-                        onNextChapter = {
-                            if (uiState.currentChapter < totalChapters) {
-                                viewModel.loadChapter(uiState.currentBook, uiState.currentChapter + 1)
+                    item {
+                        val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
+                        val catalog = uiState.activeVersionCatalog
+                        val currentCanonicalId = BibleBooksData.resolveCanonicalBookId(uiState.currentBook)
+                        val prevPassage = catalog?.getPreviousPassage(uiState.currentBook, uiState.currentChapter)
+                        val nextPassage = catalog?.getNextPassage(uiState.currentBook, uiState.currentChapter)
+
+                        val prevLabel = prevPassage?.let { (book, chap) ->
+                            if (book.number == currentCanonicalId) {
+                                if (isVersionEn) "Ch. $chap" else "Cap. $chap"
+                            } else {
+                                "${book.abbreviation} $chap"
                             }
                         }
-                    )
+                        val nextLabel = nextPassage?.let { (book, chap) ->
+                            if (book.number == currentCanonicalId) {
+                                if (isVersionEn) "Ch. $chap" else "Cap. $chap"
+                            } else {
+                                "${book.abbreviation} $chap"
+                            }
+                        }
+
+                        ChapterBottomNavigationControls(
+                            previousLabel = prevLabel,
+                            nextLabel = nextLabel,
+                            onPreviousChapter = { viewModel.navigateToPreviousChapter() },
+                            onNextChapter = { viewModel.navigateToNextChapter() }
+                        )
+                    }
                 }
             }
         }
@@ -1387,20 +1582,15 @@ private fun ParallelReaderView(
                         .weight(1f, fill = false)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable(enabled = !isLinked) {
-                            rightBookInfo = BibleBooksData.getBookByName(displayRightTitle)
-                                ?: BibleBooksData.books.firstOrNull { it.name.equals(displayRightTitle, ignoreCase = true) }
-                                        ?: BibleBooksData.books.first()
-                            rightPickerChapter = displayRightChapter
-                            rightPickerStep = 1
-                            isRightPickerOpen = true
+                            openRightIndependentPicker(displayRightTitle, displayRightChapter)
                         }
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     Text(
                         text = "$localizedRightBook $displayRightChapter",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = appColors.textPrimary,
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.5.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = headingColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1410,7 +1600,7 @@ private fun ParallelReaderView(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = "Cambiar pasaje derecho",
                             modifier = Modifier.size(16.dp),
-                            tint = appColors.textSecondary
+                            tint = mutedTextColor
                         )
                     }
                 }
@@ -1431,12 +1621,11 @@ private fun ParallelReaderView(
                         ) {
                             Text(
                                 text = uiState.parallelVersion,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.sp,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                                 maxLines = 1,
                                 softWrap = false,
                                 color = appColors.accent,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Icon(
@@ -1463,7 +1652,8 @@ private fun ParallelReaderView(
                                     text = {
                                         Text(
                                             text = label,
-                                            fontWeight = if (uiState.parallelVersion == tag) FontWeight.Bold else FontWeight.Normal,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (uiState.parallelVersion == tag) FontWeight.SemiBold else FontWeight.Normal,
                                             color = if (uiState.parallelVersion == tag) appColors.accent else appColors.textPrimary
                                         )
                                     },
@@ -1487,7 +1677,8 @@ private fun ParallelReaderView(
                                     text = {
                                         Text(
                                             text = "${module.title} (${module.versionTag})",
-                                            fontWeight = if (uiState.parallelVersion == module.versionTag) FontWeight.Bold else FontWeight.Normal,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (uiState.parallelVersion == module.versionTag) FontWeight.SemiBold else FontWeight.Normal,
                                             color = if (uiState.parallelVersion == module.versionTag) appColors.accent else appColors.textPrimary,
                                             maxLines = 1,
                                             softWrap = false
@@ -1524,94 +1715,162 @@ private fun ParallelReaderView(
                     bottom = 96.dp + navBarBottom
                 )
             ) {
-                items(
-                    count = uiState.parallelVerses.size,
-                    key = { index -> "R_${uiState.parallelVerses[index].id}" }
-                ) { index ->
-                    val verse = uiState.parallelVerses[index]
-                    val hasCommentary = true
-                    val hasCrossReference = if (isLinked) {
-                        verse.verse in uiState.versesWithCrossReferences
-                    } else {
-                        verse.verse in uiState.parallelVersesWithCrossReferences
+                if (uiState.isParallelChapterLoading && uiState.parallelVerses.isEmpty()) {
+                    item(key = "right_loading") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = appColors.accent,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                } else if (uiState.parallelVerses.isEmpty()) {
+                    item(key = "right_unavailable") {
+                        PassageUnavailableState(
+                            versionCode = uiState.parallelVersion,
+                            interfaceLanguage = uiState.userPreferences.interfaceLanguage,
+                            availableVersions = downloadedVersions,
+                            onOpenAvailableBooks = {
+                                if (isLinked) {
+                                    viewModel.openPassagePicker()
+                                } else {
+                                    openRightIndependentPicker(displayRightTitle, displayRightChapter)
+                                }
+                            },
+                            onSelectVersion = { tag ->
+                                if (isLinked) {
+                                    viewModel.setParallelVersion(tag)
+                                } else {
+                                    viewModel.loadParallelChapter(
+                                        bookName = rightBookTitle,
+                                        chapter = rightChapter,
+                                        version = tag
+                                    )
+                                }
+                            },
+                            compact = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp)
+                                .testTag("right_passage_unavailable_state")
+                        )
+                    }
+                } else {
+                    items(
+                        count = uiState.parallelVerses.size,
+                        key = { index -> "R_${uiState.parallelVerses[index].id}" }
+                    ) { index ->
+                        val verse = uiState.parallelVerses[index]
+                        val hasCommentary = true
+                        val hasCrossReference = if (isLinked) {
+                            verse.verse in uiState.versesWithCrossReferences
+                        } else {
+                            verse.verse in uiState.parallelVersesWithCrossReferences
+                        }
+                        val hasRvrVersionNote = verse.verse in uiState.parallelVersesWithRvrNotes
+
+                        VerseRowItem(
+                            verse = verse,
+                            subheadings = uiState.parallelChapterSubheadings[verse.verse].orEmpty(),
+                            hasCommentary = hasCommentary,
+                            hasCrossReference = hasCrossReference,
+                            hasRvrVersionNote = hasRvrVersionNote,
+                            isHighlighted = if (isLinked) {
+                                uiState.highlightedVerse == verse.verse
+                            } else {
+                                rightHighlightedVerse == verse.verse
+                            },
+                            isSelected = selectedIsRightPane && verse.verse in selectedVerses,
+                            isSelectionMode = isSelectionMode,
+                            fontFamily = fontFamily,
+                            fontSize = fontSize,
+                            lineHeight = lineHeight,
+                            onCommentaryClick = { code ->
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                onClearRightHighlight()
+                                viewModel.openCommentary(verse, code)
+                            },
+                            onCrossRefClick = {
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                onClearRightHighlight()
+                                viewModel.openCrossReferences(verse)
+                            },
+                            onWordClick = { word ->
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                onClearRightHighlight()
+                                viewModel.lookupWord(word, verse)
+                            },
+                            onNoteClick = { marker ->
+                                if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
+                                onClearRightHighlight()
+                                viewModel.onVersionNoteClick(verse, marker)
+                            },
+                            onAnyVerseTap = {
+                                if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
+                                    viewModel.clearNavigationHighlight()
+                                }
+                                if (rightHighlightedVerse != null && rightHighlightedVerse != verse.verse) {
+                                    onClearRightHighlight()
+                                }
+                            },
+                            onVerseClick = { onRightVerseClick(verse.verse) },
+                            onVerseLongClick = { onRightVerseLongClick(verse.verse) }
+                        )
                     }
 
-                    VerseRowItem(
-                        verse = verse,
-                        subheadings = uiState.parallelChapterSubheadings[verse.verse].orEmpty(),
-                        hasCommentary = hasCommentary,
-                        hasCrossReference = hasCrossReference,
-                        isHighlighted = if (isLinked) {
-                            uiState.highlightedVerse == verse.verse
-                        } else {
-                            rightHighlightedVerse == verse.verse
-                        },
-                        isSelected = selectedIsRightPane && verse.verse in selectedVerses,
-                        isSelectionMode = isSelectionMode,
-                        fontFamily = fontFamily,
-                        fontSize = fontSize,
-                        lineHeight = lineHeight,
-                        onCommentaryClick = { code ->
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            onClearRightHighlight()
-                            viewModel.openCommentary(verse, code)
-                        },
-                        onCrossRefClick = {
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            onClearRightHighlight()
-                            viewModel.openCrossReferences(verse)
-                        },
-                        onWordClick = { word ->
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            onClearRightHighlight()
-                            viewModel.lookupWord(word, verse)
-                        },
-                        onNoteClick = { marker ->
-                            if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
-                            onClearRightHighlight()
-                            viewModel.onVersionNoteClick(verse, marker)
-                        },
-                        onAnyVerseTap = {
-                            if (uiState.isNavigationHighlightActive && uiState.highlightedVerse != verse.verse) {
-                                viewModel.clearNavigationHighlight()
-                            }
-                            if (rightHighlightedVerse != null && rightHighlightedVerse != verse.verse) {
-                                onClearRightHighlight()
-                            }
-                        },
-                        onVerseClick = { onRightVerseClick(verse.verse) },
-                        onVerseLongClick = { onRightVerseLongClick(verse.verse) }
-                    )
-                }
+                    item {
+                        val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
+                        val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
+                        val rightCatalog = if (isLinked) uiState.activeVersionCatalog else uiState.parallelVersionCatalog
+                        val currentRightCanonical = BibleBooksData.resolveCanonicalBookId(rightBook)
+                        val prevRight = rightCatalog?.getPreviousPassage(rightBook, activeRightChapter)
+                        val nextRight = rightCatalog?.getNextPassage(rightBook, activeRightChapter)
+                        val isRightVersionEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
 
-                item {
-                    val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
-                    val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
-                    val totalChapters = BibleBooksData.getBookByName(rightBook)?.chapterCount ?: 1
-                    val isRightVersionEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
-                    ChapterBottomNavigationControls(
-                        currentChapter = activeRightChapter,
-                        totalChapters = totalChapters,
-                        isEnglish = isRightVersionEn,
-                        onPreviousChapter = {
-                            if (activeRightChapter > 1) {
-                                if (isLinked) {
-                                    viewModel.loadChapter(uiState.currentBook, activeRightChapter - 1)
-                                } else {
-                                    onUpdateRightPassage(rightBook, activeRightChapter - 1, 1)
-                                }
-                            }
-                        },
-                        onNextChapter = {
-                            if (activeRightChapter < totalChapters) {
-                                if (isLinked) {
-                                    viewModel.loadChapter(uiState.currentBook, activeRightChapter + 1)
-                                } else {
-                                    onUpdateRightPassage(rightBook, activeRightChapter + 1, 1)
-                                }
+                        val prevLabel = prevRight?.let { (book, chap) ->
+                            if (book.number == currentRightCanonical) {
+                                if (isRightVersionEn) "Ch. $chap" else "Cap. $chap"
+                            } else {
+                                "${book.abbreviation} $chap"
                             }
                         }
-                    )
+                        val nextLabel = nextRight?.let { (book, chap) ->
+                            if (book.number == currentRightCanonical) {
+                                if (isRightVersionEn) "Ch. $chap" else "Cap. $chap"
+                            } else {
+                                "${book.abbreviation} $chap"
+                            }
+                        }
+
+                        ChapterBottomNavigationControls(
+                            previousLabel = prevLabel,
+                            nextLabel = nextLabel,
+                            onPreviousChapter = {
+                                prevRight?.let { (book, chap) ->
+                                    if (isLinked) {
+                                        viewModel.loadChapter(book.name, chap)
+                                    } else {
+                                        onUpdateRightPassage(book.name, chap, 1)
+                                    }
+                                }
+                            },
+                            onNextChapter = {
+                                nextRight?.let { (book, chap) ->
+                                    if (isLinked) {
+                                        viewModel.loadChapter(book.name, chap)
+                                    } else {
+                                        onUpdateRightPassage(book.name, chap, 1)
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1622,14 +1881,28 @@ private fun ParallelReaderView(
             currentStep = rightPickerStep,
             selectedBook = rightBookInfo ?: BibleBooksData.books.first(),
             selectedChapter = rightPickerChapter,
+            catalog = rightPickerCatalog,
+            availableVerses = rightPickerAvailableVerses,
             interfaceLanguage = uiState.userPreferences.interfaceLanguage,
             onBookSelected = { selected ->
+                val defaultChap = rightPickerCatalog?.getAvailableChapters(selected)?.firstOrNull() ?: 1
                 rightBookInfo = selected
+                rightPickerChapter = defaultChap
+                rightPickerAvailableVerses = emptyList()
                 rightPickerStep = 2
             },
             onChapterSelected = { ch ->
                 rightPickerChapter = ch
+                rightPickerAvailableVerses = emptyList()
                 rightPickerStep = 3
+                val selectedName = rightBookInfo?.name ?: rightBookTitle
+                coroutineScope.launch {
+                    rightPickerAvailableVerses = viewModel.getAvailableVersesForVersion(
+                        version = uiState.parallelVersion,
+                        bookName = selectedName,
+                        chapter = ch
+                    )
+                }
             },
             onVerseSelected = { v ->
                 val selectedBookName = rightBookInfo?.name ?: rightBookTitle
@@ -1653,15 +1926,228 @@ private fun ParallelReaderView(
 }
 
 @Composable
+private fun PassageUnavailableState(
+    versionCode: String,
+    interfaceLanguage: String,
+    availableVersions: List<BibleModule>,
+    onOpenAvailableBooks: () -> Unit,
+    onSelectVersion: (String) -> Unit,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ReaderCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) ReaderCrispMutedText else appColors.textSecondary
+    val isEn = interfaceLanguage.contains("English", ignoreCase = true)
+    var versionMenuExpanded by remember { mutableStateOf(false) }
+    val otherVersions = remember(availableVersions, versionCode) {
+        val list = availableVersions.filter { !it.versionTag.equals(versionCode, ignoreCase = true) }
+        list
+    }
+
+    val message = if (isEn) {
+        "This passage is not available in $versionCode"
+    } else {
+        "Este pasaje no está disponible en la versión $versionCode"
+    }
+
+    Column(
+        modifier = modifier.padding(horizontal = if (compact) 8.dp else 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.MenuBook,
+            contentDescription = null,
+            tint = mutedTextColor.copy(alpha = 0.7f),
+            modifier = Modifier.size(if (compact) 28.dp else 36.dp)
+        )
+        Spacer(modifier = Modifier.height(if (compact) 10.dp else 14.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontSize = if (compact) 13.sp else 15.5.sp,
+                lineHeight = if (compact) 18.sp else 22.sp
+            ),
+            fontWeight = FontWeight.SemiBold,
+            color = headingColor,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(if (compact) 12.dp else 16.dp))
+
+        if (compact) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onOpenAvailableBooks,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, appColors.border),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("unavailable_open_books_button")
+                ) {
+                    Text(
+                        text = if (isEn) "Available books" else "Ver libros",
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = headingColor,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Box {
+                    TextButton(
+                        onClick = { versionMenuExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.testTag("unavailable_switch_version_button")
+                    ) {
+                        Text(
+                            text = if (isEn) "Switch version" else "Cambiar versión",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.Medium,
+                            color = appColors.accent,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = versionMenuExpanded,
+                        onDismissRequest = { versionMenuExpanded = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = appColors.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
+                    ) {
+                        if (otherVersions.isEmpty()) {
+                            listOf("RVR1960", "KJV").filter { !it.equals(versionCode, ignoreCase = true) }.forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text(tag, style = MaterialTheme.typography.bodyMedium, color = appColors.textPrimary) },
+                                    onClick = {
+                                        versionMenuExpanded = false
+                                        onSelectVersion(tag)
+                                    }
+                                )
+                            }
+                        } else {
+                            otherVersions.forEach { module ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "${module.title} (${module.versionTag})",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = appColors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    onClick = {
+                                        versionMenuExpanded = false
+                                        onSelectVersion(module.versionTag)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onOpenAvailableBooks,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, appColors.border),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.testTag("unavailable_open_books_button")
+                ) {
+                    Text(
+                        text = if (isEn) "Available books" else "Ver libros disponibles",
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = headingColor,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Box {
+                    TextButton(
+                        onClick = { versionMenuExpanded = true },
+                        modifier = Modifier.testTag("unavailable_switch_version_button")
+                    ) {
+                        Text(
+                            text = if (isEn) "Switch version" else "Cambiar versión",
+                            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = appColors.accent,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = versionMenuExpanded,
+                        onDismissRequest = { versionMenuExpanded = false },
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = appColors.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, appColors.border.copy(alpha = if (appColors.isDark) 0.85f else 0.75f))
+                    ) {
+                        if (otherVersions.isEmpty()) {
+                            listOf("RVR1960", "KJV").filter { !it.equals(versionCode, ignoreCase = true) }.forEach { tag ->
+                                DropdownMenuItem(
+                                    text = { Text(tag, style = MaterialTheme.typography.bodyMedium, color = appColors.textPrimary) },
+                                    onClick = {
+                                        versionMenuExpanded = false
+                                        onSelectVersion(tag)
+                                    }
+                                )
+                            }
+                        } else {
+                            otherVersions.forEach { module ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "${module.title} (${module.versionTag})",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = appColors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    onClick = {
+                                        versionMenuExpanded = false
+                                        onSelectVersion(module.versionTag)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChapterBottomNavigationControls(
-    currentChapter: Int,
-    totalChapters: Int,
-    isEnglish: Boolean = false,
+    previousLabel: String?,
+    nextLabel: String?,
     onPreviousChapter: () -> Unit,
     onNextChapter: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ReaderCrispTitleNavy else appColors.textPrimary
 
     Row(
         modifier = modifier
@@ -1670,7 +2156,7 @@ private fun ChapterBottomNavigationControls(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (currentChapter > 1) {
+        if (!previousLabel.isNullOrBlank()) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = appColors.surfaceVariant,
@@ -1678,6 +2164,7 @@ private fun ChapterBottomNavigationControls(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .clickable { onPreviousChapter() }
+                    .testTag("chapter_prev_button")
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1691,11 +2178,12 @@ private fun ChapterBottomNavigationControls(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (isEnglish) "Chapter ${currentChapter - 1}" else "Capítulo ${currentChapter - 1}",
-                        color = appColors.textPrimary,
-                        fontSize = 12.sp,
+                        text = previousLabel,
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.5.sp),
+                        color = headingColor,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -1705,7 +2193,7 @@ private fun ChapterBottomNavigationControls(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        if (currentChapter < totalChapters) {
+        if (!nextLabel.isNullOrBlank()) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = appColors.surfaceVariant,
@@ -1713,17 +2201,19 @@ private fun ChapterBottomNavigationControls(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .clickable { onNextChapter() }
+                    .testTag("chapter_next_button")
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isEnglish) "Chapter ${currentChapter + 1}" else "Capítulo ${currentChapter + 1}",
-                        color = appColors.textPrimary,
-                        fontSize = 12.sp,
+                        text = nextLabel,
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.5.sp),
+                        color = headingColor,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
@@ -1747,6 +2237,7 @@ private fun VerseRowItem(
     subheadings: List<String> = emptyList(),
     hasCommentary: Boolean,
     hasCrossReference: Boolean,
+    hasRvrVersionNote: Boolean = false,
     isHighlighted: Boolean,
     isSelected: Boolean,
     isSelectionMode: Boolean,
@@ -1762,6 +2253,9 @@ private fun VerseRowItem(
     onVerseLongClick: () -> Unit
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) ReaderCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) ReaderCrispMutedText else appColors.textSecondary
     val selectionBgColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     val tempHighlightColor = appColors.accent.copy(alpha = if (appColors.isDark) 0.22f else 0.14f)
 
@@ -1779,9 +2273,14 @@ private fun VerseRowItem(
     val isRvr1960 = remember(verse.version) {
         BibleStudyTextUtils.isRvr1960Version(verse.version)
     }
+    val showRvrAsterisks = isRvr1960 && hasRvrVersionNote
 
-    val rawCleanText = remember(verse.text, verse.version) {
-        BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, verse.version)
+    val rawCleanText = remember(verse.text, verse.version, showRvrAsterisks) {
+        BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+            rawText = verse.text,
+            version = verse.version,
+            showRvrAsterisks = showRvrAsterisks
+        )
     }
 
     val effectiveSubheadings = remember(subheadings, verse.sectionTitle) {
@@ -1804,7 +2303,7 @@ private fun VerseRowItem(
     val annotatedString = remember(
         verse.verse,
         rawCleanText,
-        isRvr1960,
+        showRvrAsterisks,
         appColors.verseNumberColor,
         appColors.textPrimary,
         appColors.accent,
@@ -1842,7 +2341,7 @@ private fun VerseRowItem(
                 color = appColors.textPrimary
             )
 
-            BibleStudyTextUtils.tokenizeVerseText(rawCleanText, isRvr1960).forEach { token ->
+            BibleStudyTextUtils.tokenizeVerseText(rawCleanText, showRvrAsterisks).forEach { token ->
                 when (token) {
                     is VerseDisplayToken.BracketNote -> {
                         pushStringAnnotation(tag = "NOTE", annotation = token.marker)
@@ -1996,7 +2495,7 @@ private fun VerseRowItem(
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Subtítulos de pasaje automáticos (fuera del bloque resaltable/seleccionable del versículo)
+        // Subtítulos de pasaje automáticos con tipografía unificada de interfaz (fuera del bloque resaltable/seleccionable)
         if (effectiveSubheadings.isNotEmpty()) {
             Column(
                 modifier = Modifier
@@ -2014,22 +2513,25 @@ private fun VerseRowItem(
                     if (isParallelRef) {
                         Text(
                             text = heading,
-                            fontSize = (fontSize.value * 0.80f).coerceIn(11.5f, 16.5f).sp,
-                            lineHeight = (fontSize.value * 1.15f).coerceIn(15f, 22f).sp,
-                            fontStyle = FontStyle.Italic,
-                            fontWeight = FontWeight.Normal,
-                            color = appColors.textSecondary,
-                            fontFamily = fontFamily,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = (fontSize.value * 0.78f).coerceIn(11.5f, 15.5f).sp,
+                                lineHeight = (fontSize.value * 1.15f).coerceIn(16f, 22f).sp,
+                                fontStyle = FontStyle.Italic,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            color = mutedTextColor,
                             modifier = Modifier.padding(top = if (idx > 0) 2.dp else 0.dp)
                         )
                     } else {
                         Text(
                             text = heading,
-                            fontSize = (fontSize.value * 1.03f).coerceIn(14.5f, 23f).sp,
-                            lineHeight = (fontSize.value * 1.32f).coerceIn(19f, 29f).sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = appColors.titleColor,
-                            fontFamily = fontFamily,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = (fontSize.value * 0.96f).coerceIn(14.5f, 21f).sp,
+                                lineHeight = (fontSize.value * 1.28f).coerceIn(19f, 27f).sp,
+                                letterSpacing = (-0.15).sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = headingColor,
                             modifier = Modifier.padding(top = if (idx > 0) 4.dp else 0.dp)
                         )
                     }

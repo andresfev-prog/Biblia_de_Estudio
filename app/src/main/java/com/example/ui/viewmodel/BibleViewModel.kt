@@ -18,6 +18,7 @@ import com.example.data.model.CrossReference
 import com.example.data.model.DictionaryEntry
 import com.example.data.model.DictionaryMatch
 import com.example.data.model.FavoriteVerse
+import com.example.data.model.ModuleBibleCatalog
 import com.example.data.model.ReadingProgress
 import com.example.data.model.SearchHistoryItem
 import com.example.data.model.UserNote
@@ -77,8 +78,14 @@ data class BibleUiState(
     val isParallelLinked: Boolean = true,
     val verses: List<BibleVerse> = emptyList(),
     val parallelVerses: List<BibleVerse> = emptyList(),
+    val isChapterLoading: Boolean = false,
+    val isParallelChapterLoading: Boolean = false,
+    val activeVersionCatalog: ModuleBibleCatalog? = null,
+    val parallelVersionCatalog: ModuleBibleCatalog? = null,
     val chapterSubheadings: Map<Int, List<String>> = emptyMap(),
     val parallelChapterSubheadings: Map<Int, List<String>> = emptyMap(),
+    val versesWithRvrNotes: Set<Int> = emptySet(),
+    val parallelVersesWithRvrNotes: Set<Int> = emptySet(),
     val selectedVerses: List<BibleVerse> = emptyList(),
     val highlightedVerse: Int? = null,
     val highlightToken: Long = 0L,
@@ -99,6 +106,7 @@ data class BibleUiState(
     val pickerStep: Int = 1,
     val pickerSelectedBook: BookInfo = BibleBooksData.books.first { it.name == "Juan" },
     val pickerSelectedChapter: Int = 1,
+    val pickerAvailableVerses: List<Int> = emptyList(),
     // Modales de estudio
     val selectedCommentaryVerse: BibleVerse? = null,
     val currentVerseCommentaries: List<Commentary> = emptyList(),
@@ -436,28 +444,62 @@ class BibleViewModel(
         if (!preserveHighlight) {
             clearNavigationHighlight()
         }
-        _uiState.value = _uiState.value.copy(ttsVerseIndex = 0, selectedVerses = emptyList())
+        val shouldReloadParallel = !_uiState.value.isParallelMode || _uiState.value.isParallelLinked
+        _uiState.value = _uiState.value.copy(
+            currentBook = bookName,
+            currentChapter = chapter,
+            activeVersion = version,
+            ttsVerseIndex = 0,
+            selectedVerses = emptyList(),
+            isChapterLoading = true,
+            isParallelChapterLoading = if (shouldReloadParallel) true else _uiState.value.isParallelChapterLoading
+        )
 
-        // 1. Cargar versículos y subtítulos automáticos del panel principal
+        // 1. Cargar catálogo dinámico, notas RVR reales, versículos y subtítulos del panel principal
         mainChapterJob?.cancel()
         mainChapterJob = viewModelScope.launch {
+            val catalog = repository.getModuleCatalog(version)
+            val rvrNotesSet = if (BibleStudyTextUtils.isRvr1960Version(version)) {
+                repository.getVersesWithRealVersionNotes(version, bookName, chapter)
+            } else {
+                emptySet()
+            }
+
             repository.getVerses(version, bookName, chapter).collect { verseList ->
                 val cleanList = verseList.map { verse ->
-                    verse.copy(text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, version))
+                    val showAsterisk = BibleStudyTextUtils.isRvr1960Version(version) && verse.verse in rvrNotesSet
+                    verse.copy(
+                        text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                            rawText = verse.text,
+                            version = version,
+                            showRvrAsterisks = showAsterisk
+                        )
+                    )
                 }
-                val subheadings = repository.getChapterSubheadings(
-                    version = version,
-                    bookName = bookName,
-                    chapter = chapter,
-                    chapterVerseNumbers = cleanList.map { it.verse }
-                )
+                val subheadings = if (cleanList.isNotEmpty()) {
+                    repository.getChapterSubheadings(
+                        version = version,
+                        bookName = bookName,
+                        chapter = chapter,
+                        chapterVerseNumbers = cleanList.map { it.verse }
+                    )
+                } else {
+                    emptyMap()
+                }
+
+                if (cleanList.isEmpty() && (_uiState.value.isTtsPlaying || _uiState.value.isTtsVisible)) {
+                    stopTts()
+                }
 
                 _uiState.value = _uiState.value.copy(
                     currentBook = bookName,
                     currentChapter = chapter,
                     activeVersion = version,
                     verses = cleanList,
-                    chapterSubheadings = subheadings
+                    chapterSubheadings = subheadings,
+                    activeVersionCatalog = catalog,
+                    versesWithRvrNotes = rvrNotesSet,
+                    isChapterLoading = false
                 )
             }
         }
@@ -492,24 +534,45 @@ class BibleViewModel(
         }
 
         // 4. Cargar panel paralelo y sus subtítulos automáticos
-        if (!_uiState.value.isParallelMode || _uiState.value.isParallelLinked) {
+        if (shouldReloadParallel) {
             parallelChapterJob?.cancel()
             parallelChapterJob = viewModelScope.launch {
+                val parallelCatalog = repository.getModuleCatalog(parallelVersion)
+                val parallelRvrNotes = if (BibleStudyTextUtils.isRvr1960Version(parallelVersion)) {
+                    repository.getVersesWithRealVersionNotes(parallelVersion, bookName, chapter)
+                } else {
+                    emptySet()
+                }
+
                 repository.getVerses(parallelVersion, bookName, chapter).collect { pList ->
                     val cleanParallelList = pList.map { verse ->
-                        verse.copy(text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(verse.text, parallelVersion))
+                        val showAsterisk = BibleStudyTextUtils.isRvr1960Version(parallelVersion) && verse.verse in parallelRvrNotes
+                        verse.copy(
+                            text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                                rawText = verse.text,
+                                version = parallelVersion,
+                                showRvrAsterisks = showAsterisk
+                            )
+                        )
                     }
-                    val parallelSubheadings = repository.getChapterSubheadings(
-                        version = parallelVersion,
-                        bookName = bookName,
-                        chapter = chapter,
-                        chapterVerseNumbers = cleanParallelList.map { it.verse }
-                    )
+                    val parallelSubheadings = if (cleanParallelList.isNotEmpty()) {
+                        repository.getChapterSubheadings(
+                            version = parallelVersion,
+                            bookName = bookName,
+                            chapter = chapter,
+                            chapterVerseNumbers = cleanParallelList.map { it.verse }
+                        )
+                    } else {
+                        emptyMap()
+                    }
 
                     _uiState.value = _uiState.value.copy(
                         parallelVersion = parallelVersion,
                         parallelVerses = cleanParallelList,
-                        parallelChapterSubheadings = parallelSubheadings
+                        parallelChapterSubheadings = parallelSubheadings,
+                        parallelVersionCatalog = parallelCatalog,
+                        parallelVersesWithRvrNotes = parallelRvrNotes,
+                        isParallelChapterLoading = false
                     )
                 }
             }
@@ -521,22 +584,47 @@ class BibleViewModel(
     }
 
     fun loadParallelChapter(bookName: String, chapter: Int, version: String = _uiState.value.parallelVersion) {
+        _uiState.value = _uiState.value.copy(
+            parallelVersion = version,
+            isParallelChapterLoading = true
+        )
         parallelChapterJob?.cancel()
         parallelChapterJob = viewModelScope.launch {
+            val parallelCatalog = repository.getModuleCatalog(version)
+            val parallelRvrNotes = if (BibleStudyTextUtils.isRvr1960Version(version)) {
+                repository.getVersesWithRealVersionNotes(version, bookName, chapter)
+            } else {
+                emptySet()
+            }
+
             repository.getVerses(version, bookName, chapter).collect { parallelList ->
                 val cleanedList = parallelList.map { item ->
-                    item.copy(text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(item.text, version))
+                    val showAsterisk = BibleStudyTextUtils.isRvr1960Version(version) && item.verse in parallelRvrNotes
+                    item.copy(
+                        text = BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                            rawText = item.text,
+                            version = version,
+                            showRvrAsterisks = showAsterisk
+                        )
+                    )
                 }
-                val parallelSubheadings = repository.getChapterSubheadings(
-                    version = version,
-                    bookName = bookName,
-                    chapter = chapter,
-                    chapterVerseNumbers = cleanedList.map { it.verse }
-                )
+                val parallelSubheadings = if (cleanedList.isNotEmpty()) {
+                    repository.getChapterSubheadings(
+                        version = version,
+                        bookName = bookName,
+                        chapter = chapter,
+                        chapterVerseNumbers = cleanedList.map { it.verse }
+                    )
+                } else {
+                    emptyMap()
+                }
                 _uiState.value = _uiState.value.copy(
                     parallelVerses = cleanedList,
                     parallelVersion = version,
-                    parallelChapterSubheadings = parallelSubheadings
+                    parallelChapterSubheadings = parallelSubheadings,
+                    parallelVersionCatalog = parallelCatalog,
+                    parallelVersesWithRvrNotes = parallelRvrNotes,
+                    isParallelChapterLoading = false
                 )
             }
         }
@@ -561,6 +649,30 @@ class BibleViewModel(
         if (newLinked && _uiState.value.isParallelMode) {
             loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter)
         }
+    }
+
+    fun navigateToPreviousChapter() {
+        val state = _uiState.value
+        val prev = state.activeVersionCatalog?.getPreviousPassage(state.currentBook, state.currentChapter)
+        if (prev != null) {
+            loadChapter(prev.first.name, prev.second)
+        }
+    }
+
+    fun navigateToNextChapter() {
+        val state = _uiState.value
+        val next = state.activeVersionCatalog?.getNextPassage(state.currentBook, state.currentChapter)
+        if (next != null) {
+            loadChapter(next.first.name, next.second)
+        }
+    }
+
+    suspend fun getModuleCatalogForVersion(version: String): ModuleBibleCatalog {
+        return repository.getModuleCatalog(version)
+    }
+
+    suspend fun getAvailableVersesForVersion(version: String, bookName: String, chapter: Int): List<Int> {
+        return repository.getAvailableVerseNumbers(version, bookName, chapter)
     }
 
     fun triggerNavigationHighlight(
@@ -624,16 +736,48 @@ class BibleViewModel(
         }
     }
 
-    // --- Selector de Pasajes ---
+    // --- Selector de Pasajes (100 % dinámico según catálogo SQLite del módulo activo) ---
     fun openPassagePicker() {
-        val currentBookObj = BibleBooksData.getBookByName(_uiState.value.currentBook)
+        val state = _uiState.value
+        val existingCatalog = state.activeVersionCatalog?.takeIf {
+            it.version.equals(state.activeVersion, ignoreCase = true)
+        }
+        val initialBook = existingCatalog?.findAvailableBook(state.currentBook)
+            ?: existingCatalog?.availableBooks?.firstOrNull()
+            ?: BibleBooksData.getBookByName(state.currentBook)
             ?: BibleBooksData.books.first()
-        _uiState.value = _uiState.value.copy(
+        val initialChapters = existingCatalog?.getAvailableChapters(initialBook).orEmpty()
+        val initialChapter = if (state.currentChapter in initialChapters) {
+            state.currentChapter
+        } else {
+            initialChapters.firstOrNull() ?: state.currentChapter
+        }
+
+        _uiState.value = state.copy(
             isPassagePickerVisible = true,
             pickerStep = 1,
-            pickerSelectedBook = currentBookObj,
-            pickerSelectedChapter = _uiState.value.currentChapter
+            pickerSelectedBook = initialBook,
+            pickerSelectedChapter = initialChapter,
+            pickerAvailableVerses = emptyList()
         )
+
+        viewModelScope.launch {
+            val loadedCatalog = repository.getModuleCatalog(_uiState.value.activeVersion)
+            val resolvedBook = loadedCatalog.findAvailableBook(_uiState.value.currentBook)
+                ?: loadedCatalog.availableBooks.firstOrNull()
+                ?: _uiState.value.pickerSelectedBook
+            val chapters = loadedCatalog.getAvailableChapters(resolvedBook)
+            val resolvedChapter = if (_uiState.value.currentChapter in chapters) {
+                _uiState.value.currentChapter
+            } else {
+                chapters.firstOrNull() ?: 1
+            }
+            _uiState.value = _uiState.value.copy(
+                activeVersionCatalog = loadedCatalog,
+                pickerSelectedBook = resolvedBook,
+                pickerSelectedChapter = resolvedChapter
+            )
+        }
     }
 
     fun dismissPassagePicker() {
@@ -641,11 +785,32 @@ class BibleViewModel(
     }
 
     fun onPickerBookSelected(book: BookInfo) {
-        _uiState.value = _uiState.value.copy(pickerSelectedBook = book, pickerStep = 2)
+        val chapters = _uiState.value.activeVersionCatalog?.getAvailableChapters(book).orEmpty()
+        val defaultChapter = chapters.firstOrNull() ?: 1
+        _uiState.value = _uiState.value.copy(
+            pickerSelectedBook = book,
+            pickerSelectedChapter = defaultChapter,
+            pickerStep = 2,
+            pickerAvailableVerses = emptyList()
+        )
     }
 
     fun onPickerChapterSelected(chapter: Int) {
-        _uiState.value = _uiState.value.copy(pickerSelectedChapter = chapter, pickerStep = 3)
+        val selectedBook = _uiState.value.pickerSelectedBook
+        val version = _uiState.value.activeVersion
+        _uiState.value = _uiState.value.copy(
+            pickerSelectedChapter = chapter,
+            pickerStep = 3,
+            pickerAvailableVerses = emptyList()
+        )
+        viewModelScope.launch {
+            val verses = repository.getAvailableVerseNumbers(version, selectedBook.name, chapter)
+            if (_uiState.value.pickerSelectedBook.number == selectedBook.number &&
+                _uiState.value.pickerSelectedChapter == chapter
+            ) {
+                _uiState.value = _uiState.value.copy(pickerAvailableVerses = verses)
+            }
+        }
     }
 
     fun onPickerVerseSelected(verse: Int) {
@@ -1003,6 +1168,19 @@ class BibleViewModel(
     // --- Text-To-Speech ---
     fun toggleTtsBar() {
         val willShow = !_uiState.value.isTtsVisible
+        if (willShow && _uiState.value.verses.isEmpty()) {
+            val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+            _uiState.value = _uiState.value.copy(
+                isTtsVisible = false,
+                isTtsPlaying = false,
+                toastMessage = if (isEn) {
+                    "This passage is not available for audio reading"
+                } else {
+                    "Este pasaje no está disponible para lectura de voz"
+                }
+            )
+            return
+        }
         _uiState.value = _uiState.value.copy(isTtsVisible = willShow)
         if (!willShow) {
             stopTts()
@@ -1011,7 +1189,10 @@ class BibleViewModel(
 
     fun playTts() {
         val verses = _uiState.value.verses
-        if (verses.isEmpty()) return
+        if (verses.isEmpty()) {
+            _uiState.value = _uiState.value.copy(isTtsPlaying = false)
+            return
+        }
 
         val index = _uiState.value.ttsVerseIndex.coerceIn(0, verses.lastIndex)
         val verse = verses[index]
@@ -1468,7 +1649,14 @@ class BibleViewModel(
             if (result.isSuccess) {
                 // Actualiza en Room a isDownloaded = true
                 repository.toggleModuleDownload(module.id, false)
+                repository.invalidateModuleCatalogCache()
+                BibleAssetDatabaseHelper.invalidateVersionNotesCache(module.fileName)
                 refreshCommentaryPills()
+                val affectsActiveOrParallel = module.category == "VERSION" ||
+                    module.fileName.equals("RV1960-c.commentaries.SQLite3", ignoreCase = true)
+                if (affectsActiveOrParallel) {
+                    loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter, preserveHighlight = true)
+                }
                 _uiState.value = _uiState.value.copy(
                     downloadProgress = updatedProgress,
                     toastMessage = if (isEn) "Module downloaded successfully" else "Módulo descargado correctamente"
@@ -1495,6 +1683,13 @@ class BibleViewModel(
 
             // Actualiza en Room a isDownloaded = false
             repository.toggleModuleDownload(module.id, true)
+            repository.invalidateModuleCatalogCache()
+            BibleAssetDatabaseHelper.invalidateVersionNotesCache(module.fileName)
+            val affectsActiveOrParallel = module.category == "VERSION" ||
+                module.fileName.equals("RV1960-c.commentaries.SQLite3", ignoreCase = true)
+            if (affectsActiveOrParallel) {
+                loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter, preserveHighlight = true)
+            }
 
             val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
             _uiState.value = _uiState.value.copy(

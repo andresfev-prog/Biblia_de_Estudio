@@ -79,36 +79,83 @@ class BibleRepository(
         return defaultName
     }
     private val helper = BibleAssetDatabaseHelper(context)
+    private val catalogCache = java.util.concurrent.ConcurrentHashMap<String, com.example.data.model.ModuleBibleCatalog>()
 
     private val defaultCommentaryDb = "Wesley-c.commentaries.SQLite3"
     private val defaultDictionaryDb = "Multi.dictionary.SQLite3"
+
+    fun invalidateModuleCatalogCache(version: String? = null) {
+        if (version.isNullOrBlank()) {
+            catalogCache.clear()
+        } else {
+            val normalized = BibleBooksData.normalizeVersionId(version)
+            catalogCache.remove(normalized)
+            catalogCache.remove(version.trim().uppercase())
+        }
+    }
+
+    suspend fun getModuleCatalog(version: String): com.example.data.model.ModuleBibleCatalog = withContext(Dispatchers.IO) {
+        val cacheKey = BibleBooksData.normalizeVersionId(version).ifBlank { version.trim().uppercase() }
+        catalogCache[cacheKey]?.let { return@withContext it }
+
+        val dbFileName = resolveBibleDatabaseFileName(version)
+        val chaptersByCanonical = helper.loadModuleAvailableBookChapters(dbFileName)
+        val catalog = com.example.data.model.ModuleBibleCatalog.fromChaptersMap(
+            version = version,
+            chaptersByCanonicalBook = chaptersByCanonical
+        )
+        if (catalog.availableBooks.isNotEmpty()) {
+            catalogCache[cacheKey] = catalog
+        }
+        catalog
+    }
+
+    suspend fun getAvailableVerseNumbers(
+        version: String,
+        bookName: String,
+        chapter: Int
+    ): List<Int> = withContext(Dispatchers.IO) {
+        val dbFileName = resolveBibleDatabaseFileName(version)
+        helper.getAvailableVerseNumbers(dbFileName, bookName, chapter)
+    }
+
+    suspend fun getVersesWithRealVersionNotes(
+        version: String,
+        bookName: String,
+        chapter: Int
+    ): Set<Int> = withContext(Dispatchers.IO) {
+        val versionDbName = resolveVersionCommentaryFileName(version) ?: return@withContext emptySet()
+        if (!isModuleDownloaded(versionDbName)) return@withContext emptySet()
+        helper.getVersesWithRealVersionNotes(versionDbName, bookName, chapter)
+    }
 
     fun getVerses(version: String, bookName: String, chapter: Int): Flow<List<BibleVerse>> = flow {
         val dbFileName = resolveBibleDatabaseFileName(version)
         val rawVerses = helper.getVersesFromAsset(dbFileName, bookName, chapter)
         val isEnglish = BibleBooksData.isEnglishVersion(version)
         val displayBookName = BibleBooksData.getLocalizedBookName(bookName, isEnglish)
+        val book = BibleBooksData.getBookByName(bookName)
 
-        val realVerses = rawVerses.map { (verseNum, text) ->
-            val book = BibleBooksData.getBookByName(bookName) ?: BibleBooksData.books[0]
-            BibleVerse(
-                id = (book.number.toLong() * 10000L + chapter * 100L + verseNum),
-                version = version,
-                testament = book.testament,
-                bookNumber = book.number,
-                bookName = displayBookName,
-                chapter = chapter,
-                verse = verseNum,
-                text = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(text, version),
-                sectionTitle = null
-            )
-        }
-
-        if (realVerses.isNotEmpty()) {
-            emit(realVerses)
+        val realVerses = if (book == null) {
+            emptyList()
         } else {
-            emit(generateFallbackChapter(version, bookName, chapter))
+            rawVerses.map { (verseNum, text) ->
+                BibleVerse(
+                    id = (book.number.toLong() * 10000L + chapter * 100L + verseNum),
+                    version = version,
+                    testament = book.testament,
+                    bookNumber = book.number,
+                    bookName = displayBookName,
+                    chapter = chapter,
+                    verse = verseNum,
+                    text = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(text, version),
+                    sectionTitle = null
+                )
+            }
         }
+
+        // Nunca emitir versículos ficticios/simulados: una lista vacía indica que el pasaje no existe en esta versión
+        emit(realVerses)
     }.flowOn(Dispatchers.IO)
 
     suspend fun getChapterSubheadings(
@@ -435,141 +482,6 @@ class BibleRepository(
         emit(matches)
     }.flowOn(Dispatchers.IO)
 
-    private fun getCanonicalVerseCount(bookName: String, chapter: Int): Int {
-        return when (bookName.trim()) {
-            "Salmos", "Psalms" -> when (chapter) {
-                119 -> 176
-                78 -> 72
-                89 -> 52
-                18 -> 50
-                105 -> 45
-                106 -> 48
-                107 -> 43
-                68 -> 35
-                91 -> 16
-                23 -> 6
-                117 -> 2
-                150 -> 6
-                else -> 28
-            }
-            "Josué", "Joshua" -> when (chapter) {
-                1 -> 18
-                else -> 24
-            }
-            "Proverbios", "Proverbs" -> when (chapter) {
-                1 -> 33
-                2 -> 22
-                3 -> 35
-                4 -> 27
-                5 -> 23
-                6 -> 35
-                31 -> 31
-                else -> 30
-            }
-            "Mateo", "Matthew" -> when (chapter) {
-                5 -> 48
-                26 -> 75
-                27 -> 66
-                else -> 35
-            }
-            "Lucas", "Luke" -> when (chapter) {
-                1 -> 80
-                2 -> 52
-                else -> 38
-            }
-            "Juan", "John" -> when (chapter) {
-                1 -> 51
-                3 -> 36
-                4 -> 54
-                6 -> 71
-                else -> 36
-            }
-            "Génesis", "Genesis" -> when (chapter) {
-                1 -> 31
-                24 -> 67
-                else -> 32
-            }
-            "Romanos", "Romans" -> when (chapter) {
-                8 -> 39
-                16 -> 27
-                else -> 32
-            }
-            "Apocalipsis", "Revelation" -> when (chapter) {
-                2 -> 29
-                20 -> 15
-                22 -> 21
-                else -> 25
-            }
-            else -> 30
-        }
-    }
-
-    private fun generateFallbackChapter(version: String, bookName: String, chapter: Int): List<BibleVerse> {
-        val isEnglish = BibleBooksData.isEnglishVersion(version)
-        val displayBookName = BibleBooksData.getLocalizedBookName(bookName, isEnglish)
-        val book = BibleBooksData.getBookByName(bookName) ?: BibleBooksData.books[0]
-        val verseCount = getCanonicalVerseCount(bookName, chapter)
-
-        return (1..verseCount).map { v ->
-            val sampleText = if (isEnglish) {
-                "The word of the Lord in $displayBookName chapter $chapter, verse $v: His truth and mercy endure for ever unto all generations."
-            } else {
-                "Palabra del Señor en $displayBookName capítulo $chapter, versículo $v: La fidelidad y la gracia de Dios permanecen para siempre."
-            }
-
-            BibleVerse(
-                id = (book.number.toLong() * 10000L + chapter * 100L + v),
-                version = version,
-                testament = book.testament,
-                bookNumber = book.number,
-                bookName = displayBookName,
-                chapter = chapter,
-                verse = v,
-                text = sampleText,
-                sectionTitle = if (v == 1) getCanonicalSectionSubtitle(bookName, chapter, isEnglish) else null
-            )
-        }
-    }
-
-    private fun getCanonicalSectionSubtitle(bookName: String, chapter: Int, isEnglish: Boolean = false): String? {
-        val standardBook = BibleBooksData.getBookByName(bookName)?.name ?: bookName
-        return if (isEnglish) {
-            when {
-                standardBook == "Éxodo" && chapter == 3 -> "The Calling of Moses"
-                standardBook == "Éxodo" && chapter == 20 -> "The Ten Commandments"
-                standardBook == "Juan" && chapter == 1 -> "The Word Became Flesh"
-                standardBook == "Juan" && chapter == 3 -> "Jesus and Nicodemus"
-                standardBook == "Juan" && chapter == 14 -> "Jesus the Way to the Father"
-                standardBook == "Salmos" && chapter == 23 -> "The Lord Is My Shepherd"
-                standardBook == "Salmos" && chapter == 91 -> "Abiding in the Shadow of the Almighty"
-                standardBook == "Romanos" && chapter == 8 -> "Life in the Spirit"
-                standardBook == "Filipenses" && chapter == 4 -> "Rejoice in the Lord Always"
-                standardBook == "1 Corintios" && chapter == 13 -> "The Preeminence of Love"
-                standardBook == "Mateo" && chapter == 5 -> "The Beatitudes"
-                standardBook == "Génesis" && chapter == 1 -> "The Creation of the Heavens and the Earth"
-                standardBook == "Proverbios" && chapter == 3 -> "Trust in the Lord with All Your Heart"
-                else -> null
-            }
-        } else {
-            when {
-                standardBook == "Éxodo" && chapter == 3 -> "Llamamiento de Moisés"
-                standardBook == "Éxodo" && chapter == 20 -> "Los Diez Mandamientos"
-                standardBook == "Juan" && chapter == 1 -> "El Verbo hecho carne"
-                standardBook == "Juan" && chapter == 3 -> "Jesús y Nicodemo"
-                standardBook == "Juan" && chapter == 14 -> "Jesús, el camino al Padre"
-                standardBook == "Salmos" && chapter == 23 -> "Jehová es mi pastor"
-                standardBook == "Salmos" && chapter == 91 -> "Morando bajo la sombra del Omnipotente"
-                standardBook == "Romanos" && chapter == 8 -> "La vida en el Espíritu"
-                standardBook == "Filipenses" && chapter == 4 -> "Regocijaos en el Señor siempre"
-                standardBook == "1 Corintios" && chapter == 13 -> "La preeminencia del amor"
-                standardBook == "Mateo" && chapter == 5 -> "Las bienaventuranzas"
-                standardBook == "Génesis" && chapter == 1 -> "La creación de los cielos y la tierra"
-                standardBook == "Proverbios" && chapter == 3 -> "Exhortación a la sabiduría"
-                else -> null
-            }
-        }
-    }
-
     fun getVerse(version: String, bookName: String, chapter: Int, verse: Int): Flow<BibleVerse?> {
         return dao.getVerse(version, bookName, chapter, verse)
     }
@@ -594,6 +506,7 @@ class BibleRepository(
             return@flow
         }
 
+        val isEnglishVersion = BibleBooksData.isEnglishVersion(version)
         val results = mutableListOf<BibleVerse>()
         withContext(Dispatchers.IO) {
             var database: android.database.sqlite.SQLiteDatabase? = null
@@ -604,16 +517,31 @@ class BibleRepository(
                     android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                 )
 
+                val hasBooksTable = database.rawQuery(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='books' LIMIT 1",
+                    null
+                ).use { it.moveToFirst() }
+
                 val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord, "v.")
 
-                val sql = """
+                val sql = if (hasBooksTable) {
+                    """
                     SELECT b.long_name, v.book_number, v.chapter, v.verse, v.text 
                     FROM verses v 
-                    JOIN books b ON v.book_number = b.book_number 
+                    LEFT JOIN books b ON v.book_number = b.book_number 
                     $sqlWhere 
                     ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
                     LIMIT 100
-                """.trimIndent()
+                    """.trimIndent()
+                } else {
+                    """
+                    SELECT '' AS long_name, v.book_number, v.chapter, v.verse, v.text 
+                    FROM verses v 
+                    $sqlWhere 
+                    ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
+                    LIMIT 100
+                    """.trimIndent()
+                }
 
                 val exactPattern = if (exactWord) {
                     Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
@@ -628,11 +556,12 @@ class BibleRepository(
 
                     while (cursor.moveToNext()) {
                         val rawText = cursor.getString(colText) ?: ""
-                        val cleanedText = rawText
-                            .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                            .replace(Regex("(?<=\\p{L})\\d+"), "")
-                            .replace(Regex("\\s+"), " ")
-                            .trim()
+                        val cleanedText = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                            rawText = rawText,
+                            version = version,
+                            showRvrAsterisks = false
+                        )
+                        if (cleanedText.isBlank()) continue
 
                         val matchesExact = if (exactWord && exactPattern != null) {
                             exactPattern.containsMatchIn(cleanedText)
@@ -643,12 +572,16 @@ class BibleRepository(
                         if (matchesExact) {
                             val bNum = cursor.getInt(colBookNumber)
                             val tName = if (bNum <= 460) "AT" else "NT"
+                            val rawBookName = cursor.getString(colBookName).orEmpty().trim()
+                            val resolvedBookName = rawBookName.ifBlank {
+                                BibleBooksData.getLocalizedBookName("", isEnglishVersion, bNum)
+                            }
                             results.add(
                                 BibleVerse(
                                     version = version,
                                     testament = tName,
                                     bookNumber = bNum,
-                                    bookName = cursor.getString(colBookName),
+                                    bookName = resolvedBookName,
                                     chapter = cursor.getInt(colChapter),
                                     verse = cursor.getInt(colVerse),
                                     text = cleanedText

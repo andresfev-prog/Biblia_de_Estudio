@@ -1,10 +1,6 @@
 package com.example.ui.components
 
-import android.content.Context
-import android.database.sqlite.SQLiteDatabase
-import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,8 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,17 +38,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.data.model.BibleBooksData
 import com.example.data.model.BookInfo
+import com.example.data.model.ModuleBibleCatalog
 import com.example.ui.theme.AppTheme
+import com.example.ui.theme.AppThemeIds
 
+private val PickerCrispTitleNavy = Color(0xFF0D2240)
+private val PickerCrispMutedText = Color(0xFF566376)
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +61,8 @@ fun PassageSelectorDialog(
     currentStep: Int,
     selectedBook: BookInfo,
     selectedChapter: Int,
+    catalog: ModuleBibleCatalog? = null,
+    availableVerses: List<Int> = emptyList(),
     interfaceLanguage: String = "Español",
     onBookSelected: (BookInfo) -> Unit,
     onChapterSelected: (Int) -> Unit,
@@ -69,8 +71,14 @@ fun PassageSelectorDialog(
     onDismiss: () -> Unit
 ) {
     val appColors = AppTheme.colors
+    val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
+    val headingColor = if (isCrispLight) PickerCrispTitleNavy else appColors.titleColor
+    val mutedTextColor = if (isCrispLight) PickerCrispMutedText else appColors.textSecondary
     val isEn = interfaceLanguage.contains("English", ignoreCase = true)
     val bookDisplayName = if (isEn) selectedBook.englishName else selectedBook.name
+
+    val otBooks = remember(catalog) { catalog?.oldTestamentBooks.orEmpty() }
+    val ntBooks = remember(catalog) { catalog?.newTestamentBooks.orEmpty() }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -109,7 +117,7 @@ fun PassageSelectorDialog(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = if (isEn) "Back" else "Volver",
-                                    tint = appColors.titleColor
+                                    tint = headingColor
                                 )
                             }
                         }
@@ -122,16 +130,19 @@ fun PassageSelectorDialog(
                             }
                             Text(
                                 text = headerTitle,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.titleColor,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = 17.sp,
+                                    letterSpacing = (-0.2).sp
+                                ),
+                                fontWeight = FontWeight.SemiBold,
+                                color = headingColor,
                                 maxLines = 1,
-                                softWrap = false
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = if (isEn) "Step $currentStep of 3" else "Paso $currentStep de 3",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = appColors.textSecondary,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                                color = mutedTextColor,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -142,7 +153,11 @@ fun PassageSelectorDialog(
                         onClick = onDismiss,
                         modifier = Modifier.testTag("passage_picker_close_button")
                     ) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Cerrar", tint = appColors.textSecondary)
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = if (isEn) "Close" else "Cerrar",
+                            tint = mutedTextColor
+                        )
                     }
                 }
 
@@ -150,94 +165,151 @@ fun PassageSelectorDialog(
 
                 when (currentStep) {
                     1 -> {
-                        // Step 1: Books with AT / NT Tabs
-                        var testamentTab by remember { mutableIntStateOf(0) }
-                        PrimaryTabRow(
-                            selectedTabIndex = testamentTab,
-                            modifier = Modifier.fillMaxWidth(),
-                            containerColor = appColors.surface,
-                            contentColor = appColors.accent
-                        ) {
-                            Tab(
-                                selected = testamentTab == 0,
-                                onClick = { testamentTab = 0 },
-                                text = {
-                                    Text(
-                                        text = if (isEn) "Old Testament (39)" else "Antiguo T. (39)",
-                                        fontWeight = if (testamentTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (testamentTab == 0) appColors.accent else appColors.textSecondary,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                            )
-                            Tab(
-                                selected = testamentTab == 1,
-                                onClick = { testamentTab = 1 },
-                                text = {
-                                    Text(
-                                        text = if (isEn) "New Testament (27)" else "Nuevo T. (27)",
-                                        fontWeight = if (testamentTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (testamentTab == 1) appColors.accent else appColors.textSecondary,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        val filteredBooks = if (testamentTab == 0) {
-                            BibleBooksData.books.filter { it.testament == "AT" }
+                        if (catalog == null) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = appColors.accent,
+                                    strokeWidth = 2.5.dp
+                                )
+                            }
+                        } else if (otBooks.isEmpty() && ntBooks.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isEn) {
+                                        "No books available in ${catalog.version}."
+                                    } else {
+                                        "No hay libros disponibles en ${catalog.version}."
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    color = mutedTextColor,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         } else {
-                            BibleBooksData.books.filter { it.testament == "NT" }
-                        }
+                            // Paso 1: Libros 100 % dinámicos (oculta pestaña AT o NT si el módulo no tiene libros allí)
+                            val showBothTestaments = otBooks.isNotEmpty() && ntBooks.isNotEmpty()
+                            val defaultTab = if (selectedBook.testament == "NT" && ntBooks.isNotEmpty()) 1 else 0
+                            var testamentTab by remember(catalog.version, selectedBook.number, showBothTestaments) {
+                                mutableIntStateOf(if (showBothTestaments) defaultTab else 0)
+                            }
 
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3), // O GridCells.Adaptive / LazyColumn
-                            modifier = Modifier.fillMaxSize(),
-                            // AGREGAR O AJUSTAR ESTE PADDING INFERIOR:
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(filteredBooks) { book ->
-                                val isSelected = book.number == selectedBook.number
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp)
-                                        .clip(CircleShape)
-                                        .clickable { onBookSelected(book) }
-                                        .testTag("book_card_${book.number}"),
-                                    shape = CircleShape,
-                                    color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
-                                    tonalElevation = 0.dp
+                            if (showBothTestaments) {
+                                PrimaryTabRow(
+                                    selectedTabIndex = testamentTab,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    containerColor = appColors.surface,
+                                    contentColor = appColors.accent
                                 ) {
-                                    Column(
+                                    Tab(
+                                        selected = testamentTab == 0,
+                                        onClick = { testamentTab = 0 },
+                                        modifier = Modifier.testTag("passage_tab_ot"),
+                                        text = {
+                                            Text(
+                                                text = if (isEn) "Old Testament (${otBooks.size})" else "Antiguo T. (${otBooks.size})",
+                                                style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                                                fontWeight = if (testamentTab == 0) FontWeight.SemiBold else FontWeight.Medium,
+                                                color = if (testamentTab == 0) appColors.accent else mutedTextColor,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    )
+                                    Tab(
+                                        selected = testamentTab == 1,
+                                        onClick = { testamentTab = 1 },
+                                        modifier = Modifier.testTag("passage_tab_nt"),
+                                        text = {
+                                            Text(
+                                                text = if (isEn) "New Testament (${ntBooks.size})" else "Nuevo T. (${ntBooks.size})",
+                                                style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                                                fontWeight = if (testamentTab == 1) FontWeight.SemiBold else FontWeight.Medium,
+                                                color = if (testamentTab == 1) appColors.accent else mutedTextColor,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                            } else {
+                                val singleTestamentLabel = if (ntBooks.isNotEmpty()) {
+                                    if (isEn) "New Testament (${ntBooks.size})" else "Nuevo Testamento (${ntBooks.size})"
+                                } else {
+                                    if (isEn) "Old Testament (${otBooks.size})" else "Antiguo Testamento (${otBooks.size})"
+                                }
+                                Text(
+                                    text = singleTestamentLabel,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = appColors.accent,
+                                    modifier = Modifier
+                                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                                        .testTag(if (ntBooks.isNotEmpty()) "passage_nt_only_header" else "passage_ot_only_header")
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+
+                            val filteredBooks = when {
+                                showBothTestaments -> if (testamentTab == 0) otBooks else ntBooks
+                                ntBooks.isNotEmpty() -> ntBooks
+                                else -> otBooks
+                            }
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(filteredBooks, key = { it.number }) { book ->
+                                    val isSelected = book.number == selectedBook.number
+                                    val realChaptersCount = catalog.getAvailableChapters(book).size
+                                    Surface(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalArrangement = Arrangement.Center,
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .clip(CircleShape)
+                                            .clickable { onBookSelected(book) }
+                                            .testTag("book_card_${book.number}"),
+                                        shape = CircleShape,
+                                        color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
+                                        tonalElevation = 0.dp
                                     ) {
-                                        Text(
-                                            text = if (isEn) book.englishName else book.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isSelected) appColors.pillText else appColors.textPrimary,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            textAlign = TextAlign.Center
-                                        )
-                                        Text(
-                                            text = "${book.chapterCount} ${if (isEn) "ch." else "cap."}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (isSelected) appColors.pillText.copy(alpha = 0.8f) else appColors.textSecondary,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalArrangement = Arrangement.Center,
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = if (isEn) book.englishName else book.name,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isSelected) appColors.pillText else appColors.textPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Text(
+                                                text = "$realChaptersCount ${if (isEn) "ch." else "cap."}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                                color = if (isSelected) appColors.pillText.copy(alpha = 0.85f) else mutedTextColor,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -245,48 +317,70 @@ fun PassageSelectorDialog(
                     }
 
                     2 -> {
-                        // Step 2: Chapters Numeric Grid
+                        // Paso 2: Cuadrícula dinámica con únicamente los capítulos presentes en el SQLite del módulo
                         Text(
                             text = if (isEn) "Available chapters in $bookDisplayName:" else "Capítulos disponibles en ${selectedBook.name}:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = appColors.textSecondary,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                            color = mutedTextColor,
                             maxLines = 1,
-                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
-                        val chapterList = (1..selectedBook.chapterCount).toList()
+                        val chapterList = remember(catalog, selectedBook.number) {
+                            catalog?.getAvailableChapters(selectedBook).orEmpty()
+                        }
 
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(5),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("passage_chapters_grid"),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(chapterList) { chap ->
-                                val isSelected = chap == selectedChapter
-                                Surface(
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .clip(CircleShape)
-                                        .clickable { onChapterSelected(chap) }
-                                        .testTag("chapter_button_$chap"),
-                                    shape = CircleShape,
-                                    color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
-                                    tonalElevation = 0.dp
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "$chap",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) appColors.pillText else appColors.textPrimary,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
+                        if (chapterList.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isEn) {
+                                        "No chapters available for $bookDisplayName."
+                                    } else {
+                                        "No hay capítulos disponibles para ${selectedBook.name}."
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    color = mutedTextColor,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(5),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("passage_chapters_grid"),
+                                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(chapterList, key = { it }) { chap ->
+                                    val isSelected = chap == selectedChapter
+                                    Surface(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .clickable { onChapterSelected(chap) }
+                                            .testTag("chapter_button_$chap"),
+                                        shape = CircleShape,
+                                        color = if (isSelected) appColors.pillBg else appColors.surfaceVariant,
+                                        tonalElevation = 0.dp
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "$chap",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isSelected) appColors.pillText else appColors.textPrimary,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -294,58 +388,63 @@ fun PassageSelectorDialog(
                     }
 
                     3 -> {
-                        // Paso 3: Cuadrícula Numérica de Versículos Dinámica
-                        val context = LocalContext.current
-                        val bookTitle = selectedBook?.name ?: ""
-
+                        // Paso 3: Cuadrícula dinámica con los versículos reales del módulo activo
                         Text(
-                            text = if (isEn) "Verses in $bookDisplayName $selectedChapter:" else "Versículos en $bookTitle $selectedChapter:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = appColors.textSecondary,
+                            text = if (isEn) "Verses in $bookDisplayName $selectedChapter:" else "Versículos en ${selectedBook.name} $selectedChapter:",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                            color = mutedTextColor,
                             maxLines = 1,
-                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
-                        // Consulta SQLite directa y recordada para este libro y capítulo
-                        val verseCount = remember(bookTitle, selectedChapter) {
-                            getRealVerseCount(context, bookTitle, selectedChapter)
-                        }
-                        val verseList = remember(verseCount) { (1..verseCount).toList() }
-
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(5),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("passage_verses_grid"),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(
-                                count = verseList.size,
-                                key = { index -> "picker_v_${verseList[index]}" }
-                            ) { index ->
-                                val v = verseList[index]
-                                Surface(
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .clip(CircleShape)
-                                        .clickable { onVerseSelected(v) }
-                                        .testTag("verse_button_$v"),
-                                    shape = CircleShape,
-                                    color = appColors.surfaceVariant,
-                                    tonalElevation = 0.dp
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "$v",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = appColors.textPrimary,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
+                        if (availableVerses.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    color = appColors.accent,
+                                    strokeWidth = 2.5.dp
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(5),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag("passage_verses_grid"),
+                                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 88.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(
+                                    items = availableVerses,
+                                    key = { v -> "picker_v_$v" }
+                                ) { v ->
+                                    Surface(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .clickable { onVerseSelected(v) }
+                                            .testTag("verse_button_$v"),
+                                        shape = CircleShape,
+                                        color = appColors.surfaceVariant,
+                                        tonalElevation = 0.dp
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "$v",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = appColors.textPrimary,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -354,135 +453,5 @@ fun PassageSelectorDialog(
                 }
             }
         }
-    }
-}
-
-/**
- * Consulta en tiempo real a la base de datos física SQLite (RVR1960 / KJV)
- * el total exacto de versículos que contiene el capítulo solicitado.
- */
-private fun getRealVerseCount(context: Context, bookName: String, chapter: Int): Int {
-    val cleanName = bookName.trim()
-    var count = 0
-
-    // 1. Obtener la ruta de la base de datos física extraída en el dispositivo
-    val dbFile = context.getDatabasePath("RVR1960.SQLite3").takeIf { it.exists() }
-        ?: context.getDatabasePath("KJV.SQLite3").takeIf { it.exists() }
-
-    if (dbFile != null) {
-        var db: SQLiteDatabase? = null
-        try {
-            db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
-
-            // 2. Mapear el nombre del libro a su book_number canónico (10 a 730)
-            var bookNumber = getCanonicalBookNumber(cleanName)
-
-            // Si no se reconoció por prefijo, consultar la tabla 'books' de SQLite
-            if (bookNumber == -1) {
-                db.rawQuery(
-                    "SELECT book_number FROM books WHERE long_name = ? OR short_name = ? LIMIT 1",
-                    arrayOf(cleanName, cleanName)
-                ).use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        bookNumber = cursor.getInt(0)
-                    }
-                }
-            }
-
-            // 3. Consultar el número máximo de versículos para ese capítulo
-            if (bookNumber != -1) {
-                db.rawQuery(
-                    "SELECT MAX(verse) FROM verses WHERE book_number = ? AND chapter = ?",
-                    arrayOf(bookNumber.toString(), chapter.toString())
-                ).use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        count = cursor.getInt(0)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("BIBLE_DEBUG", "Error consultando total de versículos para $cleanName $chapter", e)
-        } finally {
-            db?.close()
-        }
-    }
-
-    // 4. Si la base de datos entregó el conteo real, retornarlo; si no, contingencia segura
-    return if (count > 0) count else 30
-}
-
-/**
- * Mapeo canónico internacional MyBible de los 66 libros a su book_number numérico.
- */
-private fun getCanonicalBookNumber(name: String): Int {
-    val s = name.lowercase().trim()
-    return when {
-        s.startsWith("gén") || s.startsWith("gen") -> 10
-        s.startsWith("éx") || s.startsWith("ex") -> 20
-        s.startsWith("lev") -> 30
-        s.startsWith("núm") || s.startsWith("num") -> 40
-        s.startsWith("deu") -> 50
-        s.startsWith("jos") -> 60
-        s.startsWith("jue") || s.startsWith("judg") -> 70
-        s.startsWith("rut") -> 80
-        s.startsWith("1 s") || s.startsWith("1s") -> 90
-        s.startsWith("2 s") || s.startsWith("2s") -> 100
-        s.startsWith("1 r") || s.startsWith("1r") || s.startsWith("1 k") -> 110
-        s.startsWith("2 r") || s.startsWith("2r") || s.startsWith("2 k") -> 120
-        s.startsWith("1 cr") || s.startsWith("1cr") || s.startsWith("1 ch") -> 130
-        s.startsWith("2 cr") || s.startsWith("2cr") || s.startsWith("2 ch") -> 140
-        s.startsWith("esd") || s.startsWith("ezr") -> 150
-        s.startsWith("neh") -> 160
-        s.startsWith("est") -> 190
-        s == "job" -> 220
-        s.startsWith("sal") || s.startsWith("psa") -> 230
-        s.startsWith("pro") -> 240
-        s.startsWith("ecl") -> 250
-        s.startsWith("can") || s.startsWith("son") -> 260
-        s.startsWith("isa") -> 290
-        s.startsWith("jer") -> 300
-        s.startsWith("lam") -> 310
-        s.startsWith("eze") -> 330
-        s.startsWith("dan") -> 340
-        s.startsWith("ose") || s.startsWith("hos") -> 350
-        s.startsWith("joe") -> 360
-        s.startsWith("am") -> 370
-        s.startsWith("abd") || s.startsWith("oba") -> 380
-        s.startsWith("jon") -> 390
-        s.startsWith("miq") || s.startsWith("mic") -> 400
-        s.startsWith("nah") -> 410
-        s.startsWith("hab") -> 420
-        s.startsWith("sof") || s.startsWith("zep") -> 430
-        s.startsWith("hag") -> 440
-        s.startsWith("zac") || s.startsWith("zec") -> 450
-        s.startsWith("mal") -> 460
-        s.startsWith("mat") -> 470
-        s.startsWith("mar") -> 480
-        s.startsWith("luc") || s.startsWith("luk") -> 490
-        s.startsWith("jua") || s.startsWith("joh") -> 500
-        s.startsWith("hec") || s.startsWith("act") -> 510
-        s.startsWith("rom") -> 520
-        s.startsWith("1 co") || s.startsWith("1co") -> 530
-        s.startsWith("2 co") || s.startsWith("2co") -> 540
-        s.startsWith("gál") || s.startsWith("gal") -> 550
-        s.startsWith("efe") || s.startsWith("eph") -> 560
-        s.startsWith("fil") && !s.contains("m") || s.startsWith("phi") -> 570
-        s.startsWith("col") -> 580
-        s.startsWith("1 te") || s.startsWith("1te") || s.startsWith("1 th") -> 590
-        s.startsWith("2 te") || s.startsWith("2te") || s.startsWith("2 th") -> 600
-        s.startsWith("1 ti") || s.startsWith("1ti") -> 610
-        s.startsWith("2 ti") || s.startsWith("2ti") -> 620
-        s.startsWith("tit") -> 630
-        s.startsWith("flm") || s.startsWith("phm") || (s.startsWith("fil") && s.contains("m")) -> 640
-        s.startsWith("heb") -> 650
-        s.startsWith("san") || s.startsWith("jam") -> 660
-        s.startsWith("1 p") || s.startsWith("1p") -> 670
-        s.startsWith("2 p") || s.startsWith("2p") -> 680
-        s.startsWith("1 j") || s.startsWith("1j") -> 690
-        s.startsWith("2 j") || s.startsWith("2j") -> 700
-        s.startsWith("3 j") || s.startsWith("3j") -> 710
-        s.startsWith("jud") -> 720
-        s.startsWith("apo") || s.startsWith("rev") -> 730
-        else -> -1
     }
 }

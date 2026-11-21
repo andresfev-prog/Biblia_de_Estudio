@@ -23,6 +23,7 @@ object BibleStudyTextUtils {
     private val rvrSpaceBeforeAsteriskRegex = Regex("(\\S)\\s+\\*")
     private val rvrSpuriousCommaAfterAsteriskRegex = Regex("\\*\\s*,")
     private val rvrMissingSpaceAfterAsteriskRegex = Regex("\\*(?=[\\p{L}\\p{Nd}¿¡«\"(])")
+    private val rvrAsteriskBeforePunctRegex = Regex("\\*\\s*([,.;:!?»)])")
     private val myBibleCrossRefTagRegex = Regex("<x>\\s*(\\d+)\\s+([^<]+)</x>", RegexOption.IGNORE_CASE)
     private val anyHtmlTagRegex = Regex("<[^>]*>")
     private val parallelRefLineRegex = Regex("^\\(.*\\d+:\\d+.*\\)$")
@@ -53,8 +54,14 @@ object BibleStudyTextUtils {
     /**
      * Limpia etiquetas MyBible/Strong y, para RVR1960, elimina artefactos visuales
      * alrededor del asterisco de nota (`» *`, `*,`, `* ,`) sin dañar la puntuación real.
+     * Cuando `showRvrAsterisks` es `false` (porque no existe nota real para ese versículo en RVR-C),
+     * oculta el asterisco y cualquier espacio o coma residual asociada sin alterar la puntuación real.
      */
-    fun sanitizeVerseTextForDisplay(rawText: String, version: String): String {
+    fun sanitizeVerseTextForDisplay(
+        rawText: String,
+        version: String,
+        showRvrAsterisks: Boolean = true
+    ): String {
         var cleaned = rawText
             .replace(strongAndHtmlRegex, "")
             .replace(trailingStrongDigitsRegex, "")
@@ -68,6 +75,14 @@ object BibleStudyTextUtils {
                 .replace(rvrMissingSpaceAfterAsteriskRegex, "* ")
                 .replace(whitespaceRegex, " ")
                 .trim()
+
+            if (!showRvrAsterisks) {
+                cleaned = cleaned
+                    .replace(rvrAsteriskBeforePunctRegex, "$1")
+                    .replace("*", "")
+                    .replace(whitespaceRegex, " ")
+                    .trim()
+            }
         }
 
         return cleaned
