@@ -288,19 +288,22 @@ fun ModulesScreen(
             else -> "DICTIONARY"
         }
 
-        val baseFiltered = uiState.modules.filter { module ->
-            val matchesCategory = module.category == categoryKey
-            val matchesLanguage = when (uiState.moduleLanguageFilter) {
-                "Todos", "All" -> true
-                "Español", "Spanish" -> module.language.contains("Español", ignoreCase = true)
-                "Inglés", "English" -> module.language.contains("Inglés", ignoreCase = true) || module.language.contains("English", ignoreCase = true)
-                else -> module.language == uiState.moduleLanguageFilter
+        val baseFiltered = remember(uiState.modules, categoryKey, uiState.moduleLanguageFilter) {
+            uiState.modules.filter { module ->
+                val matchesCategory = module.category == categoryKey
+                val matchesLanguage = when (uiState.moduleLanguageFilter) {
+                    "Todos", "All" -> true
+                    "Español", "Spanish" -> module.language.contains("Español", ignoreCase = true)
+                    "Inglés", "English" -> module.language.contains("Inglés", ignoreCase = true) || module.language.contains("English", ignoreCase = true)
+                    else -> module.language == uiState.moduleLanguageFilter
+                }
+                matchesCategory && matchesLanguage
             }
-            matchesCategory && matchesLanguage
         }
 
-        val downloadedModules = baseFiltered.filter { it.isDownloaded }
-        val availableModules = baseFiltered.filter { !it.isDownloaded }
+        val (downloadedModules, availableModules) = remember(baseFiltered) {
+            baseFiltered.partition { it.isDownloaded }
+        }
 
         if (onlyDownloaded && downloadedModules.isEmpty()) {
             Box(
@@ -349,14 +352,18 @@ fun ModulesScreen(
             ) {
                 // 1. Recursos instalados en la parte superior con divisor de sección
                 if (downloadedModules.isNotEmpty()) {
-                    item(key = "divider_installed_section") {
+                    item(key = "divider_installed_section", contentType = "section_divider") {
                         LabeledDivider(
                             label = if (isEn) "Installed (${downloadedModules.size})" else "Instalados (${downloadedModules.size})"
                         )
                     }
                 }
 
-                items(downloadedModules, key = { it.id }) { item ->
+                items(
+                    items = downloadedModules,
+                    key = { it.id },
+                    contentType = { "module_card" }
+                ) { item ->
                     ModuleItemCard(
                         module = item,
                         lang = lang,
@@ -368,13 +375,17 @@ fun ModulesScreen(
 
                 // 2. Divisor centrado y recursos pendientes de descarga
                 if (!onlyDownloaded && availableModules.isNotEmpty()) {
-                    item(key = "divider_available_section") {
+                    item(key = "divider_available_section", contentType = "section_divider") {
                         LabeledDivider(
                             label = if (isEn) "Available (${availableModules.size})" else "Disponibles (${availableModules.size})"
                         )
                     }
 
-                    items(availableModules, key = { it.id }) { item ->
+                    items(
+                        items = availableModules,
+                        key = { it.id },
+                        contentType = { "module_card" }
+                    ) { item ->
                         ModuleItemCard(
                             module = item,
                             lang = lang,

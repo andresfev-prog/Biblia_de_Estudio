@@ -237,52 +237,59 @@ fun BibleScreen(
         }
     }
 
-    LaunchedEffect(leftListState.isScrollInProgress, rightListState.isScrollInProgress, uiState.isNavigationHighlightActive) {
-        if (!isProgrammaticScroll && (leftListState.isScrollInProgress || rightListState.isScrollInProgress)) {
-            if (uiState.isNavigationHighlightActive) {
-                viewModel.clearNavigationHighlight()
+    val latestIsNavigationHighlightActive by rememberUpdatedState(uiState.isNavigationHighlightActive)
+    val latestRightTempHighlight by rememberUpdatedState(rightTempHighlightedVerse)
+    val latestVersesSize by rememberUpdatedState(uiState.verses.size)
+    val latestParallelVersesSize by rememberUpdatedState(uiState.parallelVerses.size)
+
+    // Observar scroll vía snapshotFlow para evitar recomponer todo BibleScreen en cada inicio/fin de desplazamiento
+    LaunchedEffect(leftListState, rightListState) {
+        snapshotFlow { leftListState.isScrollInProgress to rightListState.isScrollInProgress }
+            .collect { (leftScrolling, rightScrolling) ->
+                if (!isProgrammaticScroll && (leftScrolling || rightScrolling)) {
+                    if (latestIsNavigationHighlightActive) {
+                        viewModel.clearNavigationHighlight()
+                    }
+                    if (latestRightTempHighlight != null && rightScrolling) {
+                        rightTempHighlightedVerse = null
+                    }
+                }
             }
-            if (rightTempHighlightedVerse != null && rightListState.isScrollInProgress) {
-                rightTempHighlightedVerse = null
-            }
-        }
     }
 
-    LaunchedEffect(
-        leftListState.isScrollInProgress,
-        uiState.isParallelLinked,
-        uiState.verses.isNotEmpty(),
-        uiState.parallelVerses.isNotEmpty()
-    ) {
-        if (uiState.isParallelLinked &&
-            uiState.verses.isNotEmpty() &&
-            uiState.parallelVerses.isNotEmpty() &&
-            leftListState.isScrollInProgress &&
-            !rightListState.isScrollInProgress
-        ) {
-            snapshotFlow { Pair(leftListState.firstVisibleItemIndex, leftListState.firstVisibleItemScrollOffset) }
-                .collect { (idx, offset) ->
-                    rightListState.scrollToItem(idx.coerceIn(0, uiState.parallelVerses.lastIndex), offset)
+    LaunchedEffect(leftListState, rightListState, uiState.isParallelMode, uiState.isParallelLinked) {
+        if (!uiState.isParallelMode || !uiState.isParallelLinked) return@LaunchedEffect
+        launch {
+            snapshotFlow {
+                if (leftListState.isScrollInProgress && !rightListState.isScrollInProgress) {
+                    Pair(leftListState.firstVisibleItemIndex, leftListState.firstVisibleItemScrollOffset)
+                } else {
+                    null
                 }
+            }.collect { pos ->
+                if (pos != null && latestVersesSize > 0 && latestParallelVersesSize > 0) {
+                    rightListState.scrollToItem(
+                        pos.first.coerceIn(0, latestParallelVersesSize - 1),
+                        pos.second
+                    )
+                }
+            }
         }
-    }
-
-    LaunchedEffect(
-        rightListState.isScrollInProgress,
-        uiState.isParallelLinked,
-        uiState.verses.isNotEmpty(),
-        uiState.parallelVerses.isNotEmpty()
-    ) {
-        if (uiState.isParallelLinked &&
-            uiState.verses.isNotEmpty() &&
-            uiState.parallelVerses.isNotEmpty() &&
-            rightListState.isScrollInProgress &&
-            !leftListState.isScrollInProgress
-        ) {
-            snapshotFlow { Pair(rightListState.firstVisibleItemIndex, rightListState.firstVisibleItemScrollOffset) }
-                .collect { (idx, offset) ->
-                    leftListState.scrollToItem(idx.coerceIn(0, uiState.verses.lastIndex), offset)
+        launch {
+            snapshotFlow {
+                if (rightListState.isScrollInProgress && !leftListState.isScrollInProgress) {
+                    Pair(rightListState.firstVisibleItemIndex, rightListState.firstVisibleItemScrollOffset)
+                } else {
+                    null
                 }
+            }.collect { pos ->
+                if (pos != null && latestVersesSize > 0 && latestParallelVersesSize > 0) {
+                    leftListState.scrollToItem(
+                        pos.first.coerceIn(0, latestVersesSize - 1),
+                        pos.second
+                    )
+                }
+            }
         }
     }
 
@@ -323,7 +330,9 @@ fun BibleScreen(
     val baseFontSizeSp = (uiState.userPreferences.fontSizePt * 1.35f).sp
     val lineHeightSp = (uiState.userPreferences.fontSizePt * 1.9f).sp
 
-    val downloadedVersions = uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
+    val downloadedVersions = remember(uiState.modules) {
+        uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
+    }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -1077,7 +1086,7 @@ private fun SingleReaderView(
             .fillMaxSize()
             .testTag("single_reader_list")
     ) {
-        item {
+        item(key = "single_chapter_header", contentType = "chapter_header") {
             val bookInfo = BibleBooksData.getBookByName(uiState.currentBook)
             val bookId = bookInfo?.number ?: 43
             val displayBookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
@@ -1101,7 +1110,7 @@ private fun SingleReaderView(
         }
 
         if (uiState.isChapterLoading && uiState.verses.isEmpty()) {
-            item(key = "single_loading") {
+            item(key = "single_loading", contentType = "loading") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1116,7 +1125,7 @@ private fun SingleReaderView(
                 }
             }
         } else if (uiState.verses.isEmpty()) {
-            item(key = "single_unavailable") {
+            item(key = "single_unavailable", contentType = "unavailable") {
                 PassageUnavailableState(
                     versionCode = uiState.activeVersion,
                     interfaceLanguage = uiState.userPreferences.interfaceLanguage,
@@ -1133,7 +1142,8 @@ private fun SingleReaderView(
         } else {
             items(
                 count = uiState.verses.size,
-                key = { index -> uiState.verses[index].id }
+                key = { index -> uiState.verses[index].id },
+                contentType = { "verse" }
             ) { index ->
                 val verse = uiState.verses[index]
                 val hasCommentary = true // La etiqueta COM debe mantenerse siempre visible en todos los versículos
@@ -1145,6 +1155,7 @@ private fun SingleReaderView(
                 ) {
                     VerseRowItem(
                         verse = verse,
+                        precomputedTokens = uiState.verseTokens[verse.id],
                         subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
                         hasCommentary = hasCommentary,
                         hasCrossReference = hasCrossReference,
@@ -1182,7 +1193,7 @@ private fun SingleReaderView(
                 }
             }
 
-            item {
+            item(key = "single_chapter_nav", contentType = "chapter_nav") {
                 val catalog = uiState.activeVersionCatalog
                 val currentCanonicalId = BibleBooksData.resolveCanonicalBookId(uiState.currentBook)
                 val prevPassage = catalog?.getPreviousPassage(uiState.currentBook, uiState.currentChapter)
@@ -1237,7 +1248,9 @@ private fun ParallelReaderView(
     appColors: AppColors,
     modifier: Modifier = Modifier
 ) {
-    val downloadedVersions = uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
+    val downloadedVersions = remember(uiState.modules) {
+        uiState.modules.filter { it.category == "VERSION" && it.isDownloaded }
+    }
     val isLinked = uiState.isParallelLinked
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val isSelectionMode = selectedVerses.isNotEmpty()
@@ -1438,7 +1451,7 @@ private fun ParallelReaderView(
                 )
             ) {
                 if (uiState.isChapterLoading && uiState.verses.isEmpty()) {
-                    item(key = "left_loading") {
+                    item(key = "left_loading", contentType = "loading") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1453,7 +1466,7 @@ private fun ParallelReaderView(
                         }
                     }
                 } else if (uiState.verses.isEmpty()) {
-                    item(key = "left_unavailable") {
+                    item(key = "left_unavailable", contentType = "unavailable") {
                         PassageUnavailableState(
                             versionCode = uiState.activeVersion,
                             interfaceLanguage = uiState.userPreferences.interfaceLanguage,
@@ -1470,7 +1483,8 @@ private fun ParallelReaderView(
                 } else {
                     items(
                         count = uiState.verses.size,
-                        key = { index -> "L_${uiState.verses[index].id}" }
+                        key = { index -> "L_${uiState.verses[index].id}" },
+                        contentType = { "verse" }
                     ) { index ->
                         val verse = uiState.verses[index]
                         val hasCommentary = true
@@ -1479,6 +1493,7 @@ private fun ParallelReaderView(
 
                         VerseRowItem(
                             verse = verse,
+                            precomputedTokens = uiState.verseTokens[verse.id],
                             subheadings = uiState.chapterSubheadings[verse.verse].orEmpty(),
                             hasCommentary = hasCommentary,
                             hasCrossReference = hasCrossReference,
@@ -1515,7 +1530,7 @@ private fun ParallelReaderView(
                         )
                     }
 
-                    item {
+                    item(key = "left_chapter_nav", contentType = "chapter_nav") {
                         val isVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
                         val catalog = uiState.activeVersionCatalog
                         val currentCanonicalId = BibleBooksData.resolveCanonicalBookId(uiState.currentBook)
@@ -1716,7 +1731,7 @@ private fun ParallelReaderView(
                 )
             ) {
                 if (uiState.isParallelChapterLoading && uiState.parallelVerses.isEmpty()) {
-                    item(key = "right_loading") {
+                    item(key = "right_loading", contentType = "loading") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1731,7 +1746,7 @@ private fun ParallelReaderView(
                         }
                     }
                 } else if (uiState.parallelVerses.isEmpty()) {
-                    item(key = "right_unavailable") {
+                    item(key = "right_unavailable", contentType = "unavailable") {
                         PassageUnavailableState(
                             versionCode = uiState.parallelVersion,
                             interfaceLanguage = uiState.userPreferences.interfaceLanguage,
@@ -1764,7 +1779,8 @@ private fun ParallelReaderView(
                 } else {
                     items(
                         count = uiState.parallelVerses.size,
-                        key = { index -> "R_${uiState.parallelVerses[index].id}" }
+                        key = { index -> "R_${uiState.parallelVerses[index].id}" },
+                        contentType = { "verse" }
                     ) { index ->
                         val verse = uiState.parallelVerses[index]
                         val hasCommentary = true
@@ -1777,6 +1793,7 @@ private fun ParallelReaderView(
 
                         VerseRowItem(
                             verse = verse,
+                            precomputedTokens = uiState.parallelVerseTokens[verse.id],
                             subheadings = uiState.parallelChapterSubheadings[verse.verse].orEmpty(),
                             hasCommentary = hasCommentary,
                             hasCrossReference = hasCrossReference,
@@ -1824,7 +1841,7 @@ private fun ParallelReaderView(
                         )
                     }
 
-                    item {
+                    item(key = "right_chapter_nav", contentType = "chapter_nav") {
                         val rightBook = if (isLinked) uiState.currentBook else (rightBookInfo?.name ?: rightBookTitle)
                         val activeRightChapter = if (isLinked) uiState.currentChapter else rightChapter
                         val rightCatalog = if (isLinked) uiState.activeVersionCatalog else uiState.parallelVersionCatalog
@@ -2234,6 +2251,7 @@ private fun ChapterBottomNavigationControls(
 @Composable
 private fun VerseRowItem(
     verse: BibleVerse,
+    precomputedTokens: List<VerseDisplayToken>? = null,
     subheadings: List<String> = emptyList(),
     hasCommentary: Boolean,
     hasCrossReference: Boolean,
@@ -2270,17 +2288,19 @@ private fun VerseRowItem(
         label = "verseHighlightBg"
     )
 
-    val isRvr1960 = remember(verse.version) {
-        BibleStudyTextUtils.isRvr1960Version(verse.version)
-    }
-    val showRvrAsterisks = isRvr1960 && hasRvrVersionNote
-
-    val rawCleanText = remember(verse.text, verse.version, showRvrAsterisks) {
-        BibleStudyTextUtils.sanitizeVerseTextForDisplay(
-            rawText = verse.text,
-            version = verse.version,
-            showRvrAsterisks = showRvrAsterisks
-        )
+    // Cuando el ViewModel entrega tokens preprocesados en Dispatchers.Default,
+    // el hilo principal evita cualquier ejecución de Regex durante el scroll.
+    val resolvedTokens = remember(precomputedTokens, verse.text, verse.version, hasRvrVersionNote) {
+        precomputedTokens ?: run {
+            val isRvr1960 = BibleStudyTextUtils.isRvr1960Version(verse.version)
+            val showRvrAsterisks = isRvr1960 && hasRvrVersionNote
+            val rawCleanText = BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                rawText = verse.text,
+                version = verse.version,
+                showRvrAsterisks = showRvrAsterisks
+            )
+            BibleStudyTextUtils.tokenizeVerseText(rawCleanText, showRvrAsterisks)
+        }
     }
 
     val effectiveSubheadings = remember(subheadings, verse.sectionTitle) {
@@ -2302,8 +2322,7 @@ private fun VerseRowItem(
 
     val annotatedString = remember(
         verse.verse,
-        rawCleanText,
-        showRvrAsterisks,
+        resolvedTokens,
         appColors.verseNumberColor,
         appColors.textPrimary,
         appColors.accent,
@@ -2341,7 +2360,7 @@ private fun VerseRowItem(
                 color = appColors.textPrimary
             )
 
-            BibleStudyTextUtils.tokenizeVerseText(rawCleanText, showRvrAsterisks).forEach { token ->
+            resolvedTokens.forEach { token ->
                 when (token) {
                     is VerseDisplayToken.BracketNote -> {
                         pushStringAnnotation(tag = "NOTE", annotation = token.marker)

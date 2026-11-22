@@ -451,6 +451,13 @@ fun SearchScreen(
                 }
 
                 else -> {
+                    val highlightPattern = remember(uiState.searchQuery, uiState.searchExactWord) {
+                        compileSearchHighlightPattern(
+                            query = uiState.searchQuery,
+                            exactWord = uiState.searchExactWord
+                        )
+                    }
+                    val favoriteLabel = StringsLocale.get("favorite_action", uiState.userPreferences.interfaceLanguage)
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp + navBarBottom),
@@ -458,15 +465,15 @@ fun SearchScreen(
                     ) {
                         items(
                             items = uiState.searchResults,
-                            key = { verse -> "${verse.version}_${verse.bookNumber}_${verse.chapter}_${verse.verse}" }
+                            key = { verse -> "${verse.version}_${verse.bookNumber}_${verse.chapter}_${verse.verse}" },
+                            contentType = { "search_result" }
                         ) { verse ->
                             val isFav = viewModel.isFavorite(verse, uiState.favoriteKeys)
                             SearchResultItem(
                                 verse = verse,
-                                searchQuery = uiState.searchQuery,
-                                exactWord = uiState.searchExactWord,
+                                highlightPattern = highlightPattern,
                                 isFavorite = isFav,
-                                favoriteLabel = StringsLocale.get("favorite_action", uiState.userPreferences.interfaceLanguage),
+                                favoriteLabel = favoriteLabel,
                                 onToggleFavorite = { viewModel.toggleFavorite(verse) },
                                 onClick = {
                                     onNavigateToVerse(verse.bookName, verse.chapter, verse.verse)
@@ -554,8 +561,7 @@ private fun SearchScopeFilterBar(
 @Composable
 private fun SearchResultItem(
     verse: BibleVerse,
-    searchQuery: String,
-    exactWord: Boolean,
+    highlightPattern: Regex?,
     isFavorite: Boolean,
     favoriteLabel: String,
     onToggleFavorite: () -> Unit,
@@ -568,11 +574,10 @@ private fun SearchResultItem(
     val mutedTextColor = if (isCrispLight) SearchCrispMutedText else MaterialTheme.colorScheme.onSurfaceVariant
 
     val primaryColor = MaterialTheme.colorScheme.primary
-    val highlightedText = remember(verse.text, searchQuery, exactWord, primaryColor) {
+    val highlightedText = remember(verse.text, highlightPattern, primaryColor) {
         buildHighlightedVerseText(
             fullText = verse.text,
-            query = searchQuery.trim(),
-            exactWord = exactWord,
+            pattern = highlightPattern,
             highlightColor = primaryColor
         )
     }
@@ -639,29 +644,37 @@ private fun SearchResultItem(
     }
 }
 
+private val SEARCH_WHITESPACE_REGEX = Regex("\\s+")
+
+private fun compileSearchHighlightPattern(
+    query: String,
+    exactWord: Boolean
+): Regex? {
+    val cleanQuery = query.trim()
+    if (cleanQuery.isBlank()) return null
+
+    return if (exactWord) {
+        Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+    } else {
+        val words = cleanQuery.split(SEARCH_WHITESPACE_REGEX).filter { it.length > 1 }
+        val allVariants = words.flatMap { com.example.data.repository.BibleRepository.generateSpanishVariants(it) }
+        if (allVariants.isEmpty()) null
+        else Regex("(?i)(" + allVariants.joinToString("|") { Regex.escape(it) } + ")")
+    }
+}
+
 /**
  * Resalta en negrita y color primario las apariciones del término buscado dentro del versículo.
  */
 private fun buildHighlightedVerseText(
     fullText: String,
-    query: String,
-    exactWord: Boolean,
+    pattern: Regex?,
     highlightColor: androidx.compose.ui.graphics.Color
 ): AnnotatedString {
-    val cleanQuery = query.trim()
-    if (cleanQuery.isBlank()) return AnnotatedString(fullText)
+    if (pattern == null) return AnnotatedString(fullText)
 
-    val pattern = if (exactWord) {
-        Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
-    } else {
-        val words = cleanQuery.split(Regex("\\s+")).filter { it.length > 1 }
-        val allVariants = words.flatMap { com.example.data.repository.BibleRepository.generateSpanishVariants(it) }
-        if (allVariants.isEmpty()) return AnnotatedString(fullText)
-        Regex("(?i)(" + allVariants.joinToString("|") { Regex.escape(it) } + ")")
-    }
-
-    val matches = pattern.findAll(fullText)
-    if (!matches.any()) return AnnotatedString(fullText)
+    val matches = pattern.findAll(fullText).toList()
+    if (matches.isEmpty()) return AnnotatedString(fullText)
 
     return buildAnnotatedString {
         var lastIndex = 0

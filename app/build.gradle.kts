@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.biblestudy.qxptk"
     minSdk = 24
     targetSdk = 36
-    versionCode = 18
-    versionName = "1.4.1-partial-bibles-typography"
+    versionCode = 19
+    versionName = "1.4.2-perf-fix"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

@@ -41,14 +41,20 @@ class BibleRepository(
         val cleanVersion = version.trim().removeSuffix(".SQLite3")
         val defaultName = "$cleanVersion.SQLite3"
 
-        // 1. Coincidencia exacta directa
+        // 1. Coincidencia exacta directa en disco
         val exactFile = context.getDatabasePath(defaultName)
-        if (exactFile.exists()) return exactFile.name
+        if (exactFile.exists() && exactFile.length() > 0L) return exactFile.name
 
-        // 2. Búsqueda insensible a mayúsculas/minúsculas en el directorio de bases de datos (solo textos bíblicos)
+        // 2. Verificación rápida en caché de assets empaquetados (sin llamadas JNI repetitivas)
+        val dbAssets = BibleAssetDatabaseHelper.getBundledDatabaseAssets(context)
+            .filter { isBibleTextDbFile(it) }
+        val exactDbAsset = dbAssets.firstOrNull { it.equals(defaultName, ignoreCase = true) }
+        if (exactDbAsset != null) return exactDbAsset
+
+        // 3. Búsqueda insensible a mayúsculas/minúsculas en el directorio de bases de datos (solo textos bíblicos)
         val dbDir = exactFile.parentFile
         if (dbDir != null && dbDir.exists()) {
-            val bibleFiles = dbDir.listFiles()?.filter { isBibleTextDbFile(it.name) }.orEmpty()
+            val bibleFiles = dbDir.listFiles()?.filter { isBibleTextDbFile(it.name) && it.length() > 0L }.orEmpty()
 
             // Coincidencia ignorando mayúsculas (ej: busca "T4T.SQLite3" y encuentra "t4t.SQLite3")
             val matchCaseInsensitive = bibleFiles.firstOrNull { it.name.equals(defaultName, ignoreCase = true) }
@@ -61,25 +67,30 @@ class BibleRepository(
             if (matchPrefix != null) return matchPrefix.name
         }
 
-        // 3. Verificación en assets (raíz y carpeta databases/) priorizando coincidencia exacta
-        try {
-            val dbAssets = (context.assets.list("databases") ?: emptyArray()).filter { isBibleTextDbFile(it) }
-            val exactDbAsset = dbAssets.firstOrNull { it.equals(defaultName, ignoreCase = true) }
-            if (exactDbAsset != null) return exactDbAsset
-            val prefixDbAsset = dbAssets.firstOrNull { it.startsWith(cleanVersion, ignoreCase = true) }
-            if (prefixDbAsset != null) return prefixDbAsset
+        // 4. Coincidencia por prefijo o raíz en caché de assets empaquetados
+        val prefixDbAsset = dbAssets.firstOrNull { it.startsWith(cleanVersion, ignoreCase = true) }
+        if (prefixDbAsset != null) return prefixDbAsset
 
-            val rootAssets = (context.assets.list("") ?: emptyArray()).filter { isBibleTextDbFile(it) }
-            val exactRootAsset = rootAssets.firstOrNull { it.equals(defaultName, ignoreCase = true) }
-            if (exactRootAsset != null) return exactRootAsset
-            val prefixRootAsset = rootAssets.firstOrNull { it.startsWith(cleanVersion, ignoreCase = true) }
-            if (prefixRootAsset != null) return prefixRootAsset
-        } catch (_: Exception) { }
+        val rootAssets = BibleAssetDatabaseHelper.getBundledRootAssets(context)
+            .filter { isBibleTextDbFile(it) }
+        val exactRootAsset = rootAssets.firstOrNull { it.equals(defaultName, ignoreCase = true) }
+        if (exactRootAsset != null) return exactRootAsset
+        val prefixRootAsset = rootAssets.firstOrNull { it.startsWith(cleanVersion, ignoreCase = true) }
+        if (prefixRootAsset != null) return prefixRootAsset
 
         return defaultName
     }
+
+    private data class CachedCatalogEntry(
+        val catalog: com.example.data.model.ModuleBibleCatalog,
+        val dbFileName: String,
+        val fileSize: Long,
+        val lastModified: Long
+    )
+
     private val helper = BibleAssetDatabaseHelper(context)
-    private val catalogCache = java.util.concurrent.ConcurrentHashMap<String, com.example.data.model.ModuleBibleCatalog>()
+    private val catalogDiskCache = ModuleCatalogDiskCache(context)
+    private val catalogCache = java.util.concurrent.ConcurrentHashMap<String, CachedCatalogEntry>()
 
     private val defaultCommentaryDb = "Wesley-c.commentaries.SQLite3"
     private val defaultDictionaryDb = "Multi.dictionary.SQLite3"
@@ -87,25 +98,70 @@ class BibleRepository(
     fun invalidateModuleCatalogCache(version: String? = null) {
         if (version.isNullOrBlank()) {
             catalogCache.clear()
+            catalogDiskCache.invalidate()
+            BibleAssetDatabaseHelper.closeAndEvictDatabase()
         } else {
             val normalized = BibleBooksData.normalizeVersionId(version)
-            catalogCache.remove(normalized)
-            catalogCache.remove(version.trim().uppercase())
+            val removedNorm = catalogCache.remove(normalized)
+            val removedRaw = catalogCache.remove(version.trim().uppercase())
+            val resolvedFile = removedNorm?.dbFileName
+                ?: removedRaw?.dbFileName
+                ?: resolveBibleDatabaseFileName(version)
+            catalogDiskCache.invalidate(resolvedFile)
+            BibleAssetDatabaseHelper.closeAndEvictDatabase(resolvedFile)
         }
+    }
+
+    /**
+     * Devuelve el catálogo si ya reside en memoria (0 ms, no bloqueante).
+     */
+    fun getCachedModuleCatalogInMemory(version: String): com.example.data.model.ModuleBibleCatalog? {
+        val cacheKey = BibleBooksData.normalizeVersionId(version).ifBlank { version.trim().uppercase() }
+        return catalogCache[cacheKey]?.catalog
     }
 
     suspend fun getModuleCatalog(version: String): com.example.data.model.ModuleBibleCatalog = withContext(Dispatchers.IO) {
         val cacheKey = BibleBooksData.normalizeVersionId(version).ifBlank { version.trim().uppercase() }
-        catalogCache[cacheKey]?.let { return@withContext it }
-
         val dbFileName = resolveBibleDatabaseFileName(version)
+        val dbFile = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, dbFileName)
+        if (!dbFile.exists() || dbFile.length() == 0L) {
+            catalogCache.remove(cacheKey)
+            return@withContext com.example.data.model.ModuleBibleCatalog.fromChaptersMap(version, emptyMap())
+        }
+
+        val fileSize = dbFile.length()
+        val lastModified = dbFile.lastModified()
+
+        // 1. Hit instantáneo en memoria (validando huella del archivo)
+        catalogCache[cacheKey]?.let { entry ->
+            if (entry.dbFileName.equals(dbFileName, ignoreCase = true) &&
+                entry.fileSize == fileSize &&
+                entry.lastModified == lastModified
+            ) {
+                return@withContext entry.catalog
+            }
+        }
+
+        // 2. Hit persistente en disco (SharedPreferences validado por tamaño + mtime -> 0 escaneos SQLite)
+        catalogDiskCache.get(
+            version = version,
+            dbFileName = dbFileName,
+            fileSize = fileSize,
+            lastModified = lastModified
+        )?.let { diskCatalog ->
+            catalogCache[cacheKey] = CachedCatalogEntry(diskCatalog, dbFileName, fileSize, lastModified)
+            return@withContext diskCatalog
+        }
+
+        // 3. Miss en frío (solo primera vez o tras actualización del módulo): consulta rápida por índice cubriente
         val chaptersByCanonical = helper.loadModuleAvailableBookChapters(dbFileName)
         val catalog = com.example.data.model.ModuleBibleCatalog.fromChaptersMap(
             version = version,
             chaptersByCanonicalBook = chaptersByCanonical
         )
         if (catalog.availableBooks.isNotEmpty()) {
-            catalogCache[cacheKey] = catalog
+            catalogCache[cacheKey] = CachedCatalogEntry(catalog, dbFileName, fileSize, lastModified)
+            catalogDiskCache.put(dbFileName, fileSize, lastModified, catalog)
         }
         catalog
     }
@@ -125,37 +181,77 @@ class BibleRepository(
         chapter: Int
     ): Set<Int> = withContext(Dispatchers.IO) {
         val versionDbName = resolveVersionCommentaryFileName(version) ?: return@withContext emptySet()
-        if (!isModuleDownloaded(versionDbName)) return@withContext emptySet()
+        // Verificación directa en disco sin consultar Room (evita bloquear la apertura del capítulo)
+        val dbFile = context.getDatabasePath(versionDbName)
+        if (!dbFile.exists() || dbFile.length() == 0L) {
+            if (!BibleAssetDatabaseHelper.hasBundledAsset(context, versionDbName)) {
+                return@withContext emptySet()
+            }
+            val extracted = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, versionDbName)
+            if (!extracted.exists() || extracted.length() == 0L) {
+                return@withContext emptySet()
+            }
+        }
         helper.getVersesWithRealVersionNotes(versionDbName, bookName, chapter)
     }
 
-    fun getVerses(version: String, bookName: String, chapter: Int): Flow<List<BibleVerse>> = flow {
+    /**
+     * Carga puntual indexada del capítulo actual en una sola pasada de sanitización
+     * sin pasar por Room ni escanear catálogos completos.
+     */
+    suspend fun getChapterVersesOnce(
+        version: String,
+        bookName: String,
+        chapter: Int,
+        rvrNotesVerses: Set<Int> = emptySet(),
+        showAllRvrAsterisks: Boolean = false
+    ): List<BibleVerse> = withContext(Dispatchers.IO) {
+        val book = BibleBooksData.getBookByName(bookName) ?: return@withContext emptyList()
         val dbFileName = resolveBibleDatabaseFileName(version)
-        val rawVerses = helper.getVersesFromAsset(dbFileName, bookName, chapter)
+        val rawVerses = helper.getRawChapterVerses(dbFileName, bookName, chapter)
+        if (rawVerses.isEmpty()) return@withContext emptyList()
+
         val isEnglish = BibleBooksData.isEnglishVersion(version)
         val displayBookName = BibleBooksData.getLocalizedBookName(bookName, isEnglish)
-        val book = BibleBooksData.getBookByName(bookName)
+        val isRvr1960 = com.example.ui.util.BibleStudyTextUtils.isRvr1960Version(version)
 
-        val realVerses = if (book == null) {
-            emptyList()
-        } else {
-            rawVerses.map { (verseNum, text) ->
-                BibleVerse(
-                    id = (book.number.toLong() * 10000L + chapter * 100L + verseNum),
-                    version = version,
-                    testament = book.testament,
-                    bookNumber = book.number,
-                    bookName = displayBookName,
-                    chapter = chapter,
-                    verse = verseNum,
-                    text = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(text, version),
-                    sectionTitle = null
+        val result = ArrayList<BibleVerse>(rawVerses.size)
+        for ((verseNum, rawText) in rawVerses) {
+            val showAsterisk = isRvr1960 && (showAllRvrAsterisks || verseNum in rvrNotesVerses)
+            val cleanText = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                rawText = rawText,
+                version = version,
+                showRvrAsterisks = showAsterisk
+            )
+            if (cleanText.isNotBlank()) {
+                result.add(
+                    BibleVerse(
+                        id = (book.number.toLong() * 10000L + chapter * 100L + verseNum),
+                        version = version,
+                        testament = book.testament,
+                        bookNumber = book.number,
+                        bookName = displayBookName,
+                        chapter = chapter,
+                        verse = verseNum,
+                        text = cleanText,
+                        sectionTitle = null
+                    )
                 )
             }
         }
+        result
+    }
 
+    fun getVerses(version: String, bookName: String, chapter: Int): Flow<List<BibleVerse>> = flow {
         // Nunca emitir versículos ficticios/simulados: una lista vacía indica que el pasaje no existe en esta versión
-        emit(realVerses)
+        emit(
+            getChapterVersesOnce(
+                version = version,
+                bookName = bookName,
+                chapter = chapter,
+                showAllRvrAsterisks = true
+            )
+        )
     }.flowOn(Dispatchers.IO)
 
     suspend fun getChapterSubheadings(
@@ -308,13 +404,10 @@ class BibleRepository(
     }
 
     suspend fun isModuleDownloaded(fileName: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val assetList = context.assets.list("databases") ?: emptyArray()
-            if (assetList.any { it.equals(fileName, ignoreCase = true) }) return@withContext true
-        } catch (_: Exception) {}
-
         val dbFile = context.getDatabasePath(fileName)
-        if (dbFile.exists() && dbFile.length() > 0) return@withContext true
+        if (dbFile.exists() && dbFile.length() > 0L) return@withContext true
+
+        if (BibleAssetDatabaseHelper.hasBundledAsset(context, fileName)) return@withContext true
 
         val mod = dao.getAllModules().first().find { it.fileName.equals(fileName, ignoreCase = true) }
         return@withContext mod?.isDownloaded == true
@@ -499,107 +592,102 @@ class BibleRepository(
         }
 
         val dbName = resolveBibleDatabaseFileName(version)
-        val dbFile = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, dbName)
-        if (!dbFile.exists() || dbFile.length() == 0L) {
+        val pooled = BibleAssetDatabaseHelper.getOrOpenPooledReadOnlyDatabase(context, dbName)
+        if (pooled == null) {
             Log.w("BIBLE_DEBUG", "No se encontró el archivo $dbName para la búsqueda.")
             emit(emptyList())
             return@flow
         }
 
+        val database = pooled.first
         val isEnglishVersion = BibleBooksData.isEnglishVersion(version)
         val results = mutableListOf<BibleVerse>()
-        withContext(Dispatchers.IO) {
-            var database: android.database.sqlite.SQLiteDatabase? = null
-            try {
-                database = android.database.sqlite.SQLiteDatabase.openDatabase(
-                    dbFile.path,
-                    null,
-                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-                )
+        try {
+            val hasBooksTable = database.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='books' LIMIT 1",
+                null
+            ).use { it.moveToFirst() }
 
-                val hasBooksTable = database.rawQuery(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='books' LIMIT 1",
-                    null
-                ).use { it.moveToFirst() }
+            val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord, "v.")
 
-                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord, "v.")
+            val sql = if (hasBooksTable) {
+                """
+                SELECT b.long_name, v.book_number, v.chapter, v.verse, v.text 
+                FROM verses v 
+                LEFT JOIN books b ON v.book_number = b.book_number 
+                $sqlWhere 
+                ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
+                LIMIT 100
+                """.trimIndent()
+            } else {
+                """
+                SELECT '' AS long_name, v.book_number, v.chapter, v.verse, v.text 
+                FROM verses v 
+                $sqlWhere 
+                ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
+                LIMIT 100
+                """.trimIndent()
+            }
 
-                val sql = if (hasBooksTable) {
-                    """
-                    SELECT b.long_name, v.book_number, v.chapter, v.verse, v.text 
-                    FROM verses v 
-                    LEFT JOIN books b ON v.book_number = b.book_number 
-                    $sqlWhere 
-                    ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
-                    LIMIT 100
-                    """.trimIndent()
-                } else {
-                    """
-                    SELECT '' AS long_name, v.book_number, v.chapter, v.verse, v.text 
-                    FROM verses v 
-                    $sqlWhere 
-                    ORDER BY v.book_number ASC, v.chapter ASC, v.verse ASC 
-                    LIMIT 100
-                    """.trimIndent()
-                }
+            val exactPattern = if (exactWord) {
+                Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+            } else null
 
-                val exactPattern = if (exactWord) {
-                    Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
-                } else null
+            database.rawQuery(sql, params)?.use { cursor ->
+                val colBookName = cursor.getColumnIndexOrThrow("long_name")
+                val colBookNumber = cursor.getColumnIndexOrThrow("book_number")
+                val colChapter = cursor.getColumnIndexOrThrow("chapter")
+                val colVerse = cursor.getColumnIndexOrThrow("verse")
+                val colText = cursor.getColumnIndexOrThrow("text")
 
-                database.rawQuery(sql, params)?.use { cursor ->
-                    val colBookName = cursor.getColumnIndexOrThrow("long_name")
-                    val colBookNumber = cursor.getColumnIndexOrThrow("book_number")
-                    val colChapter = cursor.getColumnIndexOrThrow("chapter")
-                    val colVerse = cursor.getColumnIndexOrThrow("verse")
-                    val colText = cursor.getColumnIndexOrThrow("text")
+                while (cursor.moveToNext()) {
+                    val rawText = cursor.getString(colText) ?: ""
+                    val cleanedText = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                        rawText = rawText,
+                        version = version,
+                        showRvrAsterisks = false
+                    )
+                    if (cleanedText.isBlank()) continue
 
-                    while (cursor.moveToNext()) {
-                        val rawText = cursor.getString(colText) ?: ""
-                        val cleanedText = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
-                            rawText = rawText,
-                            version = version,
-                            showRvrAsterisks = false
-                        )
-                        if (cleanedText.isBlank()) continue
+                    val matchesExact = if (exactWord && exactPattern != null) {
+                        exactPattern.containsMatchIn(cleanedText)
+                    } else {
+                        true
+                    }
 
-                        val matchesExact = if (exactWord && exactPattern != null) {
-                            exactPattern.containsMatchIn(cleanedText)
-                        } else {
-                            true
-                        }
-
-                        if (matchesExact) {
-                            val bNum = cursor.getInt(colBookNumber)
-                            val tName = if (bNum <= 460) "AT" else "NT"
-                            val rawBookName = cursor.getString(colBookName).orEmpty().trim()
-                            val resolvedBookName = rawBookName.ifBlank {
+                    if (matchesExact) {
+                        val bNum = cursor.getInt(colBookNumber)
+                        val tName = if (bNum <= 460) "AT" else "NT"
+                        val rawBookName = cursor.getString(colBookName).orEmpty().trim()
+                        val resolvedBookName = rawBookName.ifBlank {
+                            val canonicalId = BibleBooksData.resolveCanonicalBookIdFromMyBibleNumber(bNum)
+                            if (canonicalId != null) {
+                                BibleBooksData.getLocalizedBookName(canonicalId, isEnglishVersion)
+                            } else {
                                 BibleBooksData.getLocalizedBookName("", isEnglishVersion, bNum)
                             }
-                            results.add(
-                                BibleVerse(
-                                    version = version,
-                                    testament = tName,
-                                    bookNumber = bNum,
-                                    bookName = resolvedBookName,
-                                    chapter = cursor.getInt(colChapter),
-                                    verse = cursor.getInt(colVerse),
-                                    text = cleanedText
-                                )
-                            )
                         }
+                        results.add(
+                            BibleVerse(
+                                version = version,
+                                testament = tName,
+                                bookNumber = bNum,
+                                bookName = resolvedBookName,
+                                chapter = cursor.getInt(colChapter),
+                                verse = cursor.getInt(colVerse),
+                                text = cleanedText
+                            )
+                        )
                     }
                 }
-
-                Log.i(
-                    "BIBLE_DEBUG",
-                    "Búsqueda finalizada para '$cleanQuery' [$scope | $version | exacta=$exactWord] -> ${results.size} versículos encontrados."
-                )
-            } catch (e: Exception) {
-                Log.e("BIBLE_DEBUG", "Error ejecutando búsqueda de versículos en $dbName", e)
-            } finally {
-                database?.close()
             }
+
+            Log.i(
+                "BIBLE_DEBUG",
+                "Búsqueda finalizada para '$cleanQuery' [$scope | $version | exacta=$exactWord] -> ${results.size} versículos encontrados."
+            )
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error ejecutando búsqueda de versículos en $dbName", e)
         }
 
         emit(results)
@@ -618,54 +706,43 @@ class BibleRepository(
         }
 
         val dbName = resolveBibleDatabaseFileName(version)
-        val dbFile = BibleAssetDatabaseHelper.ensureDatabaseExtracted(context, dbName)
-        if (!dbFile.exists() || dbFile.length() == 0L) {
+        val database = BibleAssetDatabaseHelper.getOrOpenPooledReadOnlyDatabase(context, dbName)?.first
+        if (database == null) {
             emit(0)
             return@flow
         }
 
         var count = 0
-        withContext(Dispatchers.IO) {
-            var database: android.database.sqlite.SQLiteDatabase? = null
-            try {
-                database = android.database.sqlite.SQLiteDatabase.openDatabase(
-                    dbFile.path,
-                    null,
-                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-                )
-
-                if (exactWord) {
-                    val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord = true, "")
-                    val sql = "SELECT text FROM verses $sqlWhere"
-                    val exactPattern = Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
-                    database.rawQuery(sql, params)?.use { cursor ->
-                        val colText = cursor.getColumnIndexOrThrow("text")
-                        while (cursor.moveToNext()) {
-                            val rawText = cursor.getString(colText) ?: ""
-                            val cleanedText = rawText
-                                .replace(Regex("<S>.*?</S>|<.*?>"), "")
-                                .replace(Regex("(?<=\\p{L})\\d+"), "")
-                                .replace(Regex("\\s+"), " ")
-                                .trim()
-                            if (exactPattern.containsMatchIn(cleanedText)) {
-                                count++
-                            }
-                        }
-                    }
-                } else {
-                    val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord = false, "")
-                    val sql = "SELECT COUNT(*) FROM verses $sqlWhere"
-                    database.rawQuery(sql, params)?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            count = cursor.getInt(0)
+        try {
+            if (exactWord) {
+                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord = true, "")
+                val sql = "SELECT text FROM verses $sqlWhere"
+                val exactPattern = Regex("(?i)(?<!\\p{L})" + Regex.escape(cleanQuery) + "(?!\\p{L})")
+                database.rawQuery(sql, params)?.use { cursor ->
+                    val colText = cursor.getColumnIndexOrThrow("text")
+                    while (cursor.moveToNext()) {
+                        val rawText = cursor.getString(colText) ?: ""
+                        val cleanedText = com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+                            rawText = rawText,
+                            version = version,
+                            showRvrAsterisks = false
+                        )
+                        if (exactPattern.containsMatchIn(cleanedText)) {
+                            count++
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("BIBLE_DEBUG", "Error en COUNT(*) SQLite para $dbName", e)
-            } finally {
-                database?.close()
+            } else {
+                val (sqlWhere, params) = buildSearchWhereClause(cleanQuery, scope, exactWord = false, "")
+                val sql = "SELECT COUNT(*) FROM verses $sqlWhere"
+                database.rawQuery(sql, params)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        count = cursor.getInt(0)
+                    }
+                }
             }
+        } catch (e: Exception) {
+            Log.e("BIBLE_DEBUG", "Error en COUNT(*) SQLite para $dbName", e)
         }
         emit(count)
     }.flowOn(Dispatchers.IO)

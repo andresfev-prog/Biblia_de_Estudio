@@ -15,11 +15,13 @@ import java.io.FileOutputStream
 object DatabaseInitializer {
 
     suspend fun populateInitialData(context: Context, bibleDao: BibleDao) = withContext(Dispatchers.IO) {
-        // Si ya existen versículos cargados, no vuelve a ejecutar la inserción
-        if (bibleDao.getVerseCount() > 1000) return@withContext
-
+        // Los textos bíblicos se leen directamente desde los archivos SQLite3 en disco/assets
+        // (BibleAssetDatabaseHelper), por lo que insertar 31 102 filas en Room `bible_verses`
+        // bloqueaba el arranque durante decenas de segundos sin ser consultado por la aplicación.
         try {
-            // 1. Registrar únicamente los dos módulos bíblicos base predeterminados
+            if (bibleDao.getDownloadedModules().isNotEmpty()) return@withContext
+
+            // Registrar únicamente los dos módulos bíblicos base predeterminados
             val initialModules = listOf(
                 BibleModule(
                     id = "mod_rvr1960",
@@ -49,10 +51,6 @@ object DatabaseInitializer {
                 )
             )
             bibleDao.insertModules(initialModules)
-
-            // 2. Extraer y cargar los versículos bíblicos de RVR1960.SQLite3
-            loadVerses(context, bibleDao, "RVR1960.SQLite3")
-
         } catch (e: Exception) {
             e.printStackTrace()
         }

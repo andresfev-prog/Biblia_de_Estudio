@@ -163,6 +163,14 @@ object BibleBooksData {
         return myBibleBookNumberToCanonical[bookNumber]
     }
 
+    /**
+     * Convierte un `book_number` en esquema MyBible (10=Génesis, 20=Éxodo, ..., 60=Josué, ..., 730=Apocalipsis)
+     * a su ID canónico 1..66 sin colisionar 10..60 con libros canónicos.
+     */
+    fun resolveCanonicalBookIdFromMyBibleNumber(myBibleBookNumber: Int): Int? {
+        return myBibleBookNumberToCanonical[myBibleBookNumber]
+    }
+
     fun resolveMyBibleBookNumber(canonicalBookId: Int): Int? {
         return canonicalToMyBibleBookNumberMap[canonicalBookId]
     }

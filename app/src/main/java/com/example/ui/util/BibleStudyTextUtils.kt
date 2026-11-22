@@ -160,7 +160,7 @@ object BibleStudyTextUtils {
         val withResolvedRefs = myBibleCrossRefTagRegex.replace(raw) { match ->
             val myBibleBookNum = match.groupValues[1].toIntOrNull()
             val refTail = match.groupValues[2].trim()
-            val canonicalId = myBibleBookNum?.let { BibleBooksData.resolveCanonicalBookId("", it) }
+            val canonicalId = myBibleBookNum?.let { BibleBooksData.resolveCanonicalBookIdFromMyBibleNumber(it) }
             if (canonicalId != null) {
                 val localizedBook = BibleBooksData.getLocalizedBookName(canonicalId, isEnglish)
                 "$localizedBook $refTail"
