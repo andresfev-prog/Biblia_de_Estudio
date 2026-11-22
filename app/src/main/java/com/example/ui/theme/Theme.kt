@@ -28,6 +28,24 @@ object AppThemeIds {
     val darkThemes = listOf(MIDNIGHT_BLUE, DEEP_DARK, OBSIDIAN_ONYX)
 }
 
+data class HeroCardColors(
+    val gradientStart: Color,
+    val gradientEnd: Color,
+    val border: Color,
+    val pillBg: Color,
+    val pillBorder: Color,
+    val pillText: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val labelText: Color,
+    val badgeBg: Color,
+    val badgeText: Color,
+    val iconTint: Color,
+    val controlContainer: Color,
+    val controlContent: Color,
+    val accentDetail: Color
+)
+
 data class AppColors(
     val themeId: String,
     val background: Color,
@@ -52,7 +70,116 @@ data class AppColors(
     val refBadgeBg: Color,
     val refBadgeBorder: Color,
     val refBadgeText: Color,
+    val heroCard: HeroCardColors,
     val isDark: Boolean
+)
+
+val CrispLightHeroCardColors = HeroCardColors(
+    gradientStart = HeroClassicStart,
+    gradientEnd = HeroClassicEnd,
+    border = HeroClassicPillBg.copy(alpha = 0.45f),
+    pillBg = HeroClassicPillBg,
+    pillBorder = Color.White.copy(alpha = 0.12f),
+    pillText = HeroClassicTextPrimary,
+    textPrimary = HeroClassicTextPrimary,
+    textSecondary = HeroClassicTextSecondary,
+    labelText = HeroClassicLabelText,
+    badgeBg = Color.White.copy(alpha = 0.14f),
+    badgeText = HeroClassicBadgeText,
+    iconTint = HeroClassicTextSecondary,
+    controlContainer = Color.White.copy(alpha = 0.14f),
+    controlContent = Color(0xFFF1F5F9),
+    accentDetail = Color(0xFF93C5FD)
+)
+
+val WarmParchmentHeroCardColors = HeroCardColors(
+    gradientStart = HeroParchmentStart,
+    gradientEnd = HeroParchmentEnd,
+    border = HeroParchmentPillBg.copy(alpha = 0.55f),
+    pillBg = HeroParchmentPillBg,
+    pillBorder = HeroParchmentTextPrimary.copy(alpha = 0.14f),
+    pillText = HeroParchmentTextPrimary,
+    textPrimary = HeroParchmentTextPrimary,
+    textSecondary = HeroParchmentTextSecondary,
+    labelText = HeroParchmentLabelText,
+    badgeBg = HeroParchmentTextPrimary.copy(alpha = 0.14f),
+    badgeText = HeroParchmentBadgeText,
+    iconTint = HeroParchmentTextSecondary,
+    controlContainer = HeroParchmentTextPrimary.copy(alpha = 0.14f),
+    controlContent = HeroParchmentTextPrimary,
+    accentDetail = HeroParchmentAccentDetail
+)
+
+val SereneOliveHeroCardColors = HeroCardColors(
+    gradientStart = HeroOliveStart,
+    gradientEnd = HeroOliveEnd,
+    border = HeroOlivePillBg.copy(alpha = 0.55f),
+    pillBg = HeroOlivePillBg,
+    pillBorder = HeroOliveTextPrimary.copy(alpha = 0.14f),
+    pillText = HeroOliveTextPrimary,
+    textPrimary = HeroOliveTextPrimary,
+    textSecondary = HeroOliveTextSecondary,
+    labelText = HeroOliveLabelText,
+    badgeBg = HeroOliveTextPrimary.copy(alpha = 0.14f),
+    badgeText = HeroOliveBadgeText,
+    iconTint = HeroOliveTextSecondary,
+    controlContainer = HeroOliveTextPrimary.copy(alpha = 0.14f),
+    controlContent = HeroOliveTextPrimary,
+    accentDetail = HeroOliveAccentDetail
+)
+
+val MidnightBlueHeroCardColors = HeroCardColors(
+    gradientStart = HeroClassicStart,
+    gradientEnd = HeroClassicEnd,
+    border = HeroClassicBorderDark,
+    pillBg = HeroClassicPillBg,
+    pillBorder = Color.White.copy(alpha = 0.12f),
+    pillText = HeroClassicTextPrimary,
+    textPrimary = HeroClassicTextPrimary,
+    textSecondary = HeroClassicTextSecondary,
+    labelText = HeroClassicLabelText,
+    badgeBg = Color.White.copy(alpha = 0.14f),
+    badgeText = HeroClassicBadgeText,
+    iconTint = HeroClassicTextSecondary,
+    controlContainer = Color.White.copy(alpha = 0.14f),
+    controlContent = Color(0xFFF1F5F9),
+    accentDetail = Color(0xFF38BDF8)
+)
+
+val DeepDarkHeroCardColors = HeroCardColors(
+    gradientStart = HeroDeepDarkStart,
+    gradientEnd = HeroDeepDarkEnd,
+    border = HeroDeepDarkBorder,
+    pillBg = HeroDeepDarkPillBg,
+    pillBorder = Color.White.copy(alpha = 0.12f),
+    pillText = HeroDeepDarkTextPrimary,
+    textPrimary = HeroDeepDarkTextPrimary,
+    textSecondary = HeroDeepDarkTextSecondary,
+    labelText = HeroDeepDarkLabelText,
+    badgeBg = Color.White.copy(alpha = 0.12f),
+    badgeText = HeroDeepDarkBadgeText,
+    iconTint = HeroDeepDarkTextSecondary,
+    controlContainer = Color.White.copy(alpha = 0.12f),
+    controlContent = Color(0xFFF1F5F9),
+    accentDetail = HeroDeepDarkBadgeText
+)
+
+val ObsidianOnyxHeroCardColors = HeroCardColors(
+    gradientStart = HeroObsidianStart,
+    gradientEnd = HeroObsidianEnd,
+    border = HeroObsidianBorder,
+    pillBg = HeroObsidianPillBg,
+    pillBorder = HeroObsidianGoldAccent.copy(alpha = 0.28f),
+    pillText = HeroObsidianTextPrimary,
+    textPrimary = HeroObsidianTextPrimary,
+    textSecondary = HeroObsidianTextSecondary,
+    labelText = HeroObsidianLabelText,
+    badgeBg = HeroObsidianGoldAccent.copy(alpha = 0.16f),
+    badgeText = HeroObsidianGoldAccent,
+    iconTint = HeroObsidianTextSecondary,
+    controlContainer = HeroObsidianTextPrimary.copy(alpha = 0.12f),
+    controlContent = Color(0xFFF5ECD8),
+    accentDetail = HeroObsidianGoldAccent
 )
 
 val CrispLightAppColors = AppColors(
@@ -79,6 +206,7 @@ val CrispLightAppColors = AppColors(
     refBadgeBg = Color(0xFFD1FAE5),
     refBadgeBorder = Color(0xFF059669),
     refBadgeText = Color(0xFF047857),
+    heroCard = CrispLightHeroCardColors,
     isDark = false
 )
 
@@ -106,6 +234,7 @@ val WarmParchmentAppColors = AppColors(
     refBadgeBg = Color(0xFFE1EFE7),
     refBadgeBorder = Color(0xFF2D6E4E),
     refBadgeText = Color(0xFF1F543A),
+    heroCard = WarmParchmentHeroCardColors,
     isDark = false
 )
 
@@ -133,6 +262,7 @@ val SereneOliveAppColors = AppColors(
     refBadgeBg = Color(0xFFDCF0E5),
     refBadgeBorder = Color(0xFF2B6E4B),
     refBadgeText = Color(0xFF1F5338),
+    heroCard = SereneOliveHeroCardColors,
     isDark = false
 )
 
@@ -160,6 +290,7 @@ val MidnightBlueAppColors = AppColors(
     refBadgeBg = Color(0xFF047857).copy(alpha = 0.22f),
     refBadgeBorder = Color(0xFF34D399),
     refBadgeText = Color(0xFF34D399),
+    heroCard = MidnightBlueHeroCardColors,
     isDark = true
 )
 
@@ -187,6 +318,7 @@ val DeepDarkAppColors = AppColors(
     refBadgeBg = Color(0xFF22211E),
     refBadgeBorder = Color(0xFF585650),
     refBadgeText = Color(0xFFB9B5AC),
+    heroCard = DeepDarkHeroCardColors,
     isDark = true
 )
 
@@ -214,6 +346,7 @@ val ObsidianOnyxAppColors = AppColors(
     refBadgeBg = Color(0xFF047857).copy(alpha = 0.20f),
     refBadgeBorder = Color(0xFF34D399),
     refBadgeText = Color(0xFF34D399),
+    heroCard = ObsidianOnyxHeroCardColors,
     isDark = true
 )
 

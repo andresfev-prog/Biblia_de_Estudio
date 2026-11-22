@@ -94,9 +94,6 @@ private val HomeCrispTitleNavy = Color(0xFF0D2240)
 private val HomeCrispBorder = Color(0xFFE5E9F0)
 private val HomeCrispMutedText = Color(0xFF647082)
 private val HomeCrispInnerBox = Color(0xFFF2F4F8)
-private val HeroMidnightTop = Color(0xFF0F1D33)
-private val HeroMidnightBottom = Color(0xFF08111E)
-private val HeroPillBg = Color(0xFF1A3154)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,6 +106,7 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
+    val heroColors = appColors.heroCard
     val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
 
     val screenBg = if (isCrispLight) HomeCrispLightBg else appColors.background
@@ -286,15 +284,15 @@ fun HomeScreen(
 
         val isCurrentVotdFav = viewModel.isFavorite(dailyVerse, uiState.favoriteKeys)
 
-        // Tarjeta protagonista «Versículo del día» — Azul medianoche (#0F1D33) con tipografía serif
+        // Tarjeta protagonista «Versículo del día» armonizada con los tokens del tema activo
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("verse_of_the_day_card")
                 .tutorialTarget(TutorialStep.HOME_VERSE_OF_DAY),
             shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = HeroMidnightTop),
-            border = if (appColors.isDark) BorderStroke(1.dp, appColors.border) else null,
+            colors = CardDefaults.cardColors(containerColor = heroColors.gradientStart),
+            border = BorderStroke(1.dp, heroColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = if (appColors.isDark) 2.dp else 3.dp)
         ) {
             Column(
@@ -302,7 +300,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(HeroMidnightTop, HeroMidnightBottom)
+                            colors = listOf(heroColors.gradientStart, heroColors.gradientEnd)
                         )
                     )
                     .padding(horizontal = 20.dp, vertical = 18.dp)
@@ -316,21 +314,21 @@ fun HomeScreen(
                         text = if (isEnglish) "Verse of the Day" else "Versículo del día",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Normal,
-                        color = Color(0xFFD2DCEB),
+                        color = heroColors.labelText,
                         maxLines = 1,
                         softWrap = false
                     )
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.14f))
+                            .background(heroColors.badgeBg)
                             .padding(horizontal = 11.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = versionBadge,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFFE2E8F0),
+                            color = heroColors.badgeText,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -346,7 +344,7 @@ fun HomeScreen(
                     lineHeight = 27.sp,
                     fontStyle = FontStyle.Italic,
                     fontWeight = FontWeight.Normal,
-                    color = Color.White
+                    color = heroColors.textPrimary
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -355,7 +353,7 @@ fun HomeScreen(
                     text = "${dailyVerse.bookName} ${dailyVerse.chapter}:${dailyVerse.verse}",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Normal,
-                    color = Color(0xFFCBD5E1),
+                    color = heroColors.textSecondary,
                     maxLines = 1,
                     softWrap = false
                 )
@@ -372,10 +370,10 @@ fun HomeScreen(
                             viewModel.navigateToPassage(dailyVerse.bookName, dailyVerse.chapter, dailyVerse.verse)
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = HeroPillBg,
-                            contentColor = Color.White
+                            containerColor = heroColors.pillBg,
+                            contentColor = heroColors.pillText
                         ),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                        border = BorderStroke(1.dp, heroColors.pillBorder),
                         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
                         shape = CircleShape,
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
@@ -403,7 +401,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = if (isCurrentVotdFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 contentDescription = "Guardar en favoritos",
-                                tint = if (isCurrentVotdFav) Color(0xFFF87171) else Color(0xFFCBD5E1),
+                                tint = if (isCurrentVotdFav) Color(0xFFF87171) else heroColors.iconTint,
                                 modifier = Modifier.size(21.dp)
                             )
                         }
@@ -424,7 +422,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Outlined.ContentCopy,
                                 contentDescription = "Copiar versículo",
-                                tint = Color(0xFFCBD5E1),
+                                tint = heroColors.iconTint,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -447,7 +445,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Share,
                                 contentDescription = "Compartir versículo",
-                                tint = Color(0xFFCBD5E1),
+                                tint = heroColors.iconTint,
                                 modifier = Modifier.size(20.dp)
                             )
                         }

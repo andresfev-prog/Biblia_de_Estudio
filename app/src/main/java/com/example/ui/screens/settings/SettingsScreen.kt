@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -90,7 +91,6 @@ private val SettingsCrispMutedText = Color(0xFF566376)
 private val SettingsCrispSubtitleHeader = Color(0xFF475569)
 private val SettingsCrispSoftChipBg = Color(0xFFD7DEE8)
 private val SettingsCrispUnselectedPillBg = Color(0xFFF0F2F6)
-private val SettingsCrispAvatarBg = Color(0xFFE8ECF2)
 private val SettingsCrispPreviewBg = Color(0xFFF1F3F7)
 private val SettingsCrispPreviewBorder = Color(0xFFDDE3EC)
 
@@ -127,6 +127,7 @@ fun SettingsScreen(
     var darkThemeMenuOpen by remember { mutableStateOf(false) }
     val lang = uiState.userPreferences.interfaceLanguage
     val appColors = AppTheme.colors
+    val heroColors = appColors.heroCard
     val isCrispLight = !appColors.isDark && appColors.themeId == AppThemeIds.CRISP_LIGHT
 
     val screenBg = if (isCrispLight) SettingsCrispLightBg else appColors.background
@@ -153,7 +154,6 @@ fun SettingsScreen(
     val selectedPillBg = if (isCrispLight) SettingsCrispTitleNavy else appColors.pillBg
     val selectedPillText = if (isCrispLight) Color.White else appColors.pillText
     val unselectedPillBg = if (isCrispLight) SettingsCrispUnselectedPillBg else appColors.surfaceVariant
-    val avatarBg = if (isCrispLight) SettingsCrispAvatarBg else appColors.surfaceVariant
     val previewBg = if (isCrispLight) SettingsCrispPreviewBg else appColors.surfaceVariant
     val previewBorder = if (isCrispLight) SettingsCrispPreviewBorder else appColors.border
 
@@ -235,7 +235,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 1. User Profile & Cloud Backup Card (Linked / Local / Guest)
+        // 1. Tarjeta protagonista de Perfil (mismo estilo degradado y tokens del tema activo que Versículo del día)
         Card(
             onClick = { viewModel.showEditProfileDialog(true) },
             modifier = Modifier
@@ -243,28 +243,33 @@ fun SettingsScreen(
                 .testTag("user_profile_card")
                 .tutorialTarget(TutorialStep.SETTINGS_PROFILE),
             shape = cardShape,
-            colors = CardDefaults.cardColors(containerColor = appColors.cardBg),
-            border = BorderStroke(1.dp, cardBorderColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
+            colors = CardDefaults.cardColors(containerColor = heroColors.gradientStart),
+            border = BorderStroke(1.dp, heroColors.border),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (appColors.isDark) 2.dp else 3.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(heroColors.gradientStart, heroColors.gradientEnd)
+                        )
+                    )
                     .padding(horizontal = 18.dp, vertical = 18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar con iniciales dinámicas o ícono de invitado
+                // Avatar circular neutro translúcido con iniciales o ícono claro
                 Box(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(if (initials.isNotBlank()) selectedPillBg else avatarBg),
+                        .background(heroColors.controlContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     if (initials.isNotBlank()) {
                         Text(
                             text = initials,
-                            color = selectedPillText,
+                            color = heroColors.textPrimary,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -274,7 +279,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Outlined.Person,
                             contentDescription = null,
-                            tint = iconTint,
+                            tint = heroColors.controlContent,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -289,7 +294,7 @@ fun SettingsScreen(
                                 text = activeProfileName.ifBlank { uiState.googleEmail },
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                                 fontWeight = FontWeight.SemiBold,
-                                color = headingColor,
+                                color = heroColors.textPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -297,17 +302,16 @@ fun SettingsScreen(
                                 Text(
                                     text = uiState.googleEmail,
                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                                    color = mutedTextColor,
+                                    color = heroColors.textSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
-                            val syncedGreen = if (appColors.isDark) Color(0xFF34D399) else Color(0xFF16A34A)
                             val (statusColor, statusLabel) = when (uiState.syncStatus) {
-                                SyncStatus.SYNCING -> appColors.accent to StringsLocale.get("profile_cloud_syncing", lang)
-                                SyncStatus.ERROR -> MaterialTheme.colorScheme.error to StringsLocale.get("profile_cloud_error", lang)
-                                SyncStatus.SYNCED, SyncStatus.IDLE -> syncedGreen to StringsLocale.get("profile_cloud_active", lang)
+                                SyncStatus.SYNCING -> heroColors.accentDetail to StringsLocale.get("profile_cloud_syncing", lang)
+                                SyncStatus.ERROR -> Color(0xFFFCA5A5) to StringsLocale.get("profile_cloud_error", lang)
+                                SyncStatus.SYNCED, SyncStatus.IDLE -> Color(0xFF4ADE80) to StringsLocale.get("profile_cloud_active", lang)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 when (uiState.syncStatus) {
@@ -346,7 +350,7 @@ fun SettingsScreen(
                                 text = activeProfileName,
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                                 fontWeight = FontWeight.SemiBold,
-                                color = headingColor,
+                                color = heroColors.textPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -355,14 +359,14 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.CloudOff,
                                     contentDescription = null,
-                                    tint = mutedTextColor,
+                                    tint = heroColors.textSecondary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = StringsLocale.get("profile_local_subtitle", lang),
                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                                    color = mutedTextColor,
+                                    color = heroColors.textSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -374,7 +378,7 @@ fun SettingsScreen(
                                 text = StringsLocale.get("profile_guest_name", lang),
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                                 fontWeight = FontWeight.SemiBold,
-                                color = headingColor,
+                                color = heroColors.textPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -385,7 +389,7 @@ fun SettingsScreen(
                                     fontSize = 13.sp,
                                     lineHeight = 17.sp
                                 ),
-                                color = mutedTextColor,
+                                color = heroColors.textSecondary,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -395,19 +399,19 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Profile & Backup Icon Button
+                // Botón circular del lápiz en tono neutro translúcido/discreto con ícono claro legible
                 IconButton(
                     onClick = { viewModel.showEditProfileDialog(true) },
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(avatarBg)
+                        .background(heroColors.controlContainer)
                         .testTag("edit_profile_button")
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Edit,
                         contentDescription = StringsLocale.get("profile_backup_title", lang),
-                        tint = iconTint,
+                        tint = heroColors.controlContent,
                         modifier = Modifier.size(19.dp)
                     )
                 }
