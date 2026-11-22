@@ -53,7 +53,6 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EditNote
@@ -239,8 +238,11 @@ fun BibleScreen(
 
     val latestIsNavigationHighlightActive by rememberUpdatedState(uiState.isNavigationHighlightActive)
     val latestRightTempHighlight by rememberUpdatedState(rightTempHighlightedVerse)
+    val latestVerses by rememberUpdatedState(uiState.verses)
     val latestVersesSize by rememberUpdatedState(uiState.verses.size)
     val latestParallelVersesSize by rememberUpdatedState(uiState.parallelVerses.size)
+    val latestIsParallelMode by rememberUpdatedState(uiState.isParallelMode)
+    val latestIsChapterLoading by rememberUpdatedState(uiState.isChapterLoading)
 
     // Observar scroll vía snapshotFlow para evitar recomponer todo BibleScreen en cada inicio/fin de desplazamiento
     LaunchedEffect(leftListState, rightListState) {
@@ -255,6 +257,34 @@ fun BibleScreen(
                     }
                 }
             }
+    }
+
+    // Guardar el último versículo visible al detener el scroll (para «Continúa donde quedaste»)
+    LaunchedEffect(leftListState) {
+        var hadUserScroll = false
+        snapshotFlow {
+            Triple(
+                leftListState.isScrollInProgress,
+                leftListState.firstVisibleItemIndex,
+                leftListState.firstVisibleItemScrollOffset
+            )
+        }.collect { (scrolling, firstIdx, _) ->
+            if (scrolling && !isProgrammaticScroll) {
+                hadUserScroll = true
+            } else if (!scrolling && hadUserScroll && !isProgrammaticScroll) {
+                hadUserScroll = false
+                val verses = latestVerses
+                if (!latestIsChapterLoading && verses.isNotEmpty()) {
+                    // En SingleReaderView el encabezado del capítulo ocupa el índice 0
+                    val verseIdx = if (latestIsParallelMode) {
+                        firstIdx.coerceIn(0, verses.lastIndex)
+                    } else {
+                        (firstIdx - 1).coerceIn(0, verses.lastIndex)
+                    }
+                    viewModel.updateVisibleReadingVerse(verses[verseIdx].verse)
+                }
+            }
+        }
     }
 
     LaunchedEffect(leftListState, rightListState, uiState.isParallelMode, uiState.isParallelLinked) {
@@ -804,7 +834,7 @@ private fun ReaderTopControls(
 
     val isVersionEn = BibleBooksData.isEnglishVersion(activeVersion)
     val bookInfo = BibleBooksData.getBookByName(currentBook)
-    val bookId = bookInfo?.number ?: 43
+    val bookId = bookInfo?.number ?: 1
     val bookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
 
     Row(
@@ -826,20 +856,14 @@ private fun ReaderTopControls(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "$bookName $currentChapter",
                         style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.5.sp),
                         fontWeight = FontWeight.SemiBold,
                         color = headingColor
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = mutedTextColor
                     )
                 }
             }
@@ -874,21 +898,15 @@ private fun ReaderTopControls(
                             .testTag("version_selector_button")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
                                 text = activeVersion,
                                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
                                 fontWeight = FontWeight.SemiBold,
                                 color = headingColor
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = mutedTextColor
                             )
                         }
                     }
@@ -1088,7 +1106,7 @@ private fun SingleReaderView(
     ) {
         item(key = "single_chapter_header", contentType = "chapter_header") {
             val bookInfo = BibleBooksData.getBookByName(uiState.currentBook)
-            val bookId = bookInfo?.number ?: 43
+            val bookId = bookInfo?.number ?: 1
             val displayBookName = BibleBooksData.getLocalizedBookName(bookId, isVersionEn)
             Column(
                 modifier = Modifier
@@ -1338,7 +1356,7 @@ private fun ParallelReaderView(
                 ) {
                     val isLeftVersionEn = BibleBooksData.isEnglishVersion(uiState.activeVersion)
                     val leftBookInfo = BibleBooksData.getBookByName(uiState.currentBook)
-                    val leftBookId = leftBookInfo?.number ?: 43
+                    val leftBookId = leftBookInfo?.number ?: 1
                     val displayBookName = BibleBooksData.getLocalizedBookName(leftBookId, isLeftVersionEn)
                     Text(
                         text = "$displayBookName ${uiState.currentChapter}",
@@ -1347,12 +1365,6 @@ private fun ParallelReaderView(
                         color = headingColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Cambiar pasaje izquierdo",
-                        modifier = Modifier.size(16.dp),
-                        tint = mutedTextColor
                     )
                 }
 
@@ -1368,7 +1380,8 @@ private fun ParallelReaderView(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = uiState.activeVersion,
@@ -1377,13 +1390,6 @@ private fun ParallelReaderView(
                                 softWrap = false,
                                 color = appColors.accent,
                                 fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Cambiar versión panel izquierdo",
-                                modifier = Modifier.size(14.dp),
-                                tint = appColors.accent
                             )
                         }
                     }
@@ -1581,7 +1587,7 @@ private fun ParallelReaderView(
             val displayRightChapter = if (isLinked) uiState.currentChapter else rightChapter
             val isRightEn = BibleBooksData.isEnglishVersion(uiState.parallelVersion)
             val rightBookInfoResolved = BibleBooksData.getBookByName(displayRightTitle)
-            val rightBookId = rightBookInfoResolved?.number ?: 43
+            val rightBookId = rightBookInfoResolved?.number ?: 1
             val localizedRightBook = BibleBooksData.getLocalizedBookName(rightBookId, isRightEn)
 
             Row(
@@ -1609,15 +1615,6 @@ private fun ParallelReaderView(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (!isLinked) {
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Cambiar pasaje derecho",
-                            modifier = Modifier.size(16.dp),
-                            tint = mutedTextColor
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -1632,7 +1629,8 @@ private fun ParallelReaderView(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = uiState.parallelVersion,
@@ -1641,13 +1639,6 @@ private fun ParallelReaderView(
                                 softWrap = false,
                                 color = appColors.accent,
                                 fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Cambiar versión panel derecho",
-                                modifier = Modifier.size(14.dp),
-                                tint = appColors.accent
                             )
                         }
                     }

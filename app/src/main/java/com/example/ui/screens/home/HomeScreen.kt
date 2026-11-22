@@ -32,8 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -454,27 +452,38 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Bloque unificado: Lectura reciente y Notas
+        // Bloque unificado: Lectura reciente (o Bienvenida inicial) y Notas
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .tutorialTarget(TutorialStep.HOME_CONTINUE_NOTES)
         ) {
-            // Tarjeta «Continúa donde quedaste» — completa tocable, sin «Modo sin conexión listo» ni botón gigante
-            val lastBookRaw = uiState.readingProgress?.bookName ?: "Juan"
-            val lastChapter = uiState.readingProgress?.chapter ?: 1
-            val lastVersion = uiState.readingProgress?.version ?: "RVR1960"
+            val lastBookRaw = uiState.readingProgress?.bookName ?: uiState.currentBook.ifBlank { "Génesis" }
+            val lastChapter = uiState.readingProgress?.chapter ?: uiState.currentChapter
+            val lastVerse = (uiState.readingProgress?.verse ?: uiState.currentVerse).coerceAtLeast(1)
+            val lastVersion = uiState.readingProgress?.version ?: uiState.activeVersion.ifBlank { "RVR1960" }
 
             val isEnglishVersion = BibleBooksData.isEnglishVersion(lastVersion)
             val shouldShowInEnglish = isEnglish || isEnglishVersion
             val bookInfo = BibleBooksData.getBookByName(lastBookRaw)
-            val bookNumber = bookInfo?.number ?: 43
+            val bookNumber = bookInfo?.number ?: 1
             val displayLastBook = BibleBooksData.getLocalizedBookName(bookNumber, shouldShowInEnglish)
+            val passageReferenceText = if (lastVerse > 1) {
+                "$displayLastBook $lastChapter:$lastVerse"
+            } else {
+                "$displayLastBook $lastChapter"
+            }
 
             Card(
-                onClick = { viewModel.navigateToPassage(lastBookRaw, lastChapter) },
+                onClick = {
+                    if (uiState.hasStartedReading) {
+                        viewModel.continueReadingFromHome()
+                    } else {
+                        viewModel.startReadingFromHome()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("continue_reading_card"),
@@ -486,83 +495,136 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                    if (!uiState.hasStartedReading) {
+                        // Estado inicial limpio (instalación nueva antes de abrir la Biblia)
+                        Text(
+                            text = StringsLocale.get("start_reading_title", lang),
+                            fontSize = 19.sp,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = headingColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = StringsLocale.get("start_reading_desc", lang),
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 13.5.sp,
+                                lineHeight = 19.sp
+                            ),
+                            color = mutedTextColor,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .testTag("continue_reading_button"),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = StringsLocale.get("start_reading_action", lang),
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = headingColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    } else {
+                        // Estado activo — Opción A: etiqueta + píldora de versión, referencia + adelanto 2 líneas y acción centrada
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
                                 text = StringsLocale.get("continue_where_left", lang),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Normal,
                                 color = mutedTextColor,
                                 maxLines = 1,
-                                softWrap = false
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = softBadgeBg,
+                                modifier = Modifier.testTag("continue_reading_version_pill")
+                            ) {
+                                Text(
+                                    text = lastVersion,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = softBadgeText,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = passageReferenceText,
+                            fontSize = 21.sp,
+                            lineHeight = 26.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = headingColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("continue_reading_reference")
+                        )
+
+                        if (uiState.continueReadingPreviewText.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "$displayLastBook $lastChapter",
-                                fontSize = 23.sp,
-                                lineHeight = 28.sp,
+                                text = uiState.continueReadingPreviewText,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 13.5.sp,
+                                    lineHeight = 19.sp
+                                ),
+                                color = mutedTextColor,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("continue_reading_preview")
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .testTag("continue_reading_button"),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = StringsLocale.get("continue_reading", lang),
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = headingColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = lastVersion,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = mutedTextColor,
                                 maxLines = 1,
                                 softWrap = false
                             )
                         }
-
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = headingColor.copy(alpha = 0.75f),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .testTag("continue_reading_button"),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = StringsLocale.get("continue_reading", lang),
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = headingColor,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = headingColor,
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Tarjeta «Mis Notas» — limpia con enlace inferior centrado en lugar de botón sólido gigante
+            // Tarjeta «Mis Notas» — limpia con enlace inferior centrado sin flecha
             val latestNote = uiState.notes.firstOrNull()
             val noteDateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()) }
 
@@ -578,7 +640,7 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     // Header Row
                     Row(
@@ -654,7 +716,7 @@ fun HomeScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     if (latestNote != null) {
                         Column(
@@ -698,7 +760,7 @@ fun HomeScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         Row(
                             modifier = Modifier
@@ -718,13 +780,6 @@ fun HomeScreen(
                                 maxLines = 1,
                                 softWrap = false
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = headingColor,
-                                modifier = Modifier.size(18.dp)
-                            )
                         }
                     } else {
                         Text(
@@ -734,7 +789,7 @@ fun HomeScreen(
                             lineHeight = 20.sp
                         )
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Row(
                             modifier = Modifier
@@ -753,13 +808,6 @@ fun HomeScreen(
                                 color = headingColor,
                                 maxLines = 1,
                                 softWrap = false
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = headingColor,
-                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }

@@ -242,6 +242,28 @@ class BibleRepository(
         result
     }
 
+    /**
+     * Consulta puntual indexada de un solo versículo para el adelanto de «Continúa donde quedaste».
+     * Se ejecuta en Dispatchers.IO y devuelve texto limpio (sin etiquetas HTML/Strong ni asteriscos `*`).
+     */
+    suspend fun getSingleVersePreview(
+        version: String,
+        bookName: String,
+        chapter: Int,
+        verse: Int
+    ): String = withContext(Dispatchers.IO) {
+        val dbFileName = resolveBibleDatabaseFileName(version)
+        val safeVerse = verse.coerceAtLeast(1)
+        val rawText = helper.getRawVerseText(dbFileName, bookName, chapter, safeVerse)
+            ?: if (safeVerse > 1) helper.getRawVerseText(dbFileName, bookName, chapter, 1) else null
+        if (rawText.isNullOrBlank()) return@withContext ""
+        com.example.ui.util.BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+            rawText = rawText,
+            version = version,
+            showRvrAsterisks = false
+        ).replace(Regex("\\s+"), " ").trim()
+    }
+
     fun getVerses(version: String, bookName: String, chapter: Int): Flow<List<BibleVerse>> = flow {
         // Nunca emitir versículos ficticios/simulados: una lista vacía indica que el pasaje no existe en esta versión
         emit(

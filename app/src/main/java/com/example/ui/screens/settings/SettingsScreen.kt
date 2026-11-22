@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDone
@@ -37,7 +36,6 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SettingsBrightness
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -469,13 +467,6 @@ fun SettingsScreen(
                         )
                     }
                 }
-
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = mutedTextColor,
-                    modifier = Modifier.size(19.dp)
-                )
             }
         }
 
@@ -540,8 +531,9 @@ fun SettingsScreen(
                             .testTag("language_dropdown_button")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
                                 text = currentLanguageDisplay,
@@ -550,13 +542,6 @@ fun SettingsScreen(
                                 color = softChipText,
                                 maxLines = 1,
                                 softWrap = false
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Rounded.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = softChipText,
-                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -860,8 +845,9 @@ fun SettingsScreen(
                                     .testTag("font_family_dropdown_button")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
                                     Text(
                                         text = currentFontDisplay,
@@ -870,13 +856,6 @@ fun SettingsScreen(
                                         color = softChipText,
                                         maxLines = 1,
                                         softWrap = false
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Icon(
-                                        imageVector = Icons.Rounded.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        tint = softChipText,
-                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }

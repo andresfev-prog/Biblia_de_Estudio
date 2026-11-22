@@ -26,6 +26,7 @@ import com.example.data.model.UserPreference
 import com.example.data.repository.BibleAssetDatabaseHelper
 import com.example.data.repository.BibleRepository
 import com.example.data.repository.CloudSyncRepository
+import com.example.data.repository.ReadingStateCache
 import com.example.data.repository.SyncStatus
 import com.example.data.repository.UserCancelledSignInException
 import com.example.ui.components.TutorialStep
@@ -71,7 +72,7 @@ data class MissingNoteModulePrompt(
 
 data class BibleUiState(
     val currentDestination: AppDestination = AppDestination.HOME,
-    val currentBook: String = "Juan",
+    val currentBook: String = "Génesis",
     val currentChapter: Int = 1,
     val currentVerse: Int = 1,
     val activeVersion: String = "RVR1960",
@@ -108,7 +109,7 @@ data class BibleUiState(
     // Selector de pasaje
     val isPassagePickerVisible: Boolean = false,
     val pickerStep: Int = 1,
-    val pickerSelectedBook: BookInfo = BibleBooksData.books.first { it.name == "Juan" },
+    val pickerSelectedBook: BookInfo = BibleBooksData.books.first { it.number == 1 },
     val pickerSelectedChapter: Int = 1,
     val pickerAvailableVerses: List<Int> = emptyList(),
     // Modales de estudio
@@ -143,6 +144,8 @@ data class BibleUiState(
     // Preferencias y Datos de usuario
     val userPreferences: UserPreference = UserPreference(),
     val readingProgress: ReadingProgress? = null,
+    val hasStartedReading: Boolean = false,
+    val continueReadingPreviewText: String = "",
     val favorites: List<FavoriteVerse> = emptyList(),
     val favoriteKeys: Set<String> = emptySet(),
     val notes: List<UserNote> = emptyList(),
@@ -175,6 +178,8 @@ class BibleViewModel(
     private val syncMutex = Mutex()
     private val themeCache = ThemePreferenceCache(application)
     private val initialTheme = themeCache.loadInitialTheme()
+    private val readingStateCache = ReadingStateCache(application)
+    private val initialHasStartedReading = readingStateCache.hasStartedReading()
 
     private val _uiState = MutableStateFlow(
         BibleUiState(
@@ -182,7 +187,13 @@ class BibleViewModel(
                 themeMode = initialTheme.first,
                 selectedLightTheme = initialTheme.second,
                 selectedDarkTheme = initialTheme.third
-            )
+            ),
+            hasStartedReading = initialHasStartedReading,
+            continueReadingPreviewText = if (initialHasStartedReading) {
+                readingStateCache.loadLastPreviewText()
+            } else {
+                ""
+            }
         )
     )
     val uiState: StateFlow<BibleUiState> = _uiState.asStateFlow()
@@ -200,6 +211,7 @@ class BibleViewModel(
     private var tts: TextToSpeech? = null
     private var isTtsInitialized = false
     private var hasSpokenChapterIntro = false
+    private var hasUserNavigatedInSession = false
     private var navigationHighlightJob: Job? = null
     private var mainChapterJob: Job? = null
     private var parallelChapterJob: Job? = null
@@ -208,6 +220,8 @@ class BibleViewModel(
     private var crossRefsJob: Job? = null
     private var parallelCrossRefsJob: Job? = null
     private var commentaryPillsJob: Job? = null
+    private var previewJob: Job? = null
+    private var saveProgressJob: Job? = null
     private var lastGeneralCommentaryFiles: Set<String>? = null
 
     private val _searchQueryInput = MutableStateFlow("")
@@ -216,7 +230,8 @@ class BibleViewModel(
         initTts(application)
         observeData()
         observeSearchQuery()
-        loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter)
+        // Precargar Génesis 1 en memoria para apertura instantánea sin marcar lectura iniciada en instalación nueva
+        loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter, targetVerse = 1, persistProgress = false)
     }
 
     private fun initTts(application: Application) {
@@ -307,7 +322,72 @@ class BibleViewModel(
 
         viewModelScope.launch {
             repository.getReadingProgress().collect { progress ->
-                _uiState.value = _uiState.value.copy(readingProgress = progress)
+                if (progress != null) {
+                    readingStateCache.setHasStartedReading(true)
+                    val safeVerse = progress.verse.coerceAtLeast(1)
+                    val current = _uiState.value
+                    val cachedPreview = readingStateCache.loadPreviewFor(
+                        version = progress.version,
+                        bookName = progress.bookName,
+                        chapter = progress.chapter,
+                        verse = safeVerse
+                    )
+                    val inMemoryPreview = extractPreviewFromLoadedVerses(
+                        verses = current.verses,
+                        loadedVersion = current.activeVersion,
+                        loadedBook = current.currentBook,
+                        loadedChapter = current.currentChapter,
+                        targetVersion = progress.version,
+                        targetBook = progress.bookName,
+                        targetChapter = progress.chapter,
+                        targetVerse = safeVerse
+                    )
+                    val immediatePreview = when {
+                        inMemoryPreview.isNotBlank() -> inMemoryPreview
+                        cachedPreview.isNotBlank() -> cachedPreview
+                        else -> current.continueReadingPreviewText
+                    }
+                    if (inMemoryPreview.isNotBlank()) {
+                        readingStateCache.savePreview(
+                            version = progress.version,
+                            bookName = progress.bookName,
+                            chapter = progress.chapter,
+                            verse = safeVerse,
+                            cleanText = inMemoryPreview
+                        )
+                    }
+                    _uiState.value = current.copy(
+                        readingProgress = progress,
+                        hasStartedReading = true,
+                        continueReadingPreviewText = immediatePreview
+                    )
+                    if (inMemoryPreview.isBlank() && cachedPreview.isBlank()) {
+                        refreshContinueReadingPreview(
+                            version = progress.version,
+                            bookName = progress.bookName,
+                            chapter = progress.chapter,
+                            verse = safeVerse
+                        )
+                    }
+                    if (!hasUserNavigatedInSession) {
+                        val samePassage = current.currentBook.equals(progress.bookName, ignoreCase = true) &&
+                            current.currentChapter == progress.chapter &&
+                            current.activeVersion.equals(progress.version, ignoreCase = true)
+                        if (!samePassage) {
+                            loadChapter(
+                                bookName = progress.bookName,
+                                chapter = progress.chapter,
+                                version = progress.version,
+                                targetVerse = safeVerse,
+                                persistProgress = false
+                            )
+                        } else if (current.currentVerse != safeVerse) {
+                            _uiState.value = _uiState.value.copy(currentVerse = safeVerse)
+                        }
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(readingProgress = null)
+                }
             }
         }
 
@@ -378,6 +458,268 @@ class BibleViewModel(
         }
     }
 
+    private fun sanitizePreviewText(rawOrCleanText: String, version: String): String {
+        return BibleStudyTextUtils.sanitizeVerseTextForDisplay(
+            rawText = rawOrCleanText,
+            version = version,
+            showRvrAsterisks = false
+        ).replace(Regex("\\s+"), " ").trim()
+    }
+
+    private fun extractPreviewFromLoadedVerses(
+        verses: List<BibleVerse>,
+        loadedVersion: String,
+        loadedBook: String,
+        loadedChapter: Int,
+        targetVersion: String,
+        targetBook: String,
+        targetChapter: Int,
+        targetVerse: Int
+    ): String {
+        if (verses.isEmpty()) return ""
+        if (!loadedVersion.equals(targetVersion, ignoreCase = true) ||
+            !loadedBook.equals(targetBook, ignoreCase = true) ||
+            loadedChapter != targetChapter
+        ) {
+            return ""
+        }
+        val safeVerse = targetVerse.coerceAtLeast(1)
+        val verseObj = verses.firstOrNull { it.verse == safeVerse } ?: verses.firstOrNull() ?: return ""
+        return sanitizePreviewText(verseObj.text, targetVersion)
+    }
+
+    private fun refreshContinueReadingPreview(
+        version: String,
+        bookName: String,
+        chapter: Int,
+        verse: Int
+    ) {
+        val safeVerse = verse.coerceAtLeast(1)
+        val current = _uiState.value
+        val inMemory = extractPreviewFromLoadedVerses(
+            verses = current.verses,
+            loadedVersion = current.activeVersion,
+            loadedBook = current.currentBook,
+            loadedChapter = current.currentChapter,
+            targetVersion = version,
+            targetBook = bookName,
+            targetChapter = chapter,
+            targetVerse = safeVerse
+        )
+        if (inMemory.isNotBlank()) {
+            readingStateCache.savePreview(version, bookName, chapter, safeVerse, inMemory)
+            _uiState.value = _uiState.value.copy(continueReadingPreviewText = inMemory)
+            return
+        }
+        val cached = readingStateCache.loadPreviewFor(version, bookName, chapter, safeVerse)
+        if (cached.isNotBlank()) {
+            _uiState.value = _uiState.value.copy(continueReadingPreviewText = cached)
+            return
+        }
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val preview = repository.getSingleVersePreview(version, bookName, chapter, safeVerse)
+                if (preview.isNotBlank()) {
+                    readingStateCache.savePreview(version, bookName, chapter, safeVerse, preview)
+                    withContext(Dispatchers.Main) {
+                        val latest = _uiState.value
+                        val progress = latest.readingProgress
+                        val matchesProgress = progress == null || (
+                            progress.version.equals(version, ignoreCase = true) &&
+                                progress.bookName.equals(bookName, ignoreCase = true) &&
+                                progress.chapter == chapter
+                            )
+                        if (latest.hasStartedReading && matchesProgress) {
+                            _uiState.value = latest.copy(continueReadingPreviewText = preview)
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun markReadingStarted(
+        bookName: String = _uiState.value.currentBook,
+        chapter: Int = _uiState.value.currentChapter,
+        verse: Int = _uiState.value.currentVerse.coerceAtLeast(1),
+        version: String = _uiState.value.activeVersion
+    ) {
+        val safeVerse = verse.coerceAtLeast(1)
+        hasUserNavigatedInSession = true
+        readingStateCache.setHasStartedReading(true)
+        val current = _uiState.value
+        val inMemory = extractPreviewFromLoadedVerses(
+            verses = current.verses,
+            loadedVersion = current.activeVersion,
+            loadedBook = current.currentBook,
+            loadedChapter = current.currentChapter,
+            targetVersion = version,
+            targetBook = bookName,
+            targetChapter = chapter,
+            targetVerse = safeVerse
+        )
+        val cached = if (inMemory.isBlank()) {
+            readingStateCache.loadPreviewFor(version, bookName, chapter, safeVerse)
+        } else {
+            ""
+        }
+        val resolvedPreview = when {
+            inMemory.isNotBlank() -> {
+                readingStateCache.savePreview(version, bookName, chapter, safeVerse, inMemory)
+                inMemory
+            }
+            cached.isNotBlank() -> cached
+            else -> current.continueReadingPreviewText
+        }
+        val updatedProgress = ReadingProgress(
+            id = 1,
+            bookName = bookName,
+            chapter = chapter,
+            verse = safeVerse,
+            version = version
+        )
+        _uiState.value = current.copy(
+            hasStartedReading = true,
+            currentVerse = safeVerse,
+            readingProgress = updatedProgress,
+            continueReadingPreviewText = resolvedPreview
+        )
+        persistReadingProgressAsync(bookName, chapter, safeVerse, version)
+        if (resolvedPreview.isBlank()) {
+            refreshContinueReadingPreview(version, bookName, chapter, safeVerse)
+        }
+    }
+
+    private fun persistReadingProgressAsync(
+        bookName: String,
+        chapter: Int,
+        verse: Int,
+        version: String
+    ) {
+        saveProgressJob?.cancel()
+        saveProgressJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.saveReadingProgress(bookName, chapter, verse.coerceAtLeast(1), version)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun startReadingFromHome() {
+        val state = _uiState.value
+        val targetBook = "Génesis"
+        val targetChapter = 1
+        val targetVerse = 1
+        val targetVersion = state.activeVersion
+        markReadingStarted(
+            bookName = targetBook,
+            chapter = targetChapter,
+            verse = targetVerse,
+            version = targetVersion
+        )
+        _uiState.value = _uiState.value.copy(
+            currentDestination = AppDestination.BIBLE,
+            selectedVerses = emptyList()
+        )
+        val alreadyPreloaded = _uiState.value.verses.isNotEmpty() &&
+            _uiState.value.currentBook.equals(targetBook, ignoreCase = true) &&
+            _uiState.value.currentChapter == targetChapter &&
+            _uiState.value.activeVersion.equals(targetVersion, ignoreCase = true)
+        if (!alreadyPreloaded && !_uiState.value.isChapterLoading) {
+            loadChapter(
+                bookName = targetBook,
+                chapter = targetChapter,
+                version = targetVersion,
+                targetVerse = targetVerse,
+                persistProgress = true
+            )
+        }
+    }
+
+    fun continueReadingFromHome() {
+        val state = _uiState.value
+        val progress = state.readingProgress
+        val targetBook = progress?.bookName ?: state.currentBook
+        val targetChapter = progress?.chapter ?: state.currentChapter
+        val targetVerse = (progress?.verse ?: state.currentVerse).coerceAtLeast(1)
+        val targetVersion = progress?.version ?: state.activeVersion
+
+        markReadingStarted(
+            bookName = targetBook,
+            chapter = targetChapter,
+            verse = targetVerse,
+            version = targetVersion
+        )
+        _uiState.value = _uiState.value.copy(
+            currentDestination = AppDestination.BIBLE,
+            selectedVerses = emptyList()
+        )
+        val alreadyLoaded = _uiState.value.verses.isNotEmpty() &&
+            _uiState.value.currentBook.equals(targetBook, ignoreCase = true) &&
+            _uiState.value.currentChapter == targetChapter &&
+            _uiState.value.activeVersion.equals(targetVersion, ignoreCase = true)
+        if (targetVerse > 1) {
+            triggerNavigationHighlight(targetVerse)
+        }
+        if (!alreadyLoaded) {
+            loadChapter(
+                bookName = targetBook,
+                chapter = targetChapter,
+                version = targetVersion,
+                preserveHighlight = targetVerse > 1,
+                targetVerse = targetVerse,
+                persistProgress = true
+            )
+        }
+    }
+
+    fun updateVisibleReadingVerse(verse: Int) {
+        val safeVerse = verse.coerceAtLeast(1)
+        val state = _uiState.value
+        if (state.isChapterLoading || state.verses.isEmpty()) return
+        val existingVerse = state.readingProgress?.verse ?: state.currentVerse
+        if (state.hasStartedReading &&
+            existingVerse == safeVerse &&
+            state.continueReadingPreviewText.isNotBlank() &&
+            state.readingProgress?.bookName.equals(state.currentBook, ignoreCase = true) &&
+            state.readingProgress?.chapter == state.currentChapter &&
+            state.readingProgress?.version.equals(state.activeVersion, ignoreCase = true)
+        ) {
+            return
+        }
+        val verseObj = state.verses.firstOrNull { it.verse == safeVerse } ?: state.verses.firstOrNull() ?: return
+        val cleanPreview = sanitizePreviewText(verseObj.text, state.activeVersion)
+        hasUserNavigatedInSession = true
+        readingStateCache.setHasStartedReading(true)
+        if (cleanPreview.isNotBlank()) {
+            readingStateCache.savePreview(
+                version = state.activeVersion,
+                bookName = state.currentBook,
+                chapter = state.currentChapter,
+                verse = safeVerse,
+                cleanText = cleanPreview
+            )
+        }
+        val updatedProgress = ReadingProgress(
+            id = 1,
+            bookName = state.currentBook,
+            chapter = state.currentChapter,
+            verse = safeVerse,
+            version = state.activeVersion
+        )
+        _uiState.value = state.copy(
+            hasStartedReading = true,
+            currentVerse = safeVerse,
+            readingProgress = updatedProgress,
+            continueReadingPreviewText = cleanPreview.ifBlank { state.continueReadingPreviewText }
+        )
+        persistReadingProgressAsync(state.currentBook, state.currentChapter, safeVerse, state.activeVersion)
+    }
+
     fun setSelectedVerses(verses: List<BibleVerse>) {
         if (_uiState.value.selectedVerses != verses) {
             _uiState.value = _uiState.value.copy(selectedVerses = verses)
@@ -385,10 +727,27 @@ class BibleViewModel(
     }
 
     fun navigateTo(destination: AppDestination) {
+        if (destination == AppDestination.BIBLE && !_uiState.value.hasStartedReading) {
+            markReadingStarted(
+                bookName = _uiState.value.currentBook,
+                chapter = _uiState.value.currentChapter,
+                verse = _uiState.value.currentVerse.coerceAtLeast(1),
+                version = _uiState.value.activeVersion
+            )
+        }
         _uiState.value = _uiState.value.copy(
             currentDestination = destination,
             selectedVerses = if (destination == AppDestination.BIBLE) _uiState.value.selectedVerses else emptyList()
         )
+        if (destination == AppDestination.BIBLE && _uiState.value.verses.isEmpty() && !_uiState.value.isChapterLoading) {
+            loadChapter(
+                bookName = _uiState.value.currentBook,
+                chapter = _uiState.value.currentChapter,
+                version = _uiState.value.activeVersion,
+                targetVerse = _uiState.value.currentVerse.coerceAtLeast(1),
+                persistProgress = true
+            )
+        }
     }
 
     fun startTutorial() {
@@ -521,8 +880,11 @@ class BibleViewModel(
         parallelVersion: String = _uiState.value.parallelVersion,
         preserveHighlight: Boolean = false,
         forceClearMain: Boolean = false,
-        forceClearParallel: Boolean = false
+        forceClearParallel: Boolean = false,
+        targetVerse: Int = 1,
+        persistProgress: Boolean = true
     ) {
+        val safeTargetVerse = targetVerse.coerceAtLeast(1)
         hasSpokenChapterIntro = false
         if (!preserveHighlight) {
             clearNavigationHighlight()
@@ -563,12 +925,38 @@ class BibleViewModel(
             repository.getCachedModuleCatalogInMemory(parallelVersion)
         }
 
+        if (persistProgress) {
+            hasUserNavigatedInSession = true
+            readingStateCache.setHasStartedReading(true)
+        }
+        val immediateProgress = if (persistProgress) {
+            ReadingProgress(
+                id = 1,
+                bookName = bookName,
+                chapter = chapter,
+                verse = safeTargetVerse,
+                version = version
+            )
+        } else {
+            prev.readingProgress
+        }
+        val cachedPreview = if (persistProgress) {
+            readingStateCache.loadPreviewFor(version, bookName, chapter, safeTargetVerse)
+                .ifBlank { if (mainTargetChanged) "" else prev.continueReadingPreviewText }
+        } else {
+            prev.continueReadingPreviewText
+        }
+
         // Actualización atómica ANTES de lanzar I/O: elimina cualquier destello de versículos previos
         _uiState.value = prev.copy(
             currentBook = bookName,
             currentChapter = chapter,
+            currentVerse = safeTargetVerse,
             activeVersion = version,
             parallelVersion = parallelVersion,
+            hasStartedReading = if (persistProgress) true else prev.hasStartedReading,
+            readingProgress = immediateProgress,
+            continueReadingPreviewText = cachedPreview,
             ttsVerseIndex = 0,
             selectedVerses = emptyList(),
             verses = if (shouldClearMain) emptyList() else prev.verses,
@@ -623,7 +1011,36 @@ class BibleViewModel(
                     stopTts()
                 }
 
-                _uiState.value = _uiState.value.copy(
+                val latestState = _uiState.value
+                val previewVerseNum = if (persistProgress) {
+                    safeTargetVerse
+                } else {
+                    (latestState.readingProgress?.verse ?: safeTargetVerse).coerceAtLeast(1)
+                }
+                val shouldUpdatePreview = persistProgress || (
+                    latestState.hasStartedReading &&
+                        (latestState.readingProgress == null || (
+                            latestState.readingProgress.bookName.equals(bookName, ignoreCase = true) &&
+                                latestState.readingProgress.chapter == chapter &&
+                                latestState.readingProgress.version.equals(version, ignoreCase = true)
+                            ))
+                    )
+                val resolvedPreview = if (shouldUpdatePreview) {
+                    val vObj = cleanList.firstOrNull { it.verse == previewVerseNum } ?: cleanList.firstOrNull()
+                    if (vObj != null) {
+                        val clean = sanitizePreviewText(vObj.text, version)
+                        if (clean.isNotBlank()) {
+                            readingStateCache.savePreview(version, bookName, chapter, previewVerseNum, clean)
+                        }
+                        clean
+                    } else {
+                        ""
+                    }
+                } else {
+                    latestState.continueReadingPreviewText
+                }
+
+                _uiState.value = latestState.copy(
                     currentBook = bookName,
                     currentChapter = chapter,
                     activeVersion = version,
@@ -631,6 +1048,7 @@ class BibleViewModel(
                     verseTokens = tokensMap,
                     chapterSubheadings = subheadings,
                     versesWithRvrNotes = rvrNotesSet,
+                    continueReadingPreviewText = resolvedPreview,
                     isChapterLoading = false
                 )
             } catch (e: CancellationException) {
@@ -719,10 +1137,8 @@ class BibleViewModel(
             launchParallelCatalogLoadIfNeeded(parallelVersion)
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.saveReadingProgress(bookName, chapter, 1, version)
-            } catch (_: Exception) {}
+        if (persistProgress) {
+            persistReadingProgressAsync(bookName, chapter, safeTargetVerse, version)
         }
     }
 
@@ -917,7 +1333,7 @@ class BibleViewModel(
             currentDestination = AppDestination.BIBLE
         )
         triggerNavigationHighlight(verse)
-        loadChapter(bookName, chapter, preserveHighlight = true)
+        loadChapter(bookName, chapter, preserveHighlight = true, targetVerse = verse, persistProgress = true)
     }
 
     fun setActiveVersion(version: String) {
@@ -928,7 +1344,9 @@ class BibleViewModel(
             bookName = state.currentBook,
             chapter = state.currentChapter,
             version = version,
-            forceClearMain = changed
+            forceClearMain = changed,
+            targetVerse = state.currentVerse.coerceAtLeast(1),
+            persistProgress = state.hasStartedReading
         )
         configureNaturalTtsVoice()
     }
@@ -1049,7 +1467,7 @@ class BibleViewModel(
             isPassagePickerVisible = false
         )
         triggerNavigationHighlight(verse)
-        loadChapter(book.name, chapter, preserveHighlight = true)
+        loadChapter(book.name, chapter, preserveHighlight = true, targetVerse = verse, persistProgress = true)
     }
 
     fun onPickerBackStep() {

@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class ReadingProgress(
     @PrimaryKey
     val id: Int = 1,
-    val bookName: String = "Juan",
+    val bookName: String = "Génesis",
     val chapter: Int = 1,
     val verse: Int = 1,
     val version: String = "RVR1960",
