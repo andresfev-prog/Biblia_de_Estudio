@@ -44,12 +44,28 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:881017479515:android:52c84fe59d46eb6baa7a7e",
+        "mobilesdk_app_id": "1:881017479515:android:6fed35c729bc91d2aa7a7e",
         "android_client_info": {
           "package_name": "com.andresescobar.bibliadeestudio"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "881017479515-5d49ofcaqu9b7mp1s18m53oatiqlcf11.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.andresescobar.bibliadeestudio",
+            "certificate_hash": "324d837b5fcf3fd8384a0f8705a728bc5674761f"
+          }
+        },
+        {
+          "client_id": "881017479515-fqkkk768d8dviguf8glrp92ptheeau7u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.andresescobar.bibliadeestudio",
+            "certificate_hash": "ad8c3e51c464a9bc63d9c5db503fd89c581014ca"
+          }
+        },
         {
           "client_id": "881017479515-c6df8rit55sfpdgaecnlkidcd7c6t8sm.apps.googleusercontent.com",
           "client_type": 3
