@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -27,6 +28,7 @@ import com.example.data.repository.CloudSyncRepository
 import com.example.data.repository.ReadingStateCache
 import com.example.ui.screens.bible.BibleScreen
 import com.example.ui.screens.home.HomeScreen
+import com.example.ui.screens.modules.ModulesScreen
 import com.example.ui.screens.search.SearchScreen
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.theme.BibleStudyTheme
@@ -279,7 +281,7 @@ class Phase3Step15PolishUnitTest {
                         AppDestination.BIBLE -> BibleScreen(uiState = liveState, viewModel = viewModel)
                         AppDestination.SEARCH -> SearchScreen(uiState = liveState, viewModel = viewModel)
                         AppDestination.SETTINGS -> SettingsScreen(uiState = liveState, viewModel = viewModel)
-                        AppDestination.MODULES -> HomeScreen(uiState = liveState, viewModel = viewModel)
+                        AppDestination.MODULES -> ModulesScreen(uiState = liveState, viewModel = viewModel)
                     }
                 }
             }
@@ -299,13 +301,33 @@ class Phase3Step15PolishUnitTest {
             assertEquals(0, composeTestRule.onAllNodesWithContentDescription("Cambiar pasaje izquierdo").fetchSemanticsNodes().size)
             assertEquals(0, composeTestRule.onAllNodesWithContentDescription("Cambiar versión panel izquierdo").fetchSemanticsNodes().size)
 
-            // 3. SearchScreen: selector de versión interactivo sin flecha desplegable
+            // 3. ModulesScreen: píldora de filtro de idioma sin triángulo/flecha e interactiva
+            viewModel.navigateTo(AppDestination.MODULES)
+            composeTestRule.waitForIdle()
+            composeTestRule.onNodeWithTag("module_language_filter_button").assertIsDisplayed().assertHasClickAction()
+            composeTestRule.onNodeWithText("Idioma: Todos").assertIsDisplayed()
+            assertEquals(0, composeTestRule.onAllNodesWithContentDescription("Desplegar idiomas").fetchSemanticsNodes().size)
+            for (forbiddenArrow in listOf("▾", "⌄", "▼", "→")) {
+                assertEquals(
+                    0,
+                    composeTestRule.onAllNodesWithText(forbiddenArrow, substring = true).fetchSemanticsNodes().size
+                )
+            }
+            // Verificar que el menú desplegable sigue abriendo y aplicando el filtro
+            composeTestRule.onNodeWithTag("module_language_filter_button").performClick()
+            composeTestRule.waitForIdle()
+            composeTestRule.onNodeWithText("Español").assertIsDisplayed().performClick()
+            composeTestRule.waitForIdle()
+            assertEquals("Español", viewModel.uiState.value.moduleLanguageFilter)
+            composeTestRule.onNodeWithTag("module_language_filter_button").assertTextEquals("Idioma: Español")
+
+            // 4. SearchScreen: selector de versión interactivo sin flecha desplegable
             viewModel.navigateTo(AppDestination.SEARCH)
             composeTestRule.waitForIdle()
             composeTestRule.onNodeWithTag("search_version_selector").assertIsDisplayed().assertHasClickAction()
             assertEquals(0, composeTestRule.onAllNodesWithContentDescription("Cambiar versión").fetchSemanticsNodes().size)
 
-            // 4. SettingsScreen: Favoritos, Idioma y Fuente interactivos sin flechas
+            // 5. SettingsScreen: Favoritos, Idioma y Fuente interactivos sin flechas
             viewModel.navigateTo(AppDestination.SETTINGS)
             composeTestRule.waitForIdle()
             composeTestRule.onNodeWithTag("settings_favorites_item").performScrollTo().assertIsDisplayed().assertHasClickAction()
