@@ -13,11 +13,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.biblestudy.qxptk"
+    applicationId = "com.andresescobar.bibliadeestudio"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20
-    versionName = "1.4.3-theme-harmonization"
+    versionCode = 21
+    versionName = "1.5.0-rc1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

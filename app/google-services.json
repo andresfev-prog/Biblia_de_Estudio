@@ -41,6 +41,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:881017479515:android:52c84fe59d46eb6baa7a7e",
+        "android_client_info": {
+          "package_name": "com.andresescobar.bibliadeestudio"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "881017479515-c6df8rit55sfpdgaecnlkidcd7c6t8sm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDodrjej8a3DkSCFi1_1w-jRFZdUbs4Yf4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "881017479515-c6df8rit55sfpdgaecnlkidcd7c6t8sm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
