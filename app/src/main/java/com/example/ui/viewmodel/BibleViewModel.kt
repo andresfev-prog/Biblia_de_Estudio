@@ -95,6 +95,10 @@ data class BibleUiState(
     val highlightedVerse: Int? = null,
     val highlightToken: Long = 0L,
     val isNavigationHighlightActive: Boolean = false,
+    val scrollRestoreVerse: Int? = null,
+    val scrollRestoreToken: Long = 0L,
+    val parallelScrollRestoreVerse: Int? = null,
+    val parallelScrollRestoreToken: Long = 0L,
     // Comentarios
     val versesWithComments: Set<Int> = emptySet(),
     val parallelVersesWithComments: Set<Int> = emptySet(),
@@ -180,17 +184,41 @@ class BibleViewModel(
     private val initialTheme = themeCache.loadInitialTheme()
     private val readingStateCache = ReadingStateCache(application)
     private val initialHasStartedReading = readingStateCache.hasStartedReading()
+    private val initialCachedPosition = if (initialHasStartedReading) {
+        readingStateCache.loadReadingPosition()
+    } else {
+        null
+    }
 
     private val _uiState = MutableStateFlow(
         BibleUiState(
+            currentBook = initialCachedPosition?.bookName ?: "Génesis",
+            currentChapter = initialCachedPosition?.chapter ?: 1,
+            currentVerse = initialCachedPosition?.verse ?: 1,
+            activeVersion = initialCachedPosition?.version ?: "RVR1960",
+            parallelVersion = initialCachedPosition?.parallelVersion ?: "KJV",
+            searchVersion = initialCachedPosition?.version ?: "RVR1960",
+            scrollRestoreVerse = initialCachedPosition?.verse,
+            scrollRestoreToken = if ((initialCachedPosition?.verse ?: 1) > 1) 1L else 0L,
             userPreferences = UserPreference(
                 themeMode = initialTheme.first,
                 selectedLightTheme = initialTheme.second,
                 selectedDarkTheme = initialTheme.third
             ),
+            readingProgress = initialCachedPosition?.let { pos ->
+                ReadingProgress(
+                    id = 1,
+                    bookName = pos.bookName,
+                    chapter = pos.chapter,
+                    verse = pos.verse,
+                    version = pos.version
+                )
+            },
             hasStartedReading = initialHasStartedReading,
             continueReadingPreviewText = if (initialHasStartedReading) {
-                readingStateCache.loadLastPreviewText()
+                initialCachedPosition?.let { pos ->
+                    readingStateCache.loadPreviewFor(pos.version, pos.bookName, pos.chapter, pos.verse)
+                }.orEmpty().ifBlank { readingStateCache.loadLastPreviewText() }
             } else {
                 ""
             }
@@ -230,8 +258,16 @@ class BibleViewModel(
         initTts(application)
         observeData()
         observeSearchQuery()
-        // Precargar Génesis 1 en memoria para apertura instantánea sin marcar lectura iniciada en instalación nueva
-        loadChapter(_uiState.value.currentBook, _uiState.value.currentChapter, targetVerse = 1, persistProgress = false)
+        // Precargar pasaje inicial (o último pasaje guardado en caché) sin marcar lectura iniciada en instalación nueva
+        loadChapter(
+            bookName = _uiState.value.currentBook,
+            chapter = _uiState.value.currentChapter,
+            version = _uiState.value.activeVersion,
+            parallelVersion = _uiState.value.parallelVersion,
+            targetVerse = _uiState.value.currentVerse,
+            persistProgress = false,
+            restoreScrollPosition = _uiState.value.currentVerse > 1
+        )
     }
 
     private fun initTts(application: Application) {
@@ -323,24 +359,42 @@ class BibleViewModel(
         viewModelScope.launch {
             repository.getReadingProgress().collect { progress ->
                 if (progress != null) {
-                    readingStateCache.setHasStartedReading(true)
                     val safeVerse = progress.verse.coerceAtLeast(1)
+                    // Si la caché síncrona ya tenía una posición más reciente antes de que Room escribiera, respetarla
+                    val authoritativeProgress = if (!hasUserNavigatedInSession && initialCachedPosition != null) {
+                        ReadingProgress(
+                            id = 1,
+                            bookName = initialCachedPosition.bookName,
+                            chapter = initialCachedPosition.chapter,
+                            verse = initialCachedPosition.verse,
+                            version = initialCachedPosition.version
+                        )
+                    } else {
+                        progress
+                    }
+                    val targetV = authoritativeProgress.verse.coerceAtLeast(1)
+                    readingStateCache.saveReadingPosition(
+                        bookName = authoritativeProgress.bookName,
+                        chapter = authoritativeProgress.chapter,
+                        verse = targetV,
+                        version = authoritativeProgress.version
+                    )
                     val current = _uiState.value
                     val cachedPreview = readingStateCache.loadPreviewFor(
-                        version = progress.version,
-                        bookName = progress.bookName,
-                        chapter = progress.chapter,
-                        verse = safeVerse
+                        version = authoritativeProgress.version,
+                        bookName = authoritativeProgress.bookName,
+                        chapter = authoritativeProgress.chapter,
+                        verse = targetV
                     )
                     val inMemoryPreview = extractPreviewFromLoadedVerses(
                         verses = current.verses,
                         loadedVersion = current.activeVersion,
                         loadedBook = current.currentBook,
                         loadedChapter = current.currentChapter,
-                        targetVersion = progress.version,
-                        targetBook = progress.bookName,
-                        targetChapter = progress.chapter,
-                        targetVerse = safeVerse
+                        targetVersion = authoritativeProgress.version,
+                        targetBook = authoritativeProgress.bookName,
+                        targetChapter = authoritativeProgress.chapter,
+                        targetVerse = targetV
                     )
                     val immediatePreview = when {
                         inMemoryPreview.isNotBlank() -> inMemoryPreview
@@ -349,43 +403,56 @@ class BibleViewModel(
                     }
                     if (inMemoryPreview.isNotBlank()) {
                         readingStateCache.savePreview(
-                            version = progress.version,
-                            bookName = progress.bookName,
-                            chapter = progress.chapter,
-                            verse = safeVerse,
+                            version = authoritativeProgress.version,
+                            bookName = authoritativeProgress.bookName,
+                            chapter = authoritativeProgress.chapter,
+                            verse = targetV,
                             cleanText = inMemoryPreview
                         )
                     }
                     _uiState.value = current.copy(
-                        readingProgress = progress,
+                        readingProgress = authoritativeProgress,
                         hasStartedReading = true,
                         continueReadingPreviewText = immediatePreview
                     )
                     if (inMemoryPreview.isBlank() && cachedPreview.isBlank()) {
                         refreshContinueReadingPreview(
-                            version = progress.version,
-                            bookName = progress.bookName,
-                            chapter = progress.chapter,
-                            verse = safeVerse
+                            version = authoritativeProgress.version,
+                            bookName = authoritativeProgress.bookName,
+                            chapter = authoritativeProgress.chapter,
+                            verse = targetV
                         )
                     }
                     if (!hasUserNavigatedInSession) {
-                        val samePassage = current.currentBook.equals(progress.bookName, ignoreCase = true) &&
-                            current.currentChapter == progress.chapter &&
-                            current.activeVersion.equals(progress.version, ignoreCase = true)
+                        val samePassage = current.currentBook.equals(authoritativeProgress.bookName, ignoreCase = true) &&
+                            current.currentChapter == authoritativeProgress.chapter &&
+                            current.activeVersion.equals(authoritativeProgress.version, ignoreCase = true)
                         if (!samePassage) {
                             loadChapter(
-                                bookName = progress.bookName,
-                                chapter = progress.chapter,
-                                version = progress.version,
-                                targetVerse = safeVerse,
-                                persistProgress = false
+                                bookName = authoritativeProgress.bookName,
+                                chapter = authoritativeProgress.chapter,
+                                version = authoritativeProgress.version,
+                                targetVerse = targetV,
+                                persistProgress = false,
+                                restoreScrollPosition = targetV > 1
                             )
-                        } else if (current.currentVerse != safeVerse) {
-                            _uiState.value = _uiState.value.copy(currentVerse = safeVerse)
+                        } else if (current.currentVerse != targetV) {
+                            _uiState.value = _uiState.value.copy(
+                                currentVerse = targetV,
+                                scrollRestoreVerse = targetV,
+                                scrollRestoreToken = _uiState.value.scrollRestoreToken + 1L
+                            )
                         }
                     }
-                } else {
+                } else if (initialCachedPosition != null && !hasUserNavigatedInSession) {
+                    // Conservar la posición restaurada desde ReadingStateCache y sincronizarla con Room
+                    persistReadingProgressAsync(
+                        bookName = initialCachedPosition.bookName,
+                        chapter = initialCachedPosition.chapter,
+                        verse = initialCachedPosition.verse,
+                        version = initialCachedPosition.version
+                    )
+                } else if (!_uiState.value.hasStartedReading) {
                     _uiState.value = _uiState.value.copy(readingProgress = null)
                 }
             }
@@ -483,9 +550,9 @@ class BibleViewModel(
         ) {
             return ""
         }
-        val safeVerse = targetVerse.coerceAtLeast(1)
-        val verseObj = verses.firstOrNull { it.verse == safeVerse } ?: verses.firstOrNull() ?: return ""
-        return sanitizePreviewText(verseObj.text, targetVersion)
+        val vIdx = BibleStudyTextUtils.resolveClosestVerseIndex(verses, targetVerse)
+        if (vIdx < 0) return ""
+        return sanitizePreviewText(verses[vIdx].text, targetVersion)
     }
 
     private fun refreshContinueReadingPreview(
@@ -549,8 +616,14 @@ class BibleViewModel(
     ) {
         val safeVerse = verse.coerceAtLeast(1)
         hasUserNavigatedInSession = true
-        readingStateCache.setHasStartedReading(true)
         val current = _uiState.value
+        readingStateCache.saveReadingPosition(
+            bookName = bookName,
+            chapter = chapter,
+            verse = safeVerse,
+            version = version,
+            parallelVersion = current.parallelVersion
+        )
         val inMemory = extractPreviewFromLoadedVerses(
             verses = current.verses,
             loadedVersion = current.activeVersion,
@@ -584,6 +657,7 @@ class BibleViewModel(
         _uiState.value = current.copy(
             hasStartedReading = true,
             currentVerse = safeVerse,
+            scrollRestoreVerse = safeVerse,
             readingProgress = updatedProgress,
             continueReadingPreviewText = resolvedPreview
         )
@@ -681,9 +755,14 @@ class BibleViewModel(
         val safeVerse = verse.coerceAtLeast(1)
         val state = _uiState.value
         if (state.isChapterLoading || state.verses.isEmpty()) return
+        val resolvedIdx = BibleStudyTextUtils.resolveClosestVerseIndex(state.verses, safeVerse)
+        if (resolvedIdx < 0) return
+        val verseObj = state.verses[resolvedIdx]
+        val actualVerse = verseObj.verse
         val existingVerse = state.readingProgress?.verse ?: state.currentVerse
         if (state.hasStartedReading &&
-            existingVerse == safeVerse &&
+            existingVerse == actualVerse &&
+            state.currentVerse == actualVerse &&
             state.continueReadingPreviewText.isNotBlank() &&
             state.readingProgress?.bookName.equals(state.currentBook, ignoreCase = true) &&
             state.readingProgress?.chapter == state.currentChapter &&
@@ -691,16 +770,21 @@ class BibleViewModel(
         ) {
             return
         }
-        val verseObj = state.verses.firstOrNull { it.verse == safeVerse } ?: state.verses.firstOrNull() ?: return
         val cleanPreview = sanitizePreviewText(verseObj.text, state.activeVersion)
         hasUserNavigatedInSession = true
-        readingStateCache.setHasStartedReading(true)
+        readingStateCache.saveReadingPosition(
+            bookName = state.currentBook,
+            chapter = state.currentChapter,
+            verse = actualVerse,
+            version = state.activeVersion,
+            parallelVersion = state.parallelVersion
+        )
         if (cleanPreview.isNotBlank()) {
             readingStateCache.savePreview(
                 version = state.activeVersion,
                 bookName = state.currentBook,
                 chapter = state.currentChapter,
-                verse = safeVerse,
+                verse = actualVerse,
                 cleanText = cleanPreview
             )
         }
@@ -708,16 +792,17 @@ class BibleViewModel(
             id = 1,
             bookName = state.currentBook,
             chapter = state.currentChapter,
-            verse = safeVerse,
+            verse = actualVerse,
             version = state.activeVersion
         )
         _uiState.value = state.copy(
             hasStartedReading = true,
-            currentVerse = safeVerse,
+            currentVerse = actualVerse,
+            scrollRestoreVerse = actualVerse,
             readingProgress = updatedProgress,
             continueReadingPreviewText = cleanPreview.ifBlank { state.continueReadingPreviewText }
         )
-        persistReadingProgressAsync(state.currentBook, state.currentChapter, safeVerse, state.activeVersion)
+        persistReadingProgressAsync(state.currentBook, state.currentChapter, actualVerse, state.activeVersion)
     }
 
     fun setSelectedVerses(verses: List<BibleVerse>) {
@@ -882,7 +967,8 @@ class BibleViewModel(
         forceClearMain: Boolean = false,
         forceClearParallel: Boolean = false,
         targetVerse: Int = 1,
-        persistProgress: Boolean = true
+        persistProgress: Boolean = true,
+        restoreScrollPosition: Boolean = false
     ) {
         val safeTargetVerse = targetVerse.coerceAtLeast(1)
         hasSpokenChapterIntro = false
@@ -895,7 +981,6 @@ class BibleViewModel(
         crossRefsJob?.cancel()
 
         val prev = _uiState.value
-        val shouldReloadParallel = prev.isParallelMode && prev.isParallelLinked
         val sameActiveVersion = prev.activeVersion.equals(version, ignoreCase = true)
         val sameParallelVersion = prev.parallelVersion.equals(parallelVersion, ignoreCase = true)
         val mainTargetChanged = !prev.currentBook.equals(bookName, ignoreCase = true) ||
@@ -903,11 +988,17 @@ class BibleViewModel(
             !sameActiveVersion
         val shouldClearMain = mainTargetChanged || forceClearMain || prev.verses.isEmpty()
 
+        val targetCanonicalBookId = BibleBooksData.resolveCanonicalBookId(bookName)
+        val parallelLoadedMatchesTarget = prev.parallelVerses.isNotEmpty() &&
+            prev.parallelVerses.first().bookNumber == targetCanonicalBookId &&
+            prev.parallelVerses.first().chapter == chapter
         val parallelTargetChanged = !prev.currentBook.equals(bookName, ignoreCase = true) ||
             prev.currentChapter != chapter ||
-            !sameParallelVersion
-        val shouldClearParallel = shouldReloadParallel &&
-            (parallelTargetChanged || forceClearParallel || prev.parallelVerses.isEmpty())
+            !sameParallelVersion ||
+            !parallelLoadedMatchesTarget
+        val shouldReloadParallel = prev.isParallelMode && prev.isParallelLinked &&
+            (parallelTargetChanged || forceClearParallel)
+        val shouldClearParallel = shouldReloadParallel
 
         if (shouldReloadParallel) {
             parallelChapterJob?.cancel()
@@ -927,7 +1018,13 @@ class BibleViewModel(
 
         if (persistProgress) {
             hasUserNavigatedInSession = true
-            readingStateCache.setHasStartedReading(true)
+            readingStateCache.saveReadingPosition(
+                bookName = bookName,
+                chapter = chapter,
+                verse = safeTargetVerse,
+                version = version,
+                parallelVersion = parallelVersion
+            )
         }
         val immediateProgress = if (persistProgress) {
             ReadingProgress(
@@ -1012,11 +1109,14 @@ class BibleViewModel(
                 }
 
                 val latestState = _uiState.value
-                val previewVerseNum = if (persistProgress) {
+                val baseTargetVerse = if (persistProgress || restoreScrollPosition) {
                     safeTargetVerse
                 } else {
                     (latestState.readingProgress?.verse ?: safeTargetVerse).coerceAtLeast(1)
                 }
+                val resolvedIdx = BibleStudyTextUtils.resolveClosestVerseIndex(cleanList, baseTargetVerse)
+                val resolvedVerse = if (resolvedIdx >= 0) cleanList[resolvedIdx].verse else baseTargetVerse
+
                 val shouldUpdatePreview = persistProgress || (
                     latestState.hasStartedReading &&
                         (latestState.readingProgress == null || (
@@ -1026,11 +1126,11 @@ class BibleViewModel(
                             ))
                     )
                 val resolvedPreview = if (shouldUpdatePreview) {
-                    val vObj = cleanList.firstOrNull { it.verse == previewVerseNum } ?: cleanList.firstOrNull()
+                    val vObj = if (resolvedIdx >= 0) cleanList[resolvedIdx] else null
                     if (vObj != null) {
                         val clean = sanitizePreviewText(vObj.text, version)
                         if (clean.isNotBlank()) {
-                            readingStateCache.savePreview(version, bookName, chapter, previewVerseNum, clean)
+                            readingStateCache.savePreview(version, bookName, chapter, resolvedVerse, clean)
                         }
                         clean
                     } else {
@@ -1040,10 +1140,50 @@ class BibleViewModel(
                     latestState.continueReadingPreviewText
                 }
 
+                if (persistProgress || latestState.hasStartedReading) {
+                    readingStateCache.saveReadingPosition(
+                        bookName = bookName,
+                        chapter = chapter,
+                        verse = resolvedVerse,
+                        version = version,
+                        parallelVersion = latestState.parallelVersion
+                    )
+                }
+                val updatedProgress = if (persistProgress) {
+                    ReadingProgress(
+                        id = 1,
+                        bookName = bookName,
+                        chapter = chapter,
+                        verse = resolvedVerse,
+                        version = version
+                    )
+                } else if (latestState.readingProgress != null &&
+                    latestState.readingProgress.bookName.equals(bookName, ignoreCase = true) &&
+                    latestState.readingProgress.chapter == chapter &&
+                    latestState.readingProgress.version.equals(version, ignoreCase = true)
+                ) {
+                    latestState.readingProgress.copy(verse = resolvedVerse)
+                } else {
+                    latestState.readingProgress
+                }
+
+                val shouldEmitRestore = cleanList.isNotEmpty() &&
+                    !preserveHighlight &&
+                    (restoreScrollPosition || mainTargetChanged || resolvedVerse > 1)
+                val nextMainToken = if (shouldEmitRestore) {
+                    latestState.scrollRestoreToken + 1L
+                } else {
+                    latestState.scrollRestoreToken
+                }
+
                 _uiState.value = latestState.copy(
                     currentBook = bookName,
                     currentChapter = chapter,
+                    currentVerse = resolvedVerse,
                     activeVersion = version,
+                    readingProgress = updatedProgress,
+                    scrollRestoreVerse = resolvedVerse,
+                    scrollRestoreToken = nextMainToken,
                     verses = cleanList,
                     verseTokens = tokensMap,
                     chapterSubheadings = subheadings,
@@ -1051,6 +1191,10 @@ class BibleViewModel(
                     continueReadingPreviewText = resolvedPreview,
                     isChapterLoading = false
                 )
+
+                if (persistProgress && resolvedVerse != safeTargetVerse) {
+                    persistReadingProgressAsync(bookName, chapter, resolvedVerse, version)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1086,7 +1230,7 @@ class BibleViewModel(
             }
         }
 
-        // 4. Panel paralelo (solo cuando la vista dividida está activa y enlazada)
+        // 4. Panel paralelo (solo cuando la vista dividida está activa, enlazada y el destino paralelo cambió)
         if (shouldReloadParallel) {
             parallelChapterJob = viewModelScope.launch {
                 try {
@@ -1119,12 +1263,28 @@ class BibleViewModel(
                         precomputeVerseTokens(cleanParallelList, parallelVersion, parallelRvrNotes)
                     }
 
-                    _uiState.value = _uiState.value.copy(
+                    val latestParallelState = _uiState.value
+                    val resolvedParallelIdx = BibleStudyTextUtils.resolveClosestVerseIndex(cleanParallelList, safeTargetVerse)
+                    val resolvedParallelVerse = if (resolvedParallelIdx >= 0) {
+                        cleanParallelList[resolvedParallelIdx].verse
+                    } else {
+                        safeTargetVerse
+                    }
+                    val shouldEmitParallelRestore = cleanParallelList.isNotEmpty() && !preserveHighlight
+                    val nextParallelToken = if (shouldEmitParallelRestore) {
+                        latestParallelState.parallelScrollRestoreToken + 1L
+                    } else {
+                        latestParallelState.parallelScrollRestoreToken
+                    }
+
+                    _uiState.value = latestParallelState.copy(
                         parallelVersion = parallelVersion,
                         parallelVerses = cleanParallelList,
                         parallelVerseTokens = parallelTokens,
                         parallelChapterSubheadings = parallelSubheadings,
                         parallelVersesWithRvrNotes = parallelRvrNotes,
+                        parallelScrollRestoreVerse = resolvedParallelVerse,
+                        parallelScrollRestoreToken = nextParallelToken,
                         isParallelChapterLoading = false
                     )
                 } catch (e: CancellationException) {
@@ -1142,11 +1302,21 @@ class BibleViewModel(
         }
     }
 
-    fun loadParallelChapter(bookName: String, chapter: Int, version: String = _uiState.value.parallelVersion) {
+    fun loadParallelChapter(
+        bookName: String,
+        chapter: Int,
+        version: String = _uiState.value.parallelVersion,
+        targetVerse: Int = _uiState.value.currentVerse,
+        restoreScrollPosition: Boolean = true
+    ) {
+        val safeTargetVerse = targetVerse.coerceAtLeast(1)
         parallelChapterJob?.cancel()
         parallelCrossRefsJob?.cancel()
 
         val prev = _uiState.value
+        if (prev.hasStartedReading) {
+            readingStateCache.saveParallelVersion(version)
+        }
         val sameVersion = prev.parallelVersion.equals(version, ignoreCase = true)
         val immediateCatalog = if (sameVersion && prev.parallelVersionCatalog != null) {
             prev.parallelVersionCatalog
@@ -1196,12 +1366,28 @@ class BibleViewModel(
                     precomputeVerseTokens(cleanedList, version, parallelRvrNotes)
                 }
 
-                _uiState.value = _uiState.value.copy(
+                val latestState = _uiState.value
+                val resolvedIdx = BibleStudyTextUtils.resolveClosestVerseIndex(cleanedList, safeTargetVerse)
+                val resolvedParallelVerse = if (resolvedIdx >= 0) cleanedList[resolvedIdx].verse else safeTargetVerse
+                val shouldEmitParallelRestore = restoreScrollPosition && cleanedList.isNotEmpty()
+                val nextParallelToken = if (shouldEmitParallelRestore) {
+                    latestState.parallelScrollRestoreToken + 1L
+                } else {
+                    latestState.parallelScrollRestoreToken
+                }
+
+                _uiState.value = latestState.copy(
                     parallelVerses = cleanedList,
                     parallelVerseTokens = parallelTokens,
                     parallelVersion = version,
                     parallelChapterSubheadings = parallelSubheadings,
                     parallelVersesWithRvrNotes = parallelRvrNotes,
+                    parallelScrollRestoreVerse = if (shouldEmitParallelRestore) {
+                        resolvedParallelVerse
+                    } else {
+                        latestState.parallelScrollRestoreVerse
+                    },
+                    parallelScrollRestoreToken = nextParallelToken,
                     isParallelChapterLoading = false
                 )
             } catch (e: CancellationException) {
@@ -1226,14 +1412,21 @@ class BibleViewModel(
         }
     }
 
-    fun toggleParallelLinked() {
-        val newLinked = !_uiState.value.isParallelLinked
+    fun toggleParallelLinked(currentVisibleVerse: Int? = null) {
+        val state = _uiState.value
+        val newLinked = !state.isParallelLinked
+        val targetVerse = (currentVisibleVerse ?: state.currentVerse).coerceAtLeast(1)
+        if (targetVerse != state.currentVerse && state.verses.isNotEmpty() && !state.isChapterLoading) {
+            updateVisibleReadingVerse(targetVerse)
+        }
         _uiState.value = _uiState.value.copy(isParallelLinked = newLinked)
         if (newLinked && _uiState.value.isParallelMode) {
             loadParallelChapter(
                 bookName = _uiState.value.currentBook,
                 chapter = _uiState.value.currentChapter,
-                version = _uiState.value.parallelVersion
+                version = _uiState.value.parallelVersion,
+                targetVerse = targetVerse,
+                restoreScrollPosition = true
             )
         }
     }
@@ -1302,6 +1495,7 @@ class BibleViewModel(
         val nextToken = _uiState.value.highlightToken + 1L
         _uiState.value = _uiState.value.copy(
             currentVerse = verse,
+            scrollRestoreVerse = verse,
             highlightedVerse = verse,
             highlightToken = nextToken,
             isNavigationHighlightActive = true
@@ -1336,31 +1530,49 @@ class BibleViewModel(
         loadChapter(bookName, chapter, preserveHighlight = true, targetVerse = verse, persistProgress = true)
     }
 
-    fun setActiveVersion(version: String) {
+    fun setActiveVersion(version: String, currentVisibleVerse: Int? = null) {
         val state = _uiState.value
+        val targetVerse = (currentVisibleVerse ?: state.currentVerse).coerceAtLeast(1)
         val changed = !state.activeVersion.equals(version, ignoreCase = true)
+        val shouldPersist = state.hasStartedReading || currentVisibleVerse != null || targetVerse > 1
         _uiState.value = state.copy(searchVersion = version)
         loadChapter(
             bookName = state.currentBook,
             chapter = state.currentChapter,
             version = version,
             forceClearMain = changed,
-            targetVerse = state.currentVerse.coerceAtLeast(1),
-            persistProgress = state.hasStartedReading
+            targetVerse = targetVerse,
+            persistProgress = shouldPersist,
+            restoreScrollPosition = true
         )
         configureNaturalTtsVoice()
     }
 
-    fun setParallelVersion(version: String) {
+    fun setParallelVersion(version: String, currentVisibleVerse: Int? = null) {
         val state = _uiState.value
-        if (state.isParallelMode) {
+        val targetVerse = (currentVisibleVerse ?: state.currentVerse).coerceAtLeast(1)
+        if (state.hasStartedReading || currentVisibleVerse != null || targetVerse > 1) {
+            readingStateCache.saveParallelVersion(version)
+            if (state.isParallelLinked && targetVerse != state.currentVerse && state.verses.isNotEmpty() && !state.isChapterLoading) {
+                updateVisibleReadingVerse(targetVerse)
+            }
+        }
+        if (_uiState.value.isParallelMode) {
+            val latest = _uiState.value
+            // Asegurar que el panel principal también conserve el versículo activo durante el cambio secundario
+            _uiState.value = latest.copy(
+                currentVerse = if (latest.isParallelLinked) targetVerse else latest.currentVerse,
+                scrollRestoreVerse = if (latest.isParallelLinked) targetVerse else latest.scrollRestoreVerse
+            )
             loadParallelChapter(
-                bookName = state.currentBook,
-                chapter = state.currentChapter,
-                version = version
+                bookName = latest.currentBook,
+                chapter = latest.currentChapter,
+                version = version,
+                targetVerse = targetVerse,
+                restoreScrollPosition = true
             )
         } else {
-            _uiState.value = state.copy(
+            _uiState.value = _uiState.value.copy(
                 parallelVersion = version,
                 parallelVerses = emptyList(),
                 parallelVerseTokens = emptyMap(),
@@ -1370,15 +1582,28 @@ class BibleViewModel(
         }
     }
 
-    fun toggleParallelMode() {
-        val newMode = !_uiState.value.isParallelMode
-        _uiState.value = _uiState.value.copy(isParallelMode = newMode)
+    fun toggleParallelMode(currentVisibleVerse: Int? = null) {
+        val prev = _uiState.value
+        val targetVerse = (currentVisibleVerse ?: prev.currentVerse).coerceAtLeast(1)
+        if (targetVerse != prev.currentVerse && prev.verses.isNotEmpty() && !prev.isChapterLoading) {
+            updateVisibleReadingVerse(targetVerse)
+        }
+        val state = _uiState.value
+        val newMode = !state.isParallelMode
+        _uiState.value = state.copy(
+            isParallelMode = newMode,
+            currentVerse = targetVerse,
+            scrollRestoreVerse = targetVerse,
+            scrollRestoreToken = state.scrollRestoreToken + 1L
+        )
         if (newMode) {
-            val state = _uiState.value
+            val updated = _uiState.value
             loadParallelChapter(
-                bookName = state.currentBook,
-                chapter = state.currentChapter,
-                version = state.parallelVersion
+                bookName = updated.currentBook,
+                chapter = updated.currentChapter,
+                version = updated.parallelVersion,
+                targetVerse = targetVerse,
+                restoreScrollPosition = true
             )
         }
     }

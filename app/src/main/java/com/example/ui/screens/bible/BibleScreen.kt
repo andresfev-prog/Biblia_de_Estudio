@@ -89,6 +89,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -144,6 +145,7 @@ import com.example.ui.util.VerseDisplayToken
 import com.example.ui.viewmodel.BibleUiState
 import com.example.ui.viewmodel.BibleViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private val ReaderCrispTitleNavy = Color(0xFF0D2240)
@@ -162,8 +164,52 @@ fun BibleScreen(
 
     var rightBookTitle by remember { mutableStateOf(uiState.currentBook) }
     var rightChapter by remember { mutableIntStateOf(uiState.currentChapter) }
+    var rightIndependentVerse by remember { mutableIntStateOf(1) }
     var rightTempHighlightedVerse by remember { mutableStateOf<Int?>(null) }
     var isProgrammaticScroll by remember { mutableStateOf(false) }
+    var lastHandledMainRestoreToken by remember { mutableStateOf(0L) }
+    var lastHandledParallelRestoreToken by remember { mutableStateOf(0L) }
+
+    fun captureMainVisibleVerse(): Int {
+        if (uiState.scrollRestoreVerse != null &&
+            uiState.scrollRestoreToken != 0L &&
+            uiState.scrollRestoreToken != lastHandledMainRestoreToken
+        ) {
+            return uiState.scrollRestoreVerse.coerceAtLeast(1)
+        }
+        val verses = uiState.verses
+        if (!uiState.isChapterLoading && verses.isNotEmpty()) {
+            val rawIdx = leftListState.firstVisibleItemIndex
+            val verseIdx = if (uiState.isParallelMode) {
+                rawIdx.coerceIn(0, verses.lastIndex)
+            } else {
+                if (rawIdx <= 0) 0 else (rawIdx - 1).coerceIn(0, verses.lastIndex)
+            }
+            return verses[verseIdx].verse
+        }
+        if (uiState.isParallelMode && uiState.isParallelLinked &&
+            !uiState.isParallelChapterLoading && uiState.parallelVerses.isNotEmpty()
+        ) {
+            val rightIdx = rightListState.firstVisibleItemIndex.coerceIn(0, uiState.parallelVerses.lastIndex)
+            return uiState.parallelVerses[rightIdx].verse
+        }
+        return uiState.currentVerse.coerceAtLeast(1)
+    }
+
+    fun captureRightVisibleVerse(fallbackVerse: Int = 1): Int {
+        if (uiState.parallelScrollRestoreVerse != null &&
+            uiState.parallelScrollRestoreToken != 0L &&
+            uiState.parallelScrollRestoreToken != lastHandledParallelRestoreToken
+        ) {
+            return uiState.parallelScrollRestoreVerse.coerceAtLeast(1)
+        }
+        val pVerses = uiState.parallelVerses
+        if (!uiState.isParallelChapterLoading && pVerses.isNotEmpty()) {
+            val rightIdx = rightListState.firstVisibleItemIndex.coerceIn(0, pVerses.lastIndex)
+            return pVerses[rightIdx].verse
+        }
+        return fallbackVerse.coerceAtLeast(1)
+    }
 
     LaunchedEffect(uiState.currentBook, uiState.currentChapter, uiState.isParallelLinked) {
         if (uiState.isParallelLinked) {
@@ -195,22 +241,91 @@ fun BibleScreen(
         isProgrammaticScroll = true
         try {
             if (leftHasChapter) {
-                val idx = uiState.verses.indexOfFirst { it.verse == targetVerse }
-                val targetIdx = if (idx >= 0) idx else (targetVerse - 1).coerceIn(0, uiState.verses.lastIndex)
-                // En SingleReaderView el encabezado del capítulo ocupa el índice 0
-                val scrollIdx = if (uiState.isParallelMode || targetIdx == 0) targetIdx else targetIdx + 1
-                leftListState.scrollToItem(scrollIdx)
+                val targetIdx = BibleStudyTextUtils.resolveClosestVerseIndex(uiState.verses, targetVerse)
+                if (targetIdx >= 0) {
+                    // En SingleReaderView el encabezado del capítulo ocupa el índice 0
+                    val scrollIdx = if (uiState.isParallelMode || (targetVerse <= 1 && targetIdx == 0)) {
+                        targetIdx
+                    } else {
+                        targetIdx + 1
+                    }
+                    leftListState.scrollToItem(scrollIdx)
+                }
             }
 
             if (uiState.isParallelMode && uiState.isParallelLinked) {
                 val rightHasChapter = uiState.parallelVerses.isNotEmpty() &&
                         uiState.parallelVerses.first().chapter == uiState.currentChapter
                 if (rightHasChapter) {
-                    val idx = uiState.parallelVerses.indexOfFirst { it.verse == targetVerse }
-                    val targetIdx = if (idx >= 0) idx else (targetVerse - 1).coerceIn(0, uiState.parallelVerses.lastIndex)
-                    rightListState.scrollToItem(targetIdx)
+                    val targetIdx = BibleStudyTextUtils.resolveClosestVerseIndex(uiState.parallelVerses, targetVerse)
+                    if (targetIdx >= 0) {
+                        rightListState.scrollToItem(targetIdx)
+                    }
                 }
             }
+        } finally {
+            isProgrammaticScroll = false
+        }
+    }
+
+    // Restauración automática del versículo activo tras cambio de versión o reapertura (pantalla completa y dividida)
+    LaunchedEffect(
+        uiState.scrollRestoreToken,
+        uiState.verses,
+        uiState.isChapterLoading,
+        uiState.isParallelMode
+    ) {
+        val targetVerse = uiState.scrollRestoreVerse ?: return@LaunchedEffect
+        val token = uiState.scrollRestoreToken
+        if (token == 0L || token == lastHandledMainRestoreToken) return@LaunchedEffect
+        if (uiState.isChapterLoading || uiState.verses.isEmpty()) return@LaunchedEffect
+
+        val verseIdx = BibleStudyTextUtils.resolveClosestVerseIndex(uiState.verses, targetVerse)
+        if (verseIdx < 0) return@LaunchedEffect
+
+        val scrollIdx = if (uiState.isParallelMode) {
+            verseIdx
+        } else {
+            if (targetVerse <= 1 && verseIdx == 0) 0 else verseIdx + 1
+        }
+
+        isProgrammaticScroll = true
+        try {
+            leftListState.scrollToItem(scrollIdx)
+            if (uiState.isParallelMode && uiState.isParallelLinked &&
+                !uiState.isParallelChapterLoading && uiState.parallelVerses.isNotEmpty()
+            ) {
+                val rightIdx = BibleStudyTextUtils.resolveClosestVerseIndex(uiState.parallelVerses, targetVerse)
+                if (rightIdx >= 0) {
+                    rightListState.scrollToItem(rightIdx)
+                }
+            }
+            lastHandledMainRestoreToken = token
+        } finally {
+            isProgrammaticScroll = false
+        }
+    }
+
+    // Restauración automática del panel secundario (derecho) en vista paralela tras cambiar su traducción
+    LaunchedEffect(
+        uiState.parallelScrollRestoreToken,
+        uiState.parallelVerses,
+        uiState.isParallelChapterLoading,
+        uiState.isParallelMode
+    ) {
+        if (!uiState.isParallelMode) return@LaunchedEffect
+        val targetVerse = uiState.parallelScrollRestoreVerse ?: return@LaunchedEffect
+        val token = uiState.parallelScrollRestoreToken
+        if (token == 0L || token == lastHandledParallelRestoreToken) return@LaunchedEffect
+        if (uiState.isParallelChapterLoading || uiState.parallelVerses.isEmpty()) return@LaunchedEffect
+
+        val rightIdx = BibleStudyTextUtils.resolveClosestVerseIndex(uiState.parallelVerses, targetVerse)
+        if (rightIdx < 0) return@LaunchedEffect
+
+        isProgrammaticScroll = true
+        try {
+            rightListState.scrollToItem(rightIdx)
+            lastHandledParallelRestoreToken = token
         } finally {
             isProgrammaticScroll = false
         }
@@ -239,10 +354,18 @@ fun BibleScreen(
     val latestIsNavigationHighlightActive by rememberUpdatedState(uiState.isNavigationHighlightActive)
     val latestRightTempHighlight by rememberUpdatedState(rightTempHighlightedVerse)
     val latestVerses by rememberUpdatedState(uiState.verses)
+    val latestParallelVerses by rememberUpdatedState(uiState.parallelVerses)
     val latestVersesSize by rememberUpdatedState(uiState.verses.size)
     val latestParallelVersesSize by rememberUpdatedState(uiState.parallelVerses.size)
     val latestIsParallelMode by rememberUpdatedState(uiState.isParallelMode)
+    val latestIsParallelLinked by rememberUpdatedState(uiState.isParallelLinked)
     val latestIsChapterLoading by rememberUpdatedState(uiState.isChapterLoading)
+    val latestIsParallelChapterLoading by rememberUpdatedState(uiState.isParallelChapterLoading)
+    val latestHasStartedReading by rememberUpdatedState(uiState.hasStartedReading)
+    val latestScrollRestoreVerse by rememberUpdatedState(uiState.scrollRestoreVerse)
+    val latestScrollRestoreToken by rememberUpdatedState(uiState.scrollRestoreToken)
+    val latestParallelScrollRestoreVerse by rememberUpdatedState(uiState.parallelScrollRestoreVerse)
+    val latestParallelScrollRestoreToken by rememberUpdatedState(uiState.parallelScrollRestoreToken)
 
     // Observar scroll vía snapshotFlow para evitar recomponer todo BibleScreen en cada inicio/fin de desplazamiento
     LaunchedEffect(leftListState, rightListState) {
@@ -259,29 +382,100 @@ fun BibleScreen(
             }
     }
 
-    // Guardar el último versículo visible al detener el scroll (para «Continúa donde quedaste»)
-    LaunchedEffect(leftListState) {
-        var hadUserScroll = false
+    // Rastrear el versículo activo visible al asentarse el desplazamiento (pantalla única y ambos paneles de vista dividida)
+    LaunchedEffect(leftListState, rightListState) {
+        var lastObservedLeftIndex = -1
+        var lastObservedRightIndex = -1
         snapshotFlow {
-            Triple(
-                leftListState.isScrollInProgress,
+            listOf(
+                if (leftListState.isScrollInProgress) 1 else 0,
                 leftListState.firstVisibleItemIndex,
-                leftListState.firstVisibleItemScrollOffset
+                if (rightListState.isScrollInProgress) 1 else 0,
+                rightListState.firstVisibleItemIndex
             )
-        }.collect { (scrolling, firstIdx, _) ->
-            if (scrolling && !isProgrammaticScroll) {
-                hadUserScroll = true
-            } else if (!scrolling && hadUserScroll && !isProgrammaticScroll) {
-                hadUserScroll = false
-                val verses = latestVerses
+        }.collect { stateTuple ->
+            val leftScrolling = stateTuple[0] == 1
+            val leftFirstIdx = stateTuple[1]
+            val rightScrolling = stateTuple[2] == 1
+            val rightFirstIdx = stateTuple[3]
+
+            if (isProgrammaticScroll || leftScrolling || rightScrolling) return@collect
+
+            val hasPendingMainRestore = latestScrollRestoreVerse != null &&
+                latestScrollRestoreToken != 0L &&
+                latestScrollRestoreToken != lastHandledMainRestoreToken
+            val hasPendingParallelRestore = latestParallelScrollRestoreVerse != null &&
+                latestParallelScrollRestoreToken != 0L &&
+                latestParallelScrollRestoreToken != lastHandledParallelRestoreToken
+            if (hasPendingMainRestore || hasPendingParallelRestore || latestIsNavigationHighlightActive) {
+                return@collect
+            }
+
+            val verses = latestVerses
+            val pVerses = latestParallelVerses
+
+            if (latestIsParallelMode && !latestIsParallelLinked &&
+                !latestIsParallelChapterLoading && pVerses.isNotEmpty() &&
+                rightFirstIdx != lastObservedRightIndex
+            ) {
+                lastObservedRightIndex = rightFirstIdx
+                val rIdx = rightFirstIdx.coerceIn(0, pVerses.lastIndex)
+                rightIndependentVerse = pVerses[rIdx].verse
+            }
+
+            if (latestIsParallelMode && latestIsParallelLinked &&
+                !latestIsParallelChapterLoading && pVerses.isNotEmpty() &&
+                rightFirstIdx != lastObservedRightIndex && leftFirstIdx == lastObservedLeftIndex
+            ) {
+                lastObservedRightIndex = rightFirstIdx
+                val rIdx = rightFirstIdx.coerceIn(0, pVerses.lastIndex)
+                val rightVerse = pVerses[rIdx].verse
                 if (!latestIsChapterLoading && verses.isNotEmpty()) {
-                    // En SingleReaderView el encabezado del capítulo ocupa el índice 0
-                    val verseIdx = if (latestIsParallelMode) {
-                        firstIdx.coerceIn(0, verses.lastIndex)
-                    } else {
-                        (firstIdx - 1).coerceIn(0, verses.lastIndex)
+                    val matchLeftIdx = BibleStudyTextUtils.resolveClosestVerseIndex(verses, rightVerse)
+                    if (matchLeftIdx >= 0 && leftListState.firstVisibleItemIndex != matchLeftIdx) {
+                        withFrameNanos { }
+                        isProgrammaticScroll = true
+                        try {
+                            leftListState.scrollToItem(matchLeftIdx)
+                            lastObservedLeftIndex = matchLeftIdx
+                        } finally {
+                            isProgrammaticScroll = false
+                        }
                     }
-                    viewModel.updateVisibleReadingVerse(verses[verseIdx].verse)
+                }
+                if (latestHasStartedReading || rightVerse > 1 || rightFirstIdx > 0) {
+                    viewModel.updateVisibleReadingVerse(rightVerse)
+                }
+                return@collect
+            }
+
+            if (!latestIsChapterLoading && verses.isNotEmpty() && leftFirstIdx != lastObservedLeftIndex) {
+                lastObservedLeftIndex = leftFirstIdx
+                lastObservedRightIndex = rightFirstIdx
+                // En SingleReaderView el encabezado del capítulo ocupa el índice 0
+                val verseIdx = if (latestIsParallelMode) {
+                    leftFirstIdx.coerceIn(0, verses.lastIndex)
+                } else {
+                    if (leftFirstIdx <= 0) 0 else (leftFirstIdx - 1).coerceIn(0, verses.lastIndex)
+                }
+                val visibleVerse = verses[verseIdx].verse
+                if (latestIsParallelMode && latestIsParallelLinked &&
+                    !latestIsParallelChapterLoading && pVerses.isNotEmpty()
+                ) {
+                    val matchRightIdx = BibleStudyTextUtils.resolveClosestVerseIndex(pVerses, visibleVerse)
+                    if (matchRightIdx >= 0 && rightListState.firstVisibleItemIndex != matchRightIdx) {
+                        withFrameNanos { }
+                        isProgrammaticScroll = true
+                        try {
+                            rightListState.scrollToItem(matchRightIdx)
+                            lastObservedRightIndex = matchRightIdx
+                        } finally {
+                            isProgrammaticScroll = false
+                        }
+                    }
+                }
+                if (latestHasStartedReading || visibleVerse > 1 || leftFirstIdx > 0) {
+                    viewModel.updateVisibleReadingVerse(visibleVerse)
                 }
             }
         }
@@ -296,12 +490,17 @@ fun BibleScreen(
                 } else {
                     null
                 }
-            }.collect { pos ->
-                if (pos != null && latestVersesSize > 0 && latestParallelVersesSize > 0) {
-                    rightListState.scrollToItem(
-                        pos.first.coerceIn(0, latestParallelVersesSize - 1),
-                        pos.second
-                    )
+            }.collectLatest { pos ->
+                if (pos == null) return@collectLatest
+                withFrameNanos { }
+                val verses = latestVerses
+                val pVerses = latestParallelVerses
+                if (verses.isNotEmpty() && pVerses.isNotEmpty()) {
+                    val leftIdx = pos.first.coerceIn(0, verses.lastIndex)
+                    val targetIdx = BibleStudyTextUtils.resolveClosestVerseIndex(pVerses, verses[leftIdx].verse)
+                    if (targetIdx >= 0) {
+                        rightListState.scrollToItem(targetIdx, pos.second)
+                    }
                 }
             }
         }
@@ -312,12 +511,17 @@ fun BibleScreen(
                 } else {
                     null
                 }
-            }.collect { pos ->
-                if (pos != null && latestVersesSize > 0 && latestParallelVersesSize > 0) {
-                    leftListState.scrollToItem(
-                        pos.first.coerceIn(0, latestVersesSize - 1),
-                        pos.second
-                    )
+            }.collectLatest { pos ->
+                if (pos == null) return@collectLatest
+                withFrameNanos { }
+                val verses = latestVerses
+                val pVerses = latestParallelVerses
+                if (verses.isNotEmpty() && pVerses.isNotEmpty()) {
+                    val rightIdx = pos.first.coerceIn(0, pVerses.lastIndex)
+                    val targetIdx = BibleStudyTextUtils.resolveClosestVerseIndex(verses, pVerses[rightIdx].verse)
+                    if (targetIdx >= 0) {
+                        leftListState.scrollToItem(targetIdx, pos.second)
+                    }
                 }
             }
         }
@@ -416,9 +620,9 @@ fun BibleScreen(
                         hasReadableVerses = uiState.verses.isNotEmpty(),
                         interfaceLanguage = lang,
                         onOpenPassagePicker = { viewModel.openPassagePicker() },
-                        onSelectActiveVersion = { viewModel.setActiveVersion(it) },
-                        onToggleParallelMode = { viewModel.toggleParallelMode() },
-                        onToggleParallelLinked = { viewModel.toggleParallelLinked() },
+                        onSelectActiveVersion = { viewModel.setActiveVersion(it, captureMainVisibleVerse()) },
+                        onToggleParallelMode = { viewModel.toggleParallelMode(captureMainVisibleVerse()) },
+                        onToggleParallelLinked = { viewModel.toggleParallelLinked(captureMainVisibleVerse()) },
                         onToggleTts = { viewModel.toggleTtsBar() },
                         onOpenNotes = { viewModel.openNotesSheet() },
                         appColors = appColors
@@ -437,11 +641,36 @@ fun BibleScreen(
                     rightChapter = rightChapter,
                     rightHighlightedVerse = rightTempHighlightedVerse,
                     onClearRightHighlight = { rightTempHighlightedVerse = null },
+                    onSelectLeftVersion = { tag ->
+                        viewModel.setActiveVersion(tag, captureMainVisibleVerse())
+                    },
+                    onSelectRightVersion = { tag ->
+                        if (uiState.isParallelLinked) {
+                            viewModel.setParallelVersion(tag, captureMainVisibleVerse())
+                        } else {
+                            val preservedRightVerse = captureRightVisibleVerse(rightIndependentVerse)
+                            rightIndependentVerse = preservedRightVerse
+                            viewModel.loadParallelChapter(
+                                bookName = rightBookTitle,
+                                chapter = rightChapter,
+                                version = tag,
+                                targetVerse = preservedRightVerse,
+                                restoreScrollPosition = true
+                            )
+                        }
+                    },
                     onUpdateRightPassage = { newBook, newChapter, newVerse ->
                         rightBookTitle = newBook
                         rightChapter = newChapter
+                        rightIndependentVerse = newVerse
                         rightTempHighlightedVerse = newVerse
-                        viewModel.loadParallelChapter(newBook, newChapter, uiState.parallelVersion)
+                        viewModel.loadParallelChapter(
+                            bookName = newBook,
+                            chapter = newChapter,
+                            version = uiState.parallelVersion,
+                            targetVerse = newVerse,
+                            restoreScrollPosition = true
+                        )
                         coroutineScope.launch {
                             isProgrammaticScroll = true
                             try {
@@ -519,7 +748,7 @@ fun BibleScreen(
                     availableVersions = downloadedVersions,
                     selectedVerses = if (selectedIsRightPane) emptySet() else selectedVerses,
                     onOpenPassagePicker = { viewModel.openPassagePicker() },
-                    onSelectVersion = { viewModel.setActiveVersion(it) },
+                    onSelectVersion = { viewModel.setActiveVersion(it, captureMainVisibleVerse()) },
                     onVerseClick = { verseNum ->
                         if (uiState.isNavigationHighlightActive) viewModel.clearNavigationHighlight()
                         selectedIsRightPane = false
@@ -1253,6 +1482,8 @@ private fun ParallelReaderView(
     rightChapter: Int,
     rightHighlightedVerse: Int?,
     onClearRightHighlight: () -> Unit,
+    onSelectLeftVersion: (String) -> Unit,
+    onSelectRightVersion: (String) -> Unit,
     onUpdateRightPassage: (String, Int, Int) -> Unit,
     selectedVerses: Set<Int>,
     selectedIsRightPane: Boolean,
@@ -1377,6 +1608,7 @@ private fun ParallelReaderView(
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable { isLeftVersionMenuOpen = true }
+                            .testTag("parallel_left_version_selector")
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1416,7 +1648,7 @@ private fun ParallelReaderView(
                                     },
                                     onClick = {
                                         isLeftVersionMenuOpen = false
-                                        viewModel.setActiveVersion(tag)
+                                        onSelectLeftVersion(tag)
                                     }
                                 )
                             }
@@ -1435,7 +1667,7 @@ private fun ParallelReaderView(
                                     },
                                     onClick = {
                                         isLeftVersionMenuOpen = false
-                                        viewModel.setActiveVersion(module.versionTag)
+                                        onSelectLeftVersion(module.versionTag)
                                     }
                                 )
                             }
@@ -1448,7 +1680,9 @@ private fun ParallelReaderView(
 
             LazyColumn(
                 state = leftListState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("parallel_left_list"),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 10.dp,
@@ -1478,7 +1712,7 @@ private fun ParallelReaderView(
                             interfaceLanguage = uiState.userPreferences.interfaceLanguage,
                             availableVersions = downloadedVersions,
                             onOpenAvailableBooks = { viewModel.openPassagePicker() },
-                            onSelectVersion = { viewModel.setActiveVersion(it) },
+                            onSelectVersion = { onSelectLeftVersion(it) },
                             compact = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1626,6 +1860,7 @@ private fun ParallelReaderView(
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable { isRightVersionMenuOpen = true }
+                            .testTag("parallel_right_version_selector")
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1665,15 +1900,7 @@ private fun ParallelReaderView(
                                     },
                                     onClick = {
                                         isRightVersionMenuOpen = false
-                                        if (uiState.isParallelLinked) {
-                                            viewModel.setParallelVersion(tag)
-                                        } else {
-                                            viewModel.loadParallelChapter(
-                                                bookName = rightBookTitle,
-                                                chapter = rightChapter,
-                                                version = tag
-                                            )
-                                        }
+                                        onSelectRightVersion(tag)
                                     }
                                 )
                             }
@@ -1692,15 +1919,7 @@ private fun ParallelReaderView(
                                     },
                                     onClick = {
                                         isRightVersionMenuOpen = false
-                                        if (uiState.isParallelLinked) {
-                                            viewModel.setParallelVersion(module.versionTag)
-                                        } else {
-                                            viewModel.loadParallelChapter(
-                                                bookName = rightBookTitle,
-                                                chapter = rightChapter,
-                                                version = module.versionTag
-                                            )
-                                        }
+                                        onSelectRightVersion(module.versionTag)
                                     }
                                 )
                             }
@@ -1713,7 +1932,9 @@ private fun ParallelReaderView(
 
             LazyColumn(
                 state = rightListState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("parallel_right_list"),
                 contentPadding = PaddingValues(
                     start = 10.dp,
                     end = 16.dp,
@@ -1750,15 +1971,7 @@ private fun ParallelReaderView(
                                 }
                             },
                             onSelectVersion = { tag ->
-                                if (isLinked) {
-                                    viewModel.setParallelVersion(tag)
-                                } else {
-                                    viewModel.loadParallelChapter(
-                                        bookName = rightBookTitle,
-                                        chapter = rightChapter,
-                                        version = tag
-                                    )
-                                }
+                                onSelectRightVersion(tag)
                             },
                             compact = true,
                             modifier = Modifier

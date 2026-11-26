@@ -1,6 +1,8 @@
 package com.example.ui.util
 
 import com.example.data.model.BibleBooksData
+import com.example.data.model.BibleVerse
+import kotlin.math.abs
 
 sealed class VerseDisplayToken {
     data class BracketNote(val marker: String) : VerseDisplayToken()
@@ -255,6 +257,24 @@ object BibleStudyTextUtils {
             .joinToString("\n")
             .replace(Regex("\\n{3,}"), "\n\n")
             .trim()
+    }
+
+    /**
+     * Resuelve el índice del versículo objetivo dentro de una lista ordenada de versículos del capítulo.
+     * - Si existe coincidencia exacta con [targetVerse], devuelve su índice.
+     * - Si la traducción omite ese versículo (ej. Hechos 8:37 en ediciones críticas),
+     *   devuelve el índice del versículo inmediatamente anterior disponible (`verse < targetVerse`).
+     * - Si no existe ninguno anterior (ej. falta el v. 1), devuelve el más cercano disponible.
+     * - Si la lista está vacía, devuelve -1 sin lanzar excepciones.
+     */
+    fun resolveClosestVerseIndex(verses: List<BibleVerse>, targetVerse: Int): Int {
+        if (verses.isEmpty()) return -1
+        val safeTarget = targetVerse.coerceAtLeast(1)
+        val exactIdx = verses.indexOfFirst { it.verse == safeTarget }
+        if (exactIdx >= 0) return exactIdx
+        val previousIdx = verses.indexOfLast { it.verse < safeTarget }
+        if (previousIdx >= 0) return previousIdx
+        return verses.indices.minByOrNull { idx -> abs(verses[idx].verse - safeTarget) } ?: 0
     }
 
     private fun decodeHtmlEntities(text: String): String {
