@@ -26,6 +26,7 @@ import com.example.data.model.UserPreference
 import com.example.data.repository.BibleAssetDatabaseHelper
 import com.example.data.repository.BibleRepository
 import com.example.data.repository.CloudSyncRepository
+import com.example.data.repository.NoteDraftCache
 import com.example.data.repository.ReadingStateCache
 import com.example.data.repository.SyncStatus
 import com.example.data.repository.UserCancelledSignInException
@@ -183,6 +184,7 @@ class BibleViewModel(
     private val themeCache = ThemePreferenceCache(application)
     private val initialTheme = themeCache.loadInitialTheme()
     private val readingStateCache = ReadingStateCache(application)
+    private val noteDraftCache = NoteDraftCache(application)
     private val initialHasStartedReading = readingStateCache.hasStartedReading()
     private val initialCachedPosition = if (initialHasStartedReading) {
         readingStateCache.loadReadingPosition()
@@ -250,6 +252,7 @@ class BibleViewModel(
     private var commentaryPillsJob: Job? = null
     private var previewJob: Job? = null
     private var saveProgressJob: Job? = null
+    private var googleAuthJob: Job? = null
     private var lastGeneralCommentaryFiles: Set<String>? = null
 
     private val _searchQueryInput = MutableStateFlow("")
@@ -2665,7 +2668,18 @@ class BibleViewModel(
     }
 
     fun showEditProfileDialog(show: Boolean) {
+        if (!show && _uiState.value.isGoogleAuthInProgress) {
+            cancelGoogleSignInIfInProgress()
+        }
         _uiState.value = _uiState.value.copy(showEditProfileDialog = show)
+    }
+
+    fun cancelGoogleSignInIfInProgress() {
+        googleAuthJob?.cancel()
+        googleAuthJob = null
+        if (_uiState.value.isGoogleAuthInProgress) {
+            _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = false)
+        }
     }
 
     fun updateLocalProfileName(name: String) {
@@ -2684,45 +2698,52 @@ class BibleViewModel(
         if (_uiState.value.isGoogleAuthInProgress) return
         _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = true)
 
-        viewModelScope.launch {
-            val signInResult = cloudSyncRepository.signInWithGoogle(activityContext)
-            val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
+        googleAuthJob?.cancel()
+        googleAuthJob = viewModelScope.launch {
+            try {
+                val signInResult = cloudSyncRepository.signInWithGoogle(activityContext)
+                val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
 
-            signInResult.fold(
-                onSuccess = { cloudUser ->
-                    _uiState.value = _uiState.value.copy(
-                        googleUid = cloudUser.uid,
-                        googleDisplayName = cloudUser.displayName,
-                        googleEmail = cloudUser.email,
-                        isGoogleAuthInProgress = false
-                    )
-                    val mergeResult = syncWithCloudInternal(
-                        uid = cloudUser.uid,
-                        isUserInitiated = true,
-                        showToast = false
-                    )
-                    val syncedOk = mergeResult.isSuccess
-                    _uiState.value = _uiState.value.copy(
-                        toastMessage = if (syncedOk) {
-                            if (isEn) "Google account linked & backup synced" else "Cuenta de Google vinculada y respaldo sincronizado"
-                        } else {
-                            if (isEn) "Google account linked" else "Cuenta de Google vinculada"
+                signInResult.fold(
+                    onSuccess = { cloudUser ->
+                        _uiState.value = _uiState.value.copy(
+                            googleUid = cloudUser.uid,
+                            googleDisplayName = cloudUser.displayName,
+                            googleEmail = cloudUser.email,
+                            isGoogleAuthInProgress = false
+                        )
+                        val mergeResult = syncWithCloudInternal(
+                            uid = cloudUser.uid,
+                            isUserInitiated = true,
+                            showToast = false
+                        )
+                        val syncedOk = mergeResult.isSuccess
+                        _uiState.value = _uiState.value.copy(
+                            toastMessage = if (syncedOk) {
+                                if (isEn) "Google account linked & backup synced" else "Cuenta de Google vinculada y respaldo sincronizado"
+                            } else {
+                                if (isEn) "Google account linked" else "Cuenta de Google vinculada"
+                            }
+                        )
+                    },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = false)
+                        if (error !is UserCancelledSignInException) {
+                            val detail = error.localizedMessage?.takeIf { it.isNotBlank() }
+                            val msg = if (isEn) {
+                                if (detail != null) "Could not sign in with Google: $detail" else "Could not sign in with Google"
+                            } else {
+                                if (detail != null) "No se pudo iniciar sesión con Google: $detail" else "No se pudo iniciar sesión con Google"
+                            }
+                            _uiState.value = _uiState.value.copy(toastMessage = msg)
                         }
-                    )
-                },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = false)
-                    if (error !is UserCancelledSignInException) {
-                        val detail = error.localizedMessage?.takeIf { it.isNotBlank() }
-                        val msg = if (isEn) {
-                            if (detail != null) "Could not sign in with Google: $detail" else "Could not sign in with Google"
-                        } else {
-                            if (detail != null) "No se pudo iniciar sesión con Google: $detail" else "No se pudo iniciar sesión con Google"
-                        }
-                        _uiState.value = _uiState.value.copy(toastMessage = msg)
                     }
+                )
+            } finally {
+                if (_uiState.value.isGoogleAuthInProgress) {
+                    _uiState.value = _uiState.value.copy(isGoogleAuthInProgress = false)
                 }
-            )
+            }
         }
     }
 
@@ -2855,6 +2876,7 @@ class BibleViewModel(
     }
 
     fun saveNote(title: String, content: String, reference: String, noteId: Long = 0) {
+        noteDraftCache.clearDraft(noteId = noteId)
         val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
         val uid = _uiState.value.googleUid
         viewModelScope.launch {
@@ -2888,6 +2910,7 @@ class BibleViewModel(
     }
 
     fun deleteNote(id: Long) {
+        noteDraftCache.clearDraft(noteId = id)
         val isEn = _uiState.value.userPreferences.interfaceLanguage.contains("English", ignoreCase = true)
         val uid = _uiState.value.googleUid
         viewModelScope.launch {

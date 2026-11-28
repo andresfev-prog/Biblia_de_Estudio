@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -70,10 +71,19 @@ fun CommentaryBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         modifier = Modifier.testTag("commentary_bottom_sheet"),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = appColors.surface
     ) {
+        ModalBackHandler {
+            if (selectedCommentary != null) {
+                selectedCommentary = null
+            } else {
+                onDismiss()
+            }
+        }
+
         val customTextToolbar = rememberTranslateTextToolbar()
 
         CompositionLocalProvider(LocalTextToolbar provides customTextToolbar) {

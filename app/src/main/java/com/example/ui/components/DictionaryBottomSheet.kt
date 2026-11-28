@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -112,10 +113,19 @@ fun DictionaryBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         modifier = Modifier.testTag("dictionary_bottom_sheet"),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = appColors.surface
     ) {
+        ModalBackHandler {
+            if (selectedMatch != null) {
+                selectedMatch = null
+            } else {
+                onDismiss()
+            }
+        }
+
         val customTextToolbar = rememberTranslateTextToolbar()
 
         CompositionLocalProvider(LocalTextToolbar provides customTextToolbar) {

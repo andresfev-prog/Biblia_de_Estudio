@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.FavoriteVerse
+import com.example.ui.components.ModalBackHandler
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
@@ -68,8 +69,15 @@ fun FavoritesDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false
+        )
     ) {
+        ModalBackHandler {
+            onDismiss()
+        }
+
         Surface(
             modifier = Modifier
                 .fillMaxSize()

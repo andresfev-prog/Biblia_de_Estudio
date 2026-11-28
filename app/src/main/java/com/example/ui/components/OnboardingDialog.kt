@@ -57,8 +57,16 @@ fun OnboardingDialog(
 
     Dialog(
         onDismissRequest = onComplete,
-        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false)
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
+        ModalBackHandler {
+            if (currentStep > 1) {
+                currentStep--
+            } else {
+                onComplete()
+            }
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()

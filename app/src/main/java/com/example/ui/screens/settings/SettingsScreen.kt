@@ -1084,7 +1084,8 @@ fun SettingsScreen(
                 onContinueWithGoogle = { viewModel.signInWithGoogle(context) },
                 onSyncNow = { viewModel.syncNow() },
                 onUnlinkAccount = { viewModel.unlinkGoogleAccount(context) },
-                onDismiss = { viewModel.showEditProfileDialog(false) }
+                onDismiss = { viewModel.showEditProfileDialog(false) },
+                onCancelGoogleAuth = { viewModel.cancelGoogleSignInIfInProgress() }
             )
         }
     }

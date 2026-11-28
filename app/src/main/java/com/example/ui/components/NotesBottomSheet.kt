@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,18 +44,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +69,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.BibleBooksData
 import com.example.data.model.BibleVerse
 import com.example.data.model.UserNote
+import com.example.data.repository.NoteDraftCache
 import com.example.ui.theme.AppIcon
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.AppTheme
@@ -94,24 +103,73 @@ fun NotesBottomSheet(
     onGetLastCommentarySnippet: () -> String = { "" },
     onGetLastDictionarySnippet: () -> String = { "" },
     onDismiss: () -> Unit,
-    sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    sheetState: SheetState? = null,
+    draftCache: NoteDraftCache? = null,
+    draftContextKey: String = ""
 ) {
     val appColors = AppTheme.colors
+    val context = LocalContext.current
+    val resolvedDraftCache = draftCache ?: remember(context) { NoteDraftCache(context) }
+
+    var localEditingNote by remember { mutableStateOf(editingNote) }
     var isEditingMode by remember { mutableStateOf(editingNote != null) }
     var editorSessionKey by remember { mutableIntStateOf(0) }
+    val isImeVisible by rememberIsImeVisible()
+    val currentIsEditingMode by rememberUpdatedState(isEditingMode)
+    val currentIsImeVisible by rememberUpdatedState(isImeVisible)
+
+    val resolvedSheetState = sheetState ?: rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { target ->
+            !(currentIsEditingMode && currentIsImeVisible && target == SheetValue.Hidden)
+        }
+    )
 
     LaunchedEffect(editingNote) {
         if (editingNote != null) {
+            localEditingNote = editingNote
             isEditingMode = true
         }
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
+        onDismissRequest = {
+            if (!(isEditingMode && isImeVisible)) {
+                onDismiss()
+            }
+        },
+        sheetState = resolvedSheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         containerColor = appColors.surface,
         scrimColor = Color.Black.copy(alpha = 0.5f)
     ) {
+        val focusManager = LocalFocusManager.current
+        val hideIme = rememberHideImeAction()
+        var wasImeVisible by remember { mutableStateOf(false) }
+
+        LaunchedEffect(isImeVisible) {
+            if (wasImeVisible && !isImeVisible) {
+                focusManager.clearFocus(force = true)
+            }
+            wasImeVisible = isImeVisible
+        }
+
+        ModalBackHandler {
+            when {
+                isEditingMode && isImeVisible -> {
+                    hideIme()
+                }
+                isEditingMode -> {
+                    isEditingMode = false
+                    localEditingNote = null
+                    onSelectNoteToEdit(null)
+                }
+                else -> {
+                    onDismiss()
+                }
+            }
+        }
+
         AnimatedContent(
             targetState = isEditingMode,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -119,22 +177,28 @@ fun NotesBottomSheet(
         ) { editing ->
             if (editing) {
                 NoteEditorView(
-                    note = editingNote,
+                    note = localEditingNote,
                     sessionKey = editorSessionKey,
                     selectedVerses = selectedVerses,
                     interfaceLanguage = interfaceLanguage,
+                    draftCache = resolvedDraftCache,
+                    draftContextKey = draftContextKey,
                     onSave = { title, content, ref, id ->
                         onSaveNote(title, content, ref, id)
                         isEditingMode = false
+                        localEditingNote = null
                         onSelectNoteToEdit(null)
                     },
                     onDelete = { id ->
                         onDeleteNote(id)
                         isEditingMode = false
+                        localEditingNote = null
                         onSelectNoteToEdit(null)
                     },
                     onBack = {
+                        hideIme()
                         isEditingMode = false
+                        localEditingNote = null
                         onSelectNoteToEdit(null)
                     }
                 )
@@ -144,11 +208,13 @@ fun NotesBottomSheet(
                     interfaceLanguage = interfaceLanguage,
                     onNewNote = {
                         editorSessionKey++
+                        localEditingNote = null
                         onSelectNoteToEdit(null)
                         isEditingMode = true
                     },
                     onOpenNote = { note ->
                         editorSessionKey++
+                        localEditingNote = note
                         onSelectNoteToEdit(note)
                         isEditingMode = true
                     },
@@ -397,14 +463,77 @@ private fun NoteEditorView(
     sessionKey: Int,
     selectedVerses: List<BibleVerse>,
     interfaceLanguage: String,
+    draftCache: NoteDraftCache,
+    draftContextKey: String,
     onSave: (title: String, content: String, reference: String, id: Long) -> Unit,
     onDelete: (id: Long) -> Unit,
     onBack: () -> Unit
 ) {
     val appColors = AppTheme.colors
-    var title by remember(note, sessionKey) { mutableStateOf(note?.title ?: "") }
-    var reference by remember(note, sessionKey) { mutableStateOf(note?.biblicalReference ?: "") }
-    var content by remember(note, sessionKey) { mutableStateOf(note?.content ?: "") }
+    val noteId = note?.id ?: 0L
+    val baselineTitle = note?.title ?: ""
+    val baselineReference = note?.biblicalReference ?: ""
+    val baselineContent = note?.content ?: ""
+
+    val initialDraft = remember(noteId, sessionKey, draftContextKey) {
+        draftCache.loadDraft(noteId = noteId, contextKey = draftContextKey)?.takeIf { draft ->
+            draft.title != baselineTitle ||
+                draft.reference != baselineReference ||
+                draft.content != baselineContent
+        }
+    }
+
+    var title by remember(noteId, sessionKey, draftContextKey) {
+        mutableStateOf(initialDraft?.title ?: baselineTitle)
+    }
+    var reference by remember(noteId, sessionKey, draftContextKey) {
+        mutableStateOf(initialDraft?.reference ?: baselineReference)
+    }
+    var content by remember(noteId, sessionKey, draftContextKey) {
+        mutableStateOf(initialDraft?.content ?: baselineContent)
+    }
+    var hasRecoveredDraft by remember(noteId, sessionKey, draftContextKey) {
+        mutableStateOf(initialDraft != null)
+    }
+    val skipSaveOnDispose = remember(noteId, sessionKey, draftContextKey) {
+        mutableStateOf(false)
+    }
+
+    val latestTitle by rememberUpdatedState(title)
+    val latestReference by rememberUpdatedState(reference)
+    val latestContent by rememberUpdatedState(content)
+
+    LaunchedEffect(noteId, sessionKey, draftContextKey, title, reference, content) {
+        if (!skipSaveOnDispose.value) {
+            draftCache.saveDraft(
+                noteId = noteId,
+                contextKey = draftContextKey,
+                title = title,
+                reference = reference,
+                content = content,
+                baselineTitle = baselineTitle,
+                baselineReference = baselineReference,
+                baselineContent = baselineContent
+            )
+        }
+    }
+
+    DisposableEffect(noteId, sessionKey, draftContextKey) {
+        onDispose {
+            if (!skipSaveOnDispose.value) {
+                draftCache.saveDraft(
+                    noteId = noteId,
+                    contextKey = draftContextKey,
+                    title = latestTitle,
+                    reference = latestReference,
+                    content = latestContent,
+                    baselineTitle = baselineTitle,
+                    baselineReference = baselineReference,
+                    baselineContent = baselineContent
+                )
+            }
+        }
+    }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = appColors.accent,
@@ -448,6 +577,53 @@ private fun NoteEditorView(
                 color = appColors.titleColor,
                 maxLines = 1
             )
+        }
+
+        if (hasRecoveredDraft) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(appColors.surfaceVariant)
+                    .border(1.dp, appColors.border, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("recovered_draft_banner"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = StringsLocale.get("draft_recovered_label", interfaceLanguage),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = appColors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = {
+                        draftCache.clearDraft(noteId = noteId, contextKey = draftContextKey)
+                        title = baselineTitle
+                        reference = baselineReference
+                        content = baselineContent
+                        hasRecoveredDraft = false
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier
+                        .height(30.dp)
+                        .testTag("discard_draft_button")
+                ) {
+                    Text(
+                        text = StringsLocale.get("discard_draft", interfaceLanguage),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = appColors.accent,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -562,7 +738,9 @@ private fun NoteEditorView(
         ) {
             Button(
                 onClick = {
-                    onSave(title, content, reference.trim(), note?.id ?: 0L)
+                    skipSaveOnDispose.value = true
+                    draftCache.clearDraft(noteId = noteId, contextKey = draftContextKey)
+                    onSave(title, content, reference.trim(), noteId)
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -585,7 +763,11 @@ private fun NoteEditorView(
 
             if (note != null) {
                 OutlinedButton(
-                    onClick = { onDelete(note.id) },
+                    onClick = {
+                        skipSaveOnDispose.value = true
+                        draftCache.clearDraft(noteId = noteId, contextKey = draftContextKey)
+                        onDelete(note.id)
+                    },
                     modifier = Modifier
                         .height(48.dp)
                         .testTag("delete_note_button"),

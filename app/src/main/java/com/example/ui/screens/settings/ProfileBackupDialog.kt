@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +53,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +62,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.repository.SyncStatus
+import com.example.ui.components.ModalBackHandler
+import com.example.ui.components.rememberHideImeAction
+import com.example.ui.components.rememberIsImeVisible
 import com.example.ui.theme.AppTheme
 import com.example.ui.util.StringsLocale
 import com.example.ui.viewmodel.BibleUiState
@@ -72,20 +77,55 @@ fun ProfileBackupDialog(
     onContinueWithGoogle: () -> Unit,
     onSyncNow: () -> Unit,
     onUnlinkAccount: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCancelGoogleAuth: () -> Unit = {}
 ) {
     val appColors = AppTheme.colors
     val lang = interfaceLanguage
     val isLinked = uiState.googleUid != null
+    val isImeVisible by rememberIsImeVisible()
 
     var localName by remember(uiState.userPreferences.userName) {
         mutableStateOf(uiState.userPreferences.userName)
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = {
+            if (!uiState.isGoogleAuthInProgress) {
+                onDismiss()
+            }
+        },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false,
+            dismissOnClickOutside = !uiState.isGoogleAuthInProgress
+        )
     ) {
+        val focusManager = LocalFocusManager.current
+        val hideIme = rememberHideImeAction()
+        var wasImeVisible by remember { mutableStateOf(false) }
+
+        LaunchedEffect(isImeVisible) {
+            if (wasImeVisible && !isImeVisible) {
+                focusManager.clearFocus(force = true)
+            }
+            wasImeVisible = isImeVisible
+        }
+
+        ModalBackHandler {
+            when {
+                isImeVisible -> {
+                    hideIme()
+                }
+                uiState.isGoogleAuthInProgress -> {
+                    onCancelGoogleAuth()
+                }
+                else -> {
+                    onDismiss()
+                }
+            }
+        }
+
         Surface(
             modifier = Modifier
                 .fillMaxWidth()

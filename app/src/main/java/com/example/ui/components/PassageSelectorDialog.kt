@@ -82,8 +82,19 @@ fun PassageSelectorDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false
+        )
     ) {
+        ModalBackHandler {
+            if (currentStep > 1) {
+                onBackStep()
+            } else {
+                onDismiss()
+            }
+        }
+
         Surface(
             modifier = Modifier
                 .fillMaxSize()
